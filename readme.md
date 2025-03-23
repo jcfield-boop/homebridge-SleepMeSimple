@@ -1,6 +1,7 @@
 # SleepMe Simple - Homebridge Plugin
 
 A simplified Homebridge plugin for SleepMe devices (ChiliPad, OOLER, Dock Pro), designed for reliable HomeKit control.
+This is an evolution of me plaing with AI to create a plugin with (almost) no coding experience - building off two other plugins homebridge-SleepMePro and homebridge-SleepMeBasic that I had fun trying to re-create the functionality of the native app. (your mileage may vary...) 
 
 ## Key Features
 
