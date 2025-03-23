@@ -1,0 +1,97 @@
+{
+  "pluginAlias": "SleepMeSimple",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "SleepMe Simple",
+        "required": true
+      },
+      "apiToken": {
+        "title": "API Token",
+        "type": "string",
+        "format": "password",
+        "description": "Your SleepMe API token (obtain from your account at sleep.me)",
+        "required": true
+      },
+      "unit": {
+        "title": "Temperature Unit",
+        "type": "string",
+        "default": "C",
+        "enum": ["C", "F"],
+        "enumNames": ["Celsius (°C)", "Fahrenheit (°F)"],
+        "description": "Select preferred temperature unit",
+        "required": true
+      },
+      "devices": {
+        "title": "Device Configuration",
+        "type": "array",
+        "description": "Configure devices manually instead of discovering them through the API",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "title": "Device ID",
+              "type": "string",
+              "description": "Device ID from SleepMe (starts with 'zx-')"
+            },
+            "name": {
+              "title": "Custom Name", 
+              "type": "string",
+              "description": "Name to display in HomeKit"
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      "pollingInterval": {
+        "title": "Polling Interval",
+        "type": "integer",
+        "default": 120,
+        "minimum": 60,
+        "maximum": 300,
+        "description": "How frequently to check device status (in seconds)"
+      },
+      "logLevel": {
+        "title": "Logging Level",
+        "type": "string",
+        "default": "normal",
+        "enum": ["normal", "debug", "verbose"],
+        "enumNames": ["Normal", "Debug", "Verbose"],
+        "description": "Controls the detail level of plugin logs"
+      }
+    },
+    "required": ["apiToken", "unit"]
+  },
+  "layout": [
+    "name",
+    "apiToken",
+    {
+      "key": "unit",
+      "type": "select",
+      "title": "Temperature Unit"
+    },
+    {
+      "key": "advanced",
+      "type": "section",
+      "title": "Advanced Settings",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        {
+          "key": "pollingInterval",
+          "type": "number"
+        },
+        {
+          "key": "logLevel",
+          "type": "select",
+          "title": "Logging Level"
+        }
+      ]
+    }
+  ]
+}
