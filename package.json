@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "lint": "eslint ./src/**/*.ts",
+    "lint": "eslint ./src --ext *.ts",
     "clean": "rimraf dist/",
     "prepublishOnly": "npm run clean && npm run build"
   },
