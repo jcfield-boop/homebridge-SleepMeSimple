@@ -1,20 +1,18 @@
-import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
-
-export default [
-  eslint.configs.recommended,
-  ...tseslint.configs.recommended,
-  {
-    files: ["src/**/*.ts"],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.json"],
-      },
-    },
-    rules: {
-      // Add any specific rules here
-      "no-unused-vars": "warn",
-      "@typescript-eslint/no-explicit-any": "warn"
-    },
+module.exports = {
+  root: true,
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+  ],
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint'],
+  parserOptions: {
+    ecmaVersion: 2018,
+    sourceType: 'module',
+    project: './tsconfig.json',
   },
-];
+  rules: {
+    'no-unused-vars': 'warn',
+    '@typescript-eslint/no-explicit-any': 'warn'
+  },
+};
