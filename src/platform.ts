@@ -30,7 +30,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   
   // API client for communicating with SleepMe services
-  public readonly api: SleepMeApi;
+  public readonly api?: SleepMeApi;
   
   // Custom logger for simplified logging
   public readonly log: CustomLogger;
@@ -47,6 +47,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   
   // Timer for periodic device discovery
   private discoveryTimer?: NodeJS.Timeout;
+
+  // Flag to track if the plugin is properly configured
+  private isConfigured: boolean = true;
   
   /**
    * Constructor for the SleepMe platform.
@@ -84,33 +87,39 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     
     // Validate that the API token is present in the configuration
     if (!config.apiToken) {
+      this.isConfigured = false;
       this.log.error('API token missing from configuration! The plugin will not work.');
-      throw new Error('API token missing from configuration');
+      this.log.info('Please add your SleepMe API token to the configuration in the Homebridge UI.');
+      this.log.info('You can get your token from your SleepMe account at sleep.me');
+      // Don't throw an error - let the plugin load in a disabled state
+    } else {
+      // Initialize the SleepMe API client with the provided token
+      this.api = new SleepMeApi(config.apiToken as string, this.log);
+      
+      // Log platform initialization information
+      this.log.info(
+        `Initializing ${PLATFORM_NAME} platform with ${this.temperatureUnit === 'C' ? 'Celsius' : 'Fahrenheit'} ` +
+        `units and ${this.pollingInterval}s polling interval`
+      );
     }
-    
-    // Initialize the SleepMe API client with the provided token
-    this.api = new SleepMeApi(config.apiToken as string, this.log);
-    
-    // Log platform initialization information
-    this.log.info(
-      `Initializing ${PLATFORM_NAME} platform with ${this.temperatureUnit === 'C' ? 'Celsius' : 'Fahrenheit'} ` +
-      `units and ${this.pollingInterval}s polling interval`
-    );
     
     // Register for Homebridge events
     
     // When this event is fired, homebridge has restored all cached accessories
     this.homebridgeApi.on('didFinishLaunching', () => {
-      // Delay device discovery to prevent immediate API calls on startup
-      setTimeout(() => {
-        this.log.info('Homebridge finished launching, starting device discovery');
-        this.discoverDevices();
-      }, 5000); // 5 second delay before starting discovery
-      
-      // Set up periodic discovery to catch new or changed devices
-      this.discoveryTimer = setInterval(() => {
-        this.discoverDevices();
-      }, 24 * 60 * 60 * 1000); // Check once per day
+      // Only attempt to discover devices if the plugin is properly configured
+      if (this.isConfigured) {
+        // Delay device discovery to prevent immediate API calls on startup
+        setTimeout(() => {
+          this.log.info('Homebridge finished launching, starting device discovery');
+          this.discoverDevices();
+        }, 5000); // 5 second delay before starting discovery
+        
+        // Set up periodic discovery to catch new or changed devices
+        this.discoveryTimer = setInterval(() => {
+          this.discoverDevices();
+        }, 24 * 60 * 60 * 1000); // Check once per day
+      }
     });
     
     // Handle Homebridge shutdown event for proper cleanup
@@ -181,6 +190,12 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
    * Uses staggered initialization to prevent API rate limiting
    */
   async discoverDevices(): Promise<void> {
+    // Skip discovery if the plugin is not properly configured
+    if (!this.isConfigured || !this.api) {
+      this.log.warn('Skipping device discovery because the plugin is not properly configured');
+      return;
+    }
+
     this.log.info('Starting device discovery...');
     
     try {
@@ -298,6 +313,12 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
    * @param deviceId - The device ID for this accessory
    */
   private initializeAccessory(accessory: PlatformAccessory, deviceId: string): void {
+    // Skip initialization if the plugin is not properly configured
+    if (!this.isConfigured || !this.api) {
+      this.log.warn(`Skipping accessory initialization because the plugin is not properly configured`);
+      return;
+    }
+
     this.log.info(`Initializing accessory for device ID: ${deviceId}`);
     
     // First, remove any existing handler for this accessory
