@@ -361,3 +361,4 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       );
     }
   }
+}
