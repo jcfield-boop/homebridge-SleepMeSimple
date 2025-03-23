@@ -20,7 +20,7 @@ import {
 /**
  * Priority levels for API requests
  */
-enum RequestPriority {
+private enum RequestPriority {
   HIGH = 'high',       // Critical user-initiated actions (power, temperature changes)
   NORMAL = 'normal',   // Regular status updates
   LOW = 'low'          // Background or non-essential operations
