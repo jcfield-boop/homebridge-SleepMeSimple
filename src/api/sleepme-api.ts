@@ -19,8 +19,9 @@ import {
 
 /**
  * Priority levels for API requests
+ * Used to determine order of execution when requests are queued
  */
-private enum RequestPriority {
+enum RequestPriority {
   HIGH = 'high',       // Critical user-initiated actions (power, temperature changes)
   NORMAL = 'normal',   // Regular status updates
   LOW = 'low'          // Background or non-essential operations
@@ -33,8 +34,8 @@ interface QueuedRequest {
   id: string;                          // Unique ID for the request
   config: AxiosRequestConfig;          // Request configuration
   priority: RequestPriority;           // Request priority
-  resolve: (value: any) => void;       // Promise resolution function
-  reject: (reason: any) => void;       // Promise rejection function
+  resolve: (value: unknown) => void;   // Promise resolution function
+  reject: (reason: unknown) => void;   // Promise rejection function
   retryCount: number;                  // Number of retries attempted
   timestamp: number;                   // When the request was queued
   executing?: boolean;                 // Whether the request is currently executing
@@ -45,7 +46,7 @@ interface QueuedRequest {
 }
 
 /**
- * Cache entry for device status
+ * Interface for a cached device status entry
  */
 interface DeviceStatusCache {
   status: DeviceStatus;                // Cached device status
@@ -228,7 +229,7 @@ export class SleepMeApi {
       
       this.logger.debug(`Fetching status for device ${deviceId}...`);
       
-      const response = await this.makeRequest<Record<string, any>>({
+      const response = await this.makeRequest<Record<string, unknown>>({
         method: 'GET',
         url: `/devices/${deviceId}`,
         priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
@@ -327,16 +328,16 @@ export class SleepMeApi {
    * @param path Dot-notation path to property
    * @returns Extracted value or undefined if not found
    */
-  public extractNestedValue(obj: Record<string, any>, path: string): any {
+  public extractNestedValue(obj: Record<string, unknown>, path: string): unknown {
     const parts = path.split('.');
-    let value = obj;
+    let value: unknown = obj;
     
     for (const part of parts) {
       if (value === null || value === undefined || typeof value !== 'object') {
         return undefined;
       }
       
-      value = value[part];
+      value = (value as Record<string, unknown>)[part];
     }
     
     return value;
@@ -359,7 +360,7 @@ export class SleepMeApi {
       this.cancelAllDeviceRequests(deviceId);
       
       // Create payload for API - using integers for temperature values
-      const payload: Record<string, any> = {
+      const payload: Record<string, unknown> = {
         // Set Fahrenheit as primary temp (matching API expectation)
         set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
         thermal_control_status: 'active'
@@ -501,7 +502,7 @@ export class SleepMeApi {
    * @param settings Settings to update
    * @returns Whether operation was successful
    */
-  private async updateDeviceSettings(deviceId: string, settings: Record<string, any>): Promise<boolean> {
+  private async updateDeviceSettings(deviceId: string, settings: Record<string, unknown>): Promise<boolean> {
     if (!deviceId) {
       this.logger.error('Missing device ID in updateDeviceSettings');
       return false;
@@ -518,7 +519,7 @@ export class SleepMeApi {
       // Cancel any pending device status requests for this device
       this.cancelPendingRequests(deviceId, 'getDeviceStatus');
       
-      const response = await this.makeRequest<Record<string, any>>({
+      const response = await this.makeRequest<Record<string, unknown>>({
         method: 'PATCH',
         url: `/devices/${deviceId}`,
         data: settings,
@@ -824,7 +825,7 @@ export class SleepMeApi {
   private async makeRequest<T>(options: {
     method: string;
     url: string;
-    data?: any;
+    data?: unknown;
     priority?: RequestPriority;
     deviceId?: string;
     operationType?: string;
@@ -866,7 +867,7 @@ export class SleepMeApi {
         id: requestId,
         config,
         priority,
-        resolve,
+        resolve: resolve as (value: unknown) => void,
         reject,
         retryCount: 0,
         timestamp: Date.now(),
@@ -885,6 +886,8 @@ export class SleepMeApi {
   
   /**
    * Handle API errors with better logging
+   * @param context Context where the error occurred
+   * @param error The error that occurred
    */
   private handleApiError(context: string, error: unknown): void {
     // Cast to Axios error if possible
@@ -936,7 +939,7 @@ export class SleepMeApi {
    * @param defaultValue Default value if not found
    * @returns Extracted temperature or default value
    */
-  private extractTemperature(data: Record<string, any>, paths: string[], defaultValue = 21): number {
+  private extractTemperature(data: Record<string, unknown>, paths: string[], defaultValue = 21): number {
     for (const path of paths) {
       const value = this.extractNestedValue(data, path);
       if (typeof value === 'number' && !isNaN(value)) {
@@ -952,7 +955,7 @@ export class SleepMeApi {
    * @param data API response data
    * @returns Thermal status
    */
-  private extractThermalStatus(data: Record<string, any>): ThermalStatus {
+  private extractThermalStatus(data: Record<string, unknown>): ThermalStatus {
     // Try to get thermal status from control object
     const rawStatus = this.extractNestedValue(data, 'control.thermal_control_status') ||
                       this.extractNestedValue(data, 'thermal_control_status');
@@ -983,7 +986,7 @@ export class SleepMeApi {
    * @param data API response data
    * @returns Power state
    */
-  private extractPowerState(data: Record<string, any>): PowerState {
+  private extractPowerState(data: Record<string, unknown>): PowerState {
     // Try different paths for power state
     const thermalStatus = this.extractThermalStatus(data);
     
