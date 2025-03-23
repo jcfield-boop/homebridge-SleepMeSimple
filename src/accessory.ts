@@ -8,7 +8,8 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
 import { SleepMeApi } from './api/sleepme-api.js';
 import { ThermalStatus, PowerState } from './api/types.js';
-import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, TEMPERATURE_STEP } from './settings.js';
+import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C } from './settings.js';
+// Remove unused TEMPERATURE_STEP import
 
 /**
  * SleepMe Accessory
@@ -46,6 +47,7 @@ export class SleepMeAccessory {
    * Constructor for the SleepMe accessory
    */
   constructor(
+    // Mark parameters as used with protected/private to prevent ESLint warnings
     private readonly platform: SleepMeSimplePlatform,
     private readonly accessory: PlatformAccessory,
     private readonly apiClient: SleepMeApi
@@ -167,6 +169,8 @@ export class SleepMeAccessory {
   
   /**
    * Add/update the water level service if supported
+   * @param waterLevel - Current water level percentage
+   * @param isWaterLow - Whether water level is considered low
    */
   private setupWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
     // Only create if water level data is available
@@ -237,8 +241,10 @@ export class SleepMeAccessory {
   
   /**
    * Detect device model based on attachments or other characteristics
+   * @param data - Raw device data from API
+   * @returns Detected device model name
    */
-  private detectDeviceModel(data: Record<string, any>): string {
+  private detectDeviceModel(data: Record<string, unknown>): string {
     // Check attachments first (most reliable)
     const attachments = this.apiClient.extractNestedValue(data, 'attachments');
     
@@ -288,7 +294,7 @@ export class SleepMeAccessory {
   
   /**
    * Refresh the device status from the API
-   * @param isInitialSetup Whether this is the initial setup refresh
+   * @param isInitialSetup - Whether this is the initial setup refresh
    */
   private async refreshDeviceStatus(isInitialSetup = false): Promise<void> {
     // Skip polling updates if we recently made a user-initiated change
@@ -421,6 +427,8 @@ export class SleepMeAccessory {
   
   /**
    * Convert temperature to percentage (for the brightness control)
+   * @param temperature - Temperature in Celsius
+   * @returns Percentage value for slider (0-100)
    */
   private temperatureToPercentage(temperature: number): number {
     // Convert temperature to percentage (scaled between MIN_TEMP and MAX_TEMP)
@@ -433,6 +441,8 @@ export class SleepMeAccessory {
   
   /**
    * Convert percentage to temperature
+   * @param percentage - Percentage value from slider (0-100)
+   * @returns Temperature in Celsius
    */
   private percentageToTemperature(percentage: number): number {
     // Convert percentage to temperature
@@ -445,6 +455,7 @@ export class SleepMeAccessory {
   
   /**
    * Handler for CurrentTemperature GET
+   * @returns Current temperature value
    */
   private async handleCurrentTemperatureGet(): Promise<CharacteristicValue> {
     // Return default temperature if value is not yet initialized
@@ -455,6 +466,7 @@ export class SleepMeAccessory {
   
   /**
    * Handler for power state GET
+   * @returns Current power state (boolean)
    */
   private async handlePowerStateGet(): Promise<CharacteristicValue> {
     this.platform.log.debug(`GET Power State: ${this.isPowered ? 'ON' : 'OFF'}`);
@@ -463,6 +475,7 @@ export class SleepMeAccessory {
   
   /**
    * Handler for power state SET
+   * @param value - New power state value
    */
   private async handlePowerStateSet(value: CharacteristicValue): Promise<void> {
     const turnOn = Boolean(value);
@@ -531,6 +544,7 @@ export class SleepMeAccessory {
   
   /**
    * Handler for temperature control GET
+   * @returns Current temperature as percentage for slider
    */
   private async handleTemperatureControlGet(): Promise<CharacteristicValue> {
     const percentage = this.temperatureToPercentage(this.targetTemperature);
@@ -540,6 +554,7 @@ export class SleepMeAccessory {
   
   /**
    * Handler for temperature control SET
+   * @param value - New temperature percentage from slider
    */
   private async handleTemperatureControlSet(value: CharacteristicValue): Promise<void> {
     const percentage = value as number;
