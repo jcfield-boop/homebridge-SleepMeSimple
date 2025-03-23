@@ -1,0 +1,167 @@
+import { Device, DeviceStatus, ApiStats, Logger } from './types.js';
+/**
+ * SleepMe API Client
+ * Handles API communication with rate limiting and robust error handling
+ */
+export declare class SleepMeApi {
+    private readonly apiToken;
+    private readonly logger;
+    private requestQueue;
+    private requestsThisMinute;
+    private minuteStartTime;
+    private lastRequestTime;
+    private processingQueue;
+    private rateLimitBackoffUntil;
+    private consecutiveErrors;
+    private requestIdCounter;
+    private deviceStatusCache;
+    private stats;
+    private readonly startupComplete;
+    private startupFinished;
+    /**
+     * Create a new SleepMe API client
+     * @param apiToken API authentication token
+     * @param logger Logging utility
+     */
+    constructor(apiToken: string, logger: Logger);
+    /**
+     * Get API statistics
+     * @returns Current API statistics
+     */
+    getStats(): ApiStats;
+    /**
+     * Clean up expired cache entries
+     */
+    private cleanupCache;
+    /**
+     * Get devices from the SleepMe API
+     * @returns Array of devices or empty array if error
+     */
+    getDevices(): Promise<Device[]>;
+    /**
+     * Get status for a specific device with intelligent caching
+     * @param deviceId Device identifier
+     * @param forceFresh Whether to force a fresh status update
+     * @returns Device status or null if error
+     */
+    getDeviceStatus(deviceId: string, forceFresh?: boolean): Promise<DeviceStatus | null>;
+    /**
+     * Extract a nested property value from an object
+     * @param obj Object to extract from
+     * @param path Dot-notation path to property
+     * @returns Extracted value or undefined if not found
+     */
+    extractNestedValue(obj: Record<string, unknown>, path: string): unknown;
+    /**
+     * Turn device on
+     * @param deviceId Device identifier
+     * @param temperature Optional target temperature in Celsius
+     * @returns Whether operation was successful
+     */
+    turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean>;
+    /**
+     * Turn device off
+     * @param deviceId Device identifier
+     * @returns Whether operation was successful
+     */
+    turnDeviceOff(deviceId: string): Promise<boolean>;
+    /**
+     * Set device temperature
+     * @param deviceId Device identifier
+     * @param temperature Target temperature in Celsius
+     * @returns Whether operation was successful
+     */
+    setTemperature(deviceId: string, temperature: number): Promise<boolean>;
+    /**
+     * Cancel all pending requests for a device
+     * @param deviceId Device ID
+     */
+    cancelAllDeviceRequests(deviceId: string): void;
+    /**
+     * Update device settings
+     * @param deviceId Device identifier
+     * @param settings Settings to update
+     * @returns Whether operation was successful
+     */
+    private updateDeviceSettings;
+    /**
+     * Update the device status cache optimistically based on settings changes
+     * @param deviceId Device identifier
+     * @param updates Status updates to apply
+     */
+    private updateCacheOptimistically;
+    /**
+     * Process the request queue
+     * This is the core method for rate-limiting and prioritizing requests
+     */
+    private processQueue;
+    /**
+     * Check and reset rate limit counter if needed
+     */
+    private checkRateLimit;
+    /**
+     * Get the next request from the queue, prioritizing by type and timestamp
+     * @returns Next request to process or undefined if queue is empty
+     */
+    private getNextRequest;
+    /**
+     * Remove a request from the queue
+     * @param id Request ID
+     */
+    private removeRequest;
+    /**
+     * Cancel pending requests of a specific type for a device
+     * @param deviceId Device ID
+     * @param operationType Optional type of operation to cancel (if not specified, cancels all)
+     */
+    private cancelPendingRequests;
+    /**
+     * Make a request to the SleepMe API
+     * @param options Request options
+     * @returns Promise resolving to response data
+     */
+    private makeRequest;
+    /**
+     * Handle API errors with better logging
+     * @param context Context where the error occurred
+     * @param error The error that occurred
+     */
+    private handleApiError;
+    /**
+     * Update the average response time
+     * @param newResponseTime New response time in milliseconds
+     */
+    private updateAverageResponseTime;
+    /**
+     * Extract a temperature value from nested properties
+     * @param data Object to extract from
+     * @param paths Array of possible property paths
+     * @param defaultValue Default value if not found
+     * @returns Extracted temperature or default value
+     */
+    private extractTemperature;
+    /**
+     * Extract thermal status from API response
+     * @param data API response data
+     * @returns Thermal status
+     */
+    private extractThermalStatus;
+    /**
+     * Extract power state from API response
+     * @param data API response data
+     * @returns Power state
+     */
+    private extractPowerState;
+    /**
+     * Convert Celsius to Fahrenheit
+     * @param celsius Temperature in Celsius
+     * @returns Temperature in Fahrenheit
+     */
+    private convertCtoF;
+    /**
+     * Convert Fahrenheit to Celsius
+     * @param fahrenheit Temperature in Fahrenheit
+     * @returns Temperature in Celsius
+     */
+    private convertFtoC;
+}
