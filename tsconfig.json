@@ -6,8 +6,8 @@
       "ES2022"
     ],
     "rootDir": "./src",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "strict": true,
     "declaration": true,
     "outDir": "./dist",
@@ -21,6 +21,7 @@
     "src/**/*.ts"
   ],
   "exclude": [
-    "node_modules", "dist"
+    "node_modules", 
+    "dist"
   ]
 }
