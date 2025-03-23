@@ -24,7 +24,7 @@
         "default": "C",
         "enum": ["C", "F"],
         "enumNames": ["Celsius (°C)", "Fahrenheit (°F)"],
-        "description": "Select preferred temperature unit for display and control",
+        "description": "Select preferred temperature unit",
         "required": true
       },
       "pollingInterval": {
@@ -42,79 +42,8 @@
         "enum": ["normal", "debug", "verbose"],
         "enumNames": ["Normal", "Debug", "Verbose"],
         "description": "Controls the detail level of plugin logs"
-      },
-      "devices": {
-        "title": "Device Configuration",
-        "type": "array",
-        "description": "Manually configure devices instead of discovering them through the API",
-        "items": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "title": "Device ID",
-              "type": "string",
-              "description": "Device ID from SleepMe (usually starts with 'zx-')"
-            },
-            "name": {
-              "title": "Custom Name", 
-              "type": "string",
-              "description": "Name to display in HomeKit"
-            }
-          },
-          "required": ["id"]
-        }
       }
     },
     "required": ["apiToken", "unit"]
-  },
-  "layout": [
-    "name",
-    {
-      "key": "apiToken",
-      "type": "password",
-      "title": "API Token",
-      "description": "Get this from your SleepMe account"
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "title": "Temperature Unit"
-    },
-    {
-      "key": "advanced",
-      "type": "section",
-      "title": "Advanced Settings",
-      "expandable": true,
-      "expanded": false,
-      "items": [
-        {
-          "key": "pollingInterval",
-          "type": "number"
-        },
-        {
-          "key": "logLevel",
-          "type": "select",
-          "title": "Logging Level"
-        },
-        {
-          "key": "devices",
-          "type": "array",
-          "title": "Manual Device Configuration",
-          "description": "Only needed if you want to manually configure devices",
-          "add": "Add Device",
-          "items": [
-            {
-              "key": "devices[].id",
-              "title": "Device ID"
-            },
-            {
-              "key": "devices[].name",
-              "title": "Custom Name"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "footerDisplay": "The SleepMe Simple plugin provides reliable HomeKit control of your SleepMe devices (ChiliPad, OOLER, Dock Pro). You must provide your SleepMe API token to use this plugin."
+  }
 }
