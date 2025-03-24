@@ -6,6 +6,7 @@ on:
       - main  # or your primary branch name
     paths:
       - 'package.json'  # Only trigger when package.json changes
+  workflow_dispatch:  # Add this line to enable manual triggering
 
 jobs:
   build-and-publish:
