@@ -31,10 +31,8 @@
         "title": "Polling Interval",
         "type": "integer",
         "format": "number",
-        "default": 120,
-        "minimum": 60,
-        "maximum": 300,
-        "description": "How frequently to check device status (in seconds)"
+        "default": 90,
+        "description": "How frequently to check device status (in seconds) don't go less than 30"
       },
       "logLevel": {
         "title": "Logging Level",
