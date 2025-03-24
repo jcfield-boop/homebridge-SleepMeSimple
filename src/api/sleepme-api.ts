@@ -811,15 +811,16 @@ private async makeRequest<T>(options: {
     deviceId?: string;
     operationType?: string;
 }): Promise<T> {
+    // Log EVERY request
+    this.logger.info(
+        `API Request ${options.method} ${options.url} [${options.priority || 'NORMAL'}]` + 
+        (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '') +
+        ` Queue size: ${this.requestQueue.length}, Requests this minute: ${this.requestsThisMinute}`
+    );
     // Set default priority
     const priority = options.priority || RequestPriority.NORMAL;
     
-    // Add detailed logging for the request
-    if (this.logger.isVerbose()) {
-        this.logger.verbose(
-            `API Request ${options.method} ${options.url} [${priority}]` + 
-            (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
-        );
+   
     }
     
     // Wait for startup delay to complete for non-high priority requests
