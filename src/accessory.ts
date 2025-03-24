@@ -2,7 +2,7 @@
  * SleepMe Accessory
  * 
  * This class implements a HomeKit interface for SleepMe devices,
- * using separate services for temperature reporting, power control, and temperature adjustment
+ * using the HeaterCooler service as the primary control interface
  */
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
@@ -12,12 +12,10 @@ import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C } from './settings.js';
 
 /**
  * SleepMe Accessory
- * Provides a simplified interface for SleepMe devices using separate HomeKit services
+ * Provides a simplified interface for SleepMe devices using the HeaterCooler service
  */
 export class SleepMeAccessory {
   // HomeKit services
-  private temperatureSensorService!: Service;
-  private switchService!: Service;
   private temperatureControlService!: Service;
   private waterLevelService?: Service;
   private informationService!: Service;
@@ -67,9 +65,7 @@ export class SleepMeAccessory {
     // Initialize accessory information service
     this.setupInformationService();
     
-    // Create our simplified services
-    this.setupTemperatureSensorService();
-    this.setupPowerSwitchService();
+    // Create HeaterCooler service (main control)
     this.setupTemperatureControlService();
     
     // Initialize the device state by fetching current status
@@ -83,133 +79,107 @@ export class SleepMeAccessory {
     
     this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
   }
-private setupInformationService(): void {
-  // Get or create the information service
-  this.informationService = this.accessory.getService(this.platform.Service.AccessoryInformation) || 
-    this.accessory.addService(this.platform.Service.AccessoryInformation);
-  
-  // Set default information
-  this.informationService
-    .setCharacteristic(this.Characteristic.Manufacturer, 'SleepMe Inc.')
-    .setCharacteristic(this.Characteristic.Model, this.deviceModel)
-    .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
-    .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
-  
-  // Set the category to AIR_CONDITIONER which works better for HeaterCooler devices
-  this.accessory.category = this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER;
-}
+
+  private setupInformationService(): void {
+    // Get or create the information service
+    this.informationService = this.accessory.getService(this.platform.Service.AccessoryInformation) || 
+      this.accessory.addService(this.platform.Service.AccessoryInformation);
+    
+    // Set default information
+    this.informationService
+      .setCharacteristic(this.Characteristic.Manufacturer, 'SleepMe Inc.')
+      .setCharacteristic(this.Characteristic.Model, this.deviceModel)
+      .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
+      .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+    
+    // Set the category to AIR_CONDITIONER which works better for HeaterCooler devices
+    this.accessory.category = this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER;
+  }
   
   /**
-   * Set up the temperature sensor service
+   * Set up the HeaterCooler service for temperature control
+   * This is the only primary service we'll expose to HomeKit
    */
-  private setupTemperatureSensorService(): void {
-    // Create the temperature sensor service
-    this.temperatureSensorService = this.accessory.getService(this.platform.Service.TemperatureSensor) ||
-      this.accessory.addService(this.platform.Service.TemperatureSensor, `${this.displayName} Temperature`);
+  private setupTemperatureControlService(): void {
+    // Remove any existing temperature or switch services to avoid duplication
+    const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+    if (existingTempService) {
+      this.platform.log.info('Removing existing temperature sensor service');
+      this.accessory.removeService(existingTempService);
+    }
     
-    // Set service properties
-    this.temperatureSensorService
-      .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature`)
+    const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
+    if (existingSwitchService) {
+      this.platform.log.info('Removing existing switch service');
+      this.accessory.removeService(existingSwitchService);
+    }
+    
+    // Use HeaterCooler service for temperature control and power
+    this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
+      this.accessory.addService(this.platform.Service.HeaterCooler, this.displayName);
+    
+    // Configure basic characteristics
+    this.temperatureControlService
+      .setCharacteristic(this.Characteristic.Name, this.displayName)
+      .setCharacteristic(this.Characteristic.Active, this.isPowered ? 1 : 0)
+      .setCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.IDLE)
+      .setCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.Characteristic.TargetHeaterCoolerState.AUTO);
+    
+    // Set up current temperature characteristic
+    this.temperatureControlService
       .getCharacteristic(this.Characteristic.CurrentTemperature)
       .setProps({
-        minValue: MIN_TEMPERATURE_C - 10, // Allow slightly below min for reporting
-        maxValue: MAX_TEMPERATURE_C + 10, // Allow slightly above max for reporting
+        minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
+        maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
         minStep: 0.1
       })
-      .onGet(this.handleCurrentTemperatureGet.bind(this));
-  }
-  
-  /**
-   * Set up the power switch service
-   */
-  private setupPowerSwitchService(): void {
-    // Create the switch service
-    this.switchService = this.accessory.getService(this.platform.Service.Switch) ||
-      this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Power`);
+      .onGet(() => this.currentTemperature || 20);
     
-    // Set service properties
-    this.switchService
-      .setCharacteristic(this.Characteristic.Name, `${this.displayName} Power`)
-      .getCharacteristic(this.Characteristic.On)
-      .onGet(this.handlePowerStateGet.bind(this))
-      .onSet(this.handlePowerStateSet.bind(this));
-  }
-private setupTemperatureControlService(): void {
-  // Use HeaterCooler service for temperature control
-  this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
-    this.accessory.addService(this.platform.Service.HeaterCooler, `${this.displayName} Temperature Control`);
-  
-  // Configure basic characteristics
-  this.temperatureControlService
-    .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature Control`)
-    .setCharacteristic(this.Characteristic.Active, this.isPowered ? 1 : 0)
-    .setCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.IDLE)
-    .setCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.Characteristic.TargetHeaterCoolerState.AUTO);
-  
-  // Set up current temperature characteristic
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.CurrentTemperature)
-    .setProps({
-      minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
-      maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
-      minStep: 0.1
-    })
-    .onGet(() => this.currentTemperature || 20);
-  
-  // Set up target temperature characteristic (cooling)
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
-    .setProps({
-      minValue: MIN_TEMPERATURE_C,
-      maxValue: MAX_TEMPERATURE_C,
-      minStep: 0.5
-    })
-    .onGet(this.handleTargetTemperatureGet.bind(this))
-    .onSet(this.handleTargetTemperatureSet.bind(this));
-  
-  // Set up target temperature characteristic (heating)
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
-    .setProps({
-      minValue: MIN_TEMPERATURE_C,
-      maxValue: MAX_TEMPERATURE_C,
-      minStep: 0.5
-    })
-    .onGet(this.handleTargetTemperatureGet.bind(this))
-    .onSet(this.handleTargetTemperatureSet.bind(this));
-  
-  // Set up active state getter/setter
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.Active)
-    .onGet(() => this.isPowered ? 1 : 0)
-    .onSet((value) => {
-      this.handlePowerStateSet(Boolean(value));
-    });
-  
-  // Set up target heating/cooling state
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
-    .onGet(() => this.Characteristic.TargetHeaterCoolerState.AUTO) // Always AUTO since device handles both
-    .onSet(() => {
-      // Always reset to AUTO since we don't support specific modes
-      setTimeout(() => {
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.TargetHeaterCoolerState,
-          this.Characteristic.TargetHeaterCoolerState.AUTO
-        );
-      }, 100);
-    });
+    // Set up target temperature characteristic (cooling)
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C,
+        maxValue: MAX_TEMPERATURE_C,
+        minStep: 0.5
+      })
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
     
-  // Make sure the HeaterCooler service is the primary one by linking 
-  // other services as "sub-services"
-  if (this.temperatureSensorService) {
-    this.temperatureControlService.addLinkedService(this.temperatureSensorService);
+    // Set up target temperature characteristic (heating)
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C,
+        maxValue: MAX_TEMPERATURE_C,
+        minStep: 0.5
+      })
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
+    
+    // Set up active state getter/setter
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.Active)
+      .onGet(() => this.isPowered ? 1 : 0)
+      .onSet((value) => {
+        this.handlePowerStateSet(Boolean(value));
+      });
+    
+    // Set up target heating/cooling state
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
+      .onGet(() => this.Characteristic.TargetHeaterCoolerState.AUTO) // Always AUTO since device handles both
+      .onSet(() => {
+        // Always reset to AUTO since we don't support specific modes
+        setTimeout(() => {
+          this.temperatureControlService.updateCharacteristic(
+            this.Characteristic.TargetHeaterCoolerState,
+            this.Characteristic.TargetHeaterCoolerState.AUTO
+          );
+        }, 100);
+      });
   }
-  
-  if (this.switchService) {
-    this.temperatureControlService.addLinkedService(this.switchService);
-  }
-}
+
   /**
    * Add/update the water level service if supported
    * @param waterLevel - Current water level percentage
@@ -281,7 +251,6 @@ private setupTemperatureControlService(): void {
       });
     }, intervalMs);
   }
-  
   /**
    * Detect device model based on attachments or other characteristics
    * @param data - Raw device data from API
@@ -406,12 +375,6 @@ private setupTemperatureControlService(): void {
       if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
         this.currentTemperature = status.currentTemperature;
         
-        // Update temperature sensor
-        this.temperatureSensorService.updateCharacteristic(
-          this.Characteristic.CurrentTemperature,
-          this.currentTemperature
-        );
-        
         // Update the current temperature in HeaterCooler service
         this.temperatureControlService.updateCharacteristic(
           this.Characteristic.CurrentTemperature,
@@ -447,12 +410,6 @@ private setupTemperatureControlService(): void {
       if (this.isPowered !== newPowerState) {
         this.isPowered = newPowerState;
         
-        // Update power switch
-        this.switchService.updateCharacteristic(
-          this.Characteristic.On,
-          this.isPowered
-        );
-        
         // Update the active state in HeaterCooler service
         this.temperatureControlService.updateCharacteristic(
           this.Characteristic.Active,
@@ -481,7 +438,6 @@ private setupTemperatureControlService(): void {
       );
     }
   }
-  
   /**
    * Update the current heater/cooler state based on target vs current temperature
    * This helps HomeKit display the appropriate heating/cooling state icon
@@ -525,26 +481,6 @@ private setupTemperatureControlService(): void {
         this.Characteristic.CurrentHeaterCoolerState.IDLE
       );
     }
-  }
-  
-  /**
-   * Handler for CurrentTemperature GET
-   * @returns Current temperature value
-   */
-  private async handleCurrentTemperatureGet(): Promise<CharacteristicValue> {
-    // Return default temperature if value is not yet initialized
-    const temp = isNaN(this.currentTemperature) ? 20 : this.currentTemperature;
-    this.platform.log.debug(`GET CurrentTemperature: ${temp}`);
-    return temp;
-  }
-  
-  /**
-   * Handler for power state GET
-   * @returns Current power state (boolean)
-   */
-  private async handlePowerStateGet(): Promise<CharacteristicValue> {
-    this.platform.log.debug(`GET Power State: ${this.isPowered ? 'ON' : 'OFF'}`);
-    return this.isPowered;
   }
   
   /**
@@ -592,11 +528,6 @@ private setupTemperatureControlService(): void {
       }
       
       // Update the UI state immediately for responsiveness
-      this.switchService.updateCharacteristic(
-        this.Characteristic.On,
-        this.isPowered
-      );
-      
       this.temperatureControlService.updateCharacteristic(
         this.Characteristic.Active,
         this.isPowered ? 1 : 0
@@ -624,11 +555,6 @@ private setupTemperatureControlService(): void {
       );
       
       // Revert the switch if there was an error
-      this.switchService.updateCharacteristic(
-        this.Characteristic.On,
-        !turnOn
-      );
-      
       this.temperatureControlService.updateCharacteristic(
         this.Characteristic.Active,
         !turnOn ? 1 : 0
@@ -680,12 +606,7 @@ private setupTemperatureControlService(): void {
         if (success) {
           this.isPowered = true;
           
-          // Update the power switches
-          this.switchService.updateCharacteristic(
-            this.Characteristic.On,
-            true
-          );
-          
+          // Update the power state
           this.temperatureControlService.updateCharacteristic(
             this.Characteristic.Active,
             1
