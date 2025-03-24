@@ -2,6 +2,8 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "singular": true,
+  "customUi": true,
+  "customUiPath": "./customui",
   "schema": {
     "type": "object",
     "properties": {
@@ -30,6 +32,7 @@
       "pollingInterval": {
         "title": "Polling Interval",
         "type": "integer",
+        "format": "number",
         "default": 120,
         "minimum": 60,
         "maximum": 300,
