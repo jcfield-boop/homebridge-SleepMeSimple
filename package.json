@@ -1,7 +1,7 @@
 {
   "name": "homebridge-sleepme-simple",
   "displayName": "SleepMe Simple",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "type": "module",
   "description": "Simplified HomeKit control for SleepMe devices (ChiliPad, OOLER, Dock Pro)",
   "license": "MIT",
