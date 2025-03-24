@@ -83,7 +83,6 @@ export class SleepMeAccessory {
     
     this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
   }
-  
 private setupInformationService(): void {
   // Get or create the information service
   this.informationService = this.accessory.getService(this.platform.Service.AccessoryInformation) || 
@@ -97,9 +96,7 @@ private setupInformationService(): void {
     .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
   
   // Set the category to AIR_CONDITIONER which works better for HeaterCooler devices
-  if (this.accessory.category !== this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER) {
-    this.accessory.category = this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER;
-  }
+  this.accessory.category = this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER;
 }
   
   /**
@@ -137,7 +134,7 @@ private setupInformationService(): void {
       .onGet(this.handlePowerStateGet.bind(this))
       .onSet(this.handlePowerStateSet.bind(this));
   }
-  private setupTemperatureControlService(): void {
+private setupTemperatureControlService(): void {
   // Use HeaterCooler service for temperature control
   this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
     this.accessory.addService(this.platform.Service.HeaterCooler, `${this.displayName} Temperature Control`);
@@ -203,8 +200,15 @@ private setupInformationService(): void {
       }, 100);
     });
     
-  // Set HeaterCooler as the primary service for this accessory
-  this.accessory.setPrimaryService(this.temperatureControlService);
+  // Make sure the HeaterCooler service is the primary one by linking 
+  // other services as "sub-services"
+  if (this.temperatureSensorService) {
+    this.temperatureControlService.addLinkedService(this.temperatureSensorService);
+  }
+  
+  if (this.switchService) {
+    this.temperatureControlService.addLinkedService(this.switchService);
+  }
 }
   /**
    * Add/update the water level service if supported
