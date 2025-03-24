@@ -2,41 +2,75 @@
  * SleepMe Accessory
  * 
  * This class implements a HomeKit interface for SleepMe devices,
- * using the Thermostat service as the primary control interface
+ * using a combination of services for the best user experience
  */
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
 import { SleepMeApi } from './api/sleepme-api.js';
 import { ThermalStatus, PowerState } from './api/types.js';
-import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C } from './settings.js';
+import { 
+  MIN_TEMPERATURE_C, 
+  MAX_TEMPERATURE_C, 
+  COMMAND_DEBOUNCE_DELAY_MS,
+  USER_ACTION_QUIET_PERIOD_MS 
+} from './settings.js';
 
 /**
- * Create a debounced function
+ * Create an enhanced debounced function with leading/trailing options
  * @param callback Function to debounce
  * @param wait Wait time in milliseconds
+ * @param options Configuration options
  * @returns Debounced function
  */
-function debounce<T extends (...args: any[]) => any>(
+function createSmartDebounce<T extends (...args: any[]) => any>(
   callback: T,
-  wait: number
+  wait: number,
+  options: { leading?: boolean; trailing?: boolean } = { leading: false, trailing: true }
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let isInvoking = false;
   
   return (...args: Parameters<T>): void => {
+    lastArgs = args;
+    
+    // Function to execute the callback
+    const executeCallback = () => {
+      if (lastArgs) {
+        isInvoking = true;
+        try {
+          callback(...lastArgs);
+        } finally {
+          isInvoking = false;
+        }
+      }
+    };
+    
+    // Clear existing timeout
     if (timeout) {
       clearTimeout(timeout);
+      timeout = null;
+    } 
+    // Execute leading edge call if enabled and not currently invoking
+    else if (options.leading && !isInvoking) {
+      executeCallback();
     }
     
-    timeout = setTimeout(() => {
-      timeout = null;
-      callback(...args);
-    }, wait);
+    // Set up trailing edge call if enabled
+    if (options.trailing !== false) {
+      timeout = setTimeout(() => {
+        timeout = null;
+        if (!isInvoking) {
+          executeCallback();
+        }
+      }, wait);
+    }
   };
 }
 
 /**
  * SleepMe Accessory
- * Provides a simplified interface for SleepMe devices using the Thermostat service
+ * Provides a simplified interface for SleepMe devices
  */
 export class SleepMeAccessory {
   // HomeKit services
@@ -52,8 +86,9 @@ export class SleepMeAccessory {
   private waterLevel = 100; // Default full water level
   private isWaterLow = false;
   
-  // Debounced function for temperature setting
+  // Debounced functions for command handling
   private tempSetterDebounced: (newTemp: number, previousTemp: number) => void;
+  private powerStateSetterDebounced: (turnOn: boolean) => void;
   
   // Device properties
   private readonly deviceId: string;
@@ -63,7 +98,7 @@ export class SleepMeAccessory {
   // Update control
   private statusUpdateTimer?: NodeJS.Timeout;
   private lastStatusUpdate = 0;
-  private lastTemperatureSetTime = 0;
+  private lastUserActionTime = 0;
   private failedUpdateAttempts = 0;
   private updateInProgress = false;
   private skipNextUpdate = false;
@@ -99,10 +134,25 @@ export class SleepMeAccessory {
     // Create Thermostat service (main control)
     this.setupTemperatureControlService();
 
-    // Create debounced temperature setter
-    this.tempSetterDebounced = debounce((newTemp: number, previousTemp: number) => {
-      this.handleTargetTemperatureSetImpl(newTemp, previousTemp);
-    }, 500); // 500ms debounce time
+    // Create debounced temperature setter with smart options
+    // Use leading edge for immediate feedback, but also trailing edge for final value
+    this.tempSetterDebounced = createSmartDebounce(
+      (newTemp: number, previousTemp: number) => {
+        this.handleTargetTemperatureSetImpl(newTemp, previousTemp);
+      }, 
+      COMMAND_DEBOUNCE_DELAY_MS, 
+      { leading: false, trailing: true }
+    );
+    
+    // Create debounced power state setter
+    // No leading edge to avoid too many power toggles 
+    this.powerStateSetterDebounced = createSmartDebounce(
+      (turnOn: boolean) => {
+        this.handlePowerStateSetImpl(turnOn);
+      },
+      COMMAND_DEBOUNCE_DELAY_MS,
+      { leading: false, trailing: true }
+    );
     
     // Initialize the device state by fetching current status
     // Wait a moment before first status fetch to avoid immediate API call
@@ -140,7 +190,6 @@ export class SleepMeAccessory {
 
   /**
    * Set up the Thermostat service for temperature control
-   * This is the main service that provides thermostat functionality in HomeKit
    */
   private setupTemperatureControlService(): void {
     // Remove any existing temperature or switch services to avoid duplication
@@ -233,16 +282,17 @@ export class SleepMeAccessory {
     }
     
     // Determine if we're heating or cooling based on current vs target temperature
-    if (this.currentTemperature < this.targetTemperature - 0.5) {
-      // Heating up (with 0.5° threshold to prevent oscillation)
+    // Use a larger threshold (1.0°C) to reduce state flapping
+    if (this.currentTemperature < this.targetTemperature - 1.0) {
+      // Heating up
       return this.Characteristic.CurrentHeatingCoolingState.HEAT;
-    } else if (this.currentTemperature > this.targetTemperature + 0.5) {
+    } else if (this.currentTemperature > this.targetTemperature + 1.0) {
       // Cooling down
       return this.Characteristic.CurrentHeatingCoolingState.COOL;
     } else {
       // At target temperature (within threshold)
-      // Use OFF as state when at target temperature
-      return this.Characteristic.CurrentHeatingCoolingState.OFF;
+      // Use HEAT as state when at target temperature and powered on
+      return this.Characteristic.CurrentHeatingCoolingState.HEAT;
     }
   }
 
@@ -257,15 +307,19 @@ export class SleepMeAccessory {
 
   /**
    * Handle setting the target heating/cooling state
+   * This translates HomeKit states to SleepMe power states
    */
   private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
     this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
+    
+    // Mark user action time
+    this.lastUserActionTime = Date.now();
     
     switch (value) {
       case this.Characteristic.TargetHeatingCoolingState.OFF:
         // Turn off
         if (this.isPowered) {
-          await this.handlePowerStateSet(false);
+          this.powerStateSetterDebounced(false);
         }
         break;
     
@@ -274,7 +328,7 @@ export class SleepMeAccessory {
       case this.Characteristic.TargetHeatingCoolingState.COOL:
         // Turn on
         if (!this.isPowered) {
-          await this.handlePowerStateSet(true);
+          this.powerStateSetterDebounced(true);
         }
         
         // For SleepMe devices, we treat all active modes as AUTO
@@ -317,11 +371,11 @@ export class SleepMeAccessory {
   }
 
   /**
-   * Handler for power state SET - using heating/cooling state
-   * @param turnOn - Whether to turn on the device
+   * Debounced implementation of power state setting
+   * @param turnOn Whether to turn on the device
    */
-  private async handlePowerStateSet(turnOn: boolean): Promise<void> {
-    this.platform.log.info(`SET Power State: ${turnOn ? 'ON' : 'OFF'}`);
+  private async handlePowerStateSetImpl(turnOn: boolean): Promise<void> {
+    this.platform.log.info(`Setting power state: ${turnOn ? 'ON' : 'OFF'}`);
     
     // Skip redundant updates
     if ((turnOn && this.isPowered) || (!turnOn && !this.isPowered)) {
@@ -331,7 +385,7 @@ export class SleepMeAccessory {
     
     // Mark that we shouldn't poll right after this user action
     this.skipNextUpdate = true;
-    this.lastTemperatureSetTime = Date.now();
+    this.lastUserActionTime = Date.now();
     
     try {
       let success = false;
@@ -367,7 +421,7 @@ export class SleepMeAccessory {
         this.refreshDeviceStatus(true).catch(e => {
           this.platform.log.debug(`Error refreshing status after power change: ${e}`);
         });
-      }, 5000);
+      }, 10000); // Increased delay to 10 seconds to avoid rate limiting
     } catch (error) {
       this.platform.log.error(
         `Failed to set power state: ${error instanceof Error ? error.message : String(error)}`
@@ -380,8 +434,8 @@ export class SleepMeAccessory {
   
   /**
    * Add/update the water level service if supported
-   * @param waterLevel - Current water level percentage
-   * @param isWaterLow - Whether water level is considered low
+   * @param waterLevel Current water level percentage
+   * @param isWaterLow Whether water level is considered low
    */
   private setupWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
     // Only create if water level data is available
@@ -435,7 +489,7 @@ export class SleepMeAccessory {
     }
     
     // Convert polling interval from seconds to milliseconds
-    const initialIntervalMs = this.platform.pollingInterval * 1000;
+    const pollingIntervalMs = this.platform.pollingInterval * 1000;
     
     this.platform.log.debug(
       `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
@@ -456,13 +510,22 @@ export class SleepMeAccessory {
         return;
       }
 
+      // Check if we're in the quiet period after a user action
+      const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+      if (timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS) {
+        this.platform.log.debug(
+          `Skipping update, within quiet period after user action (${Math.round(timeSinceUserAction/1000)}s of ${USER_ACTION_QUIET_PERIOD_MS/1000}s)`
+        );
+        return;
+      }
+
       // Adaptive polling: If we've had several failed attempts, slow down polling
       const now = Date.now();
       if (this.failedUpdateAttempts > 2) {
         const timeSinceLastUpdate = now - this.lastStatusUpdate;
         // If it's been less than 2x the polling interval since last successful update,
         // skip this update to reduce API load
-        if (timeSinceLastUpdate < initialIntervalMs * 2) {
+        if (timeSinceLastUpdate < pollingIntervalMs * 2) {
           this.platform.log.debug('Skipping update due to recent failures, slowing down polling');
           return;
         }
@@ -474,12 +537,12 @@ export class SleepMeAccessory {
           `Error updating device status (attempt ${this.failedUpdateAttempts}): ${error instanceof Error ? error.message : String(error)}`
         );
       });
-    }, initialIntervalMs);
+    }, pollingIntervalMs);
   }
   
   /**
    * Detect device model based on attachments or other characteristics
-   * @param data - Raw device data from API
+   * @param data Raw device data from API
    * @returns Detected device model name
    */
   private detectDeviceModel(data: Record<string, unknown>): string {
@@ -533,15 +596,15 @@ export class SleepMeAccessory {
   
   /**
    * Refresh the device status from the API
-   * @param isInitialSetup - Whether this is the initial setup refresh
+   * @param isInitialSetup Whether this is the initial setup refresh
    */
   private async refreshDeviceStatus(isInitialSetup = false): Promise<void> {
     // Skip polling updates if we recently made a user-initiated change
     if (!isInitialSetup) {
-      const timeSinceLastTemp = Date.now() - this.lastTemperatureSetTime;
-      if (timeSinceLastTemp < 30000) { // 30 seconds
+      const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+      if (timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS) {
         this.platform.log.debug(
-          `Skipping scheduled status update, recent user interaction ${Math.round(timeSinceLastTemp/1000)}s ago`
+          `Skipping scheduled status update, recent user interaction ${Math.round(timeSinceUserAction/1000)}s ago`
         );
         this.skipNextUpdate = true; // Skip next update too
         return;
@@ -675,13 +738,16 @@ export class SleepMeAccessory {
  
   /**
    * Handler for target temperature SET
-   * @param value - New target temperature
+   * @param value New target temperature
    */
   private handleTargetTemperatureSet(value: CharacteristicValue): void {
     const newTemp = value as number;
     
     // Store previous temperature before updating UI
     const previousTemp = this.targetTemperature;
+    
+    // Mark user action time
+    this.lastUserActionTime = Date.now();
     
     // Update UI immediately for responsiveness
     this.targetTemperature = newTemp;
@@ -695,8 +761,8 @@ export class SleepMeAccessory {
 
   /**
    * Implementation of target temperature setting that makes the API call
-   * @param newTemp - New target temperature
-   * @param previousTemp - Previous target temperature before UI update
+   * @param newTemp New target temperature
+   * @param previousTemp Previous target temperature before UI update
    */
   private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: number): Promise<void> {
     this.platform.log.info(`Processing temperature change: ${previousTemp}°C → ${newTemp}°C`);
@@ -710,7 +776,7 @@ export class SleepMeAccessory {
     
     // Mark that we shouldn't poll right after this user action
     this.skipNextUpdate = true;
-    this.lastTemperatureSetTime = Date.now();
+    this.lastUserActionTime = Date.now();
     
     try {
       // Only send the command if the device is powered on
@@ -743,7 +809,7 @@ export class SleepMeAccessory {
         this.refreshDeviceStatus(true).catch(e => {
           this.platform.log.debug(`Error refreshing status after temperature change: ${e}`);
         });
-      }, 5000); // 5 seconds
+      }, 10000); // 10 seconds
     } catch (error) {
       this.platform.log.error(
         `Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`
