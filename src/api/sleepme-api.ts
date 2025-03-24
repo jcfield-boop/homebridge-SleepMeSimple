@@ -6,7 +6,11 @@ import {
   API_BASE_URL, 
   MAX_REQUESTS_PER_MINUTE,
   MIN_REQUEST_INTERVAL,
-  DEFAULT_CACHE_VALIDITY_MS
+  DEFAULT_CACHE_VALIDITY_MS,
+  MAX_RETRIES,
+  INITIAL_BACKOFF_MS,
+  MAX_BACKOFF_MS,
+  RequestPriority
 } from '../settings.js';
 import { 
   Device, 
@@ -16,16 +20,6 @@ import {
   PowerState,
   Logger
 } from './types.js';
-
-/**
- * Priority levels for API requests
- * Used to determine order of execution when requests are queued
- */
-enum RequestPriority {
-  HIGH = 'high',       // Critical user-initiated actions (power, temperature changes)
-  NORMAL = 'normal',   // Regular status updates
-  LOW = 'low'          // Background or non-essential operations
-}
 
 /**
  * Interface for a request in the queue
@@ -43,6 +37,7 @@ interface QueuedRequest {
   url: string;                         // Endpoint URL (for logging)
   deviceId?: string;                   // Device ID if applicable
   operationType?: string;              // Operation type for deduplication
+  lastAttempt?: number;                // When the request was last attempted
 }
 
 /**
@@ -59,8 +54,11 @@ interface DeviceStatusCache {
  * Handles API communication with rate limiting and robust error handling
  */
 export class SleepMeApi {
-  // Request queue
-  private requestQueue: QueuedRequest[] = [];
+  // Request queue - separate queues by priority for better management
+  private criticalQueue: QueuedRequest[] = [];
+  private highPriorityQueue: QueuedRequest[] = [];
+  private normalPriorityQueue: QueuedRequest[] = [];
+  private lowPriorityQueue: QueuedRequest[] = [];
   
   // Rate limiting state
   private requestsThisMinute = 0;
@@ -69,7 +67,7 @@ export class SleepMeApi {
   private processingQueue = false;
   private rateLimitBackoffUntil = 0;
   private consecutiveErrors = 0;
-  private rateExceededLogged = false; // Flag to prevent redundant log messages
+  private rateExceededLogged = false;  // Flag to prevent redundant log messages
   
   // Request ID counter
   private requestIdCounter = 0;
@@ -338,9 +336,9 @@ export class SleepMeApi {
   }
   
   /**
-   * Turn device on
+   * Turn device on and set temperature in a single operation
    * @param deviceId Device identifier
-   * @param temperature Optional target temperature in Celsius
+   * @param temperature Target temperature in Celsius
    * @returns Whether operation was successful
    */
   public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean> {
@@ -504,12 +502,12 @@ export class SleepMeApi {
       // Cancel any pending device status requests for this device
       this.cancelPendingRequests(deviceId, 'getDeviceStatus');
       
-      // Make the request
+      // Make the request with CRITICAL priority for user-initiated actions
       await this.makeRequest<Record<string, unknown>>({
         method: 'PATCH',
         url: `/devices/${deviceId}`,
         data: settings,
-        priority: RequestPriority.HIGH, // User-initiated actions are high priority
+        priority: RequestPriority.CRITICAL, // User-initiated actions are critical priority
         deviceId,
         operationType: 'updateDeviceSettings'
       });
@@ -558,168 +556,198 @@ export class SleepMeApi {
       );
     }
   }
- /**
- * Process the request queue
- * This is the core method for rate-limiting and prioritizing requests
- */
-private async processQueue(): Promise<void> {
-  // If already processing, exit
-  if (this.processingQueue) {
-    return;
-  }
   
-  this.processingQueue = true;
-  
-  try {
-    while (this.requestQueue.length > 0) {
-      // Check if we need to reset rate limit counter
-      const now = Date.now();
-      if (now - this.minuteStartTime >= 60000) {
-        this.requestsThisMinute = 0;
-        this.minuteStartTime = now;
-        this.rateExceededLogged = false; // Reset logging flag
-        this.logger.debug('Resetting rate limit counter (1 minute has passed)');
-      }
-      
-      // Check if we're in backoff mode
-      if (this.rateLimitBackoffUntil > now) {
-        // Only log this once, not repeatedly
-        if (!this.rateExceededLogged) {
-          this.logger.info(`Rate limit backoff active, waiting ${Math.ceil((this.rateLimitBackoffUntil - now) / 1000)}s before retry`);
-          this.rateExceededLogged = true;
-        }
-        
-        // Use a single timer rather than polling
-        await new Promise(resolve => 
-          setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
-        );
-        continue;
-      }
-      
-      // Check if we've hit the rate limit
-      if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
-        const resetTime = this.minuteStartTime + 60000;
-        const waitTime = resetTime - now;
-        
-        // Only log this once, not repeatedly
-        if (!this.rateExceededLogged) {
-          this.logger.info(
-            `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
-          );
-          this.rateExceededLogged = true;
-        }
-        
-        // Wait for rate limit reset with a single timer
-        await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-        continue;
-      }
-      
-      // Check if we need to wait between requests
-      const timeSinceLastRequest = now - this.lastRequestTime;
-      if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-        const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-        
-        // Only log this for debug level, not for every check
-        if (this.logger.isDebug()) {
-          this.logger.debug(`Waiting ${Math.round(waitTime/1000)}s between requests (rate limiting)`);
-        }
-        
-        // Use a single timer instead of polling
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        continue;
-      }
-      
-      // Get the next request with priority
-      const request = this.getNextRequest();
-      
-      if (!request) {
-        break;
-      }
-      
-      // Mark the request as executing
-      request.executing = true;
-      
-      try {
-        // Update rate limiting counters
-        this.requestsThisMinute++;
-        this.lastRequestTime = now;
-        
-        // Add auth token to request
-        request.config.headers = {
-          ...(request.config.headers || {}),
-          Authorization: `Bearer ${this.apiToken}`
-        };
-        
-        this.logger.verbose(
-          `Executing request ${request.id}: ${request.method} ${request.url}`
-        );
-        
-        const startTime = now;
-        
-        // Execute the request
-        this.stats.totalRequests++;
-        const response = await axios(request.config);
-        this.stats.successfulRequests++;
-        this.stats.lastRequest = new Date();
-        
-        // Track response time
-        const responseTime = Date.now() - startTime;
-        this.updateAverageResponseTime(responseTime);
-        
-        // Resolve the promise with the data
-        request.resolve(response.data);
-        
-        this.logger.verbose(
-          `Request ${request.id} completed in ${responseTime}ms`
-        );
-        
-        // Reset consecutive errors on success
-        this.consecutiveErrors = 0;
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        
-        this.stats.failedRequests++;
-        this.stats.lastError = axiosError;
-        
-        // Handle rate limiting (HTTP 429)
-        if (axiosError.response?.status === 429) {
-          // Implement more effective backoff
-          this.consecutiveErrors++;
-          // Start with 15 seconds backoff, increasing with consecutive errors
-          // Cap at 2 minutes max backoff
-          const backoffTime = Math.min(120000, 15000 * Math.pow(1.5, this.consecutiveErrors));
-          this.rateLimitBackoffUntil = Date.now() + backoffTime;
-          
-          // Simplified logging
-          this.logger.warn(`Rate limit exceeded (429). Implementing backoff strategy for ${Math.ceil(backoffTime/1000)}s.`);
-          
-          // Requeue the request
-          this.requestQueue.unshift({
-            ...request,
-            executing: false,
-            retryCount: request.retryCount + 1
-          });
-        } else {
-          // For other errors, just reject
-          this.consecutiveErrors++;
-          request.reject(error);
-        }
-      } finally {
-        // Remove request from queue
-        this.removeRequest(request.id);
-      }
+  /**
+   * Process the request queue with improved priority handling
+   * and adaptive rate limiting
+   */
+  private async processQueue(): Promise<void> {
+    // If already processing, exit
+    if (this.processingQueue) {
+      return;
     }
-  } finally {
-    this.processingQueue = false;
     
-    // If there are still requests in the queue, continue processing
-    if (this.requestQueue.length > 0) {
-      // Use a real delay here instead of immediate re-processing
-      setTimeout(() => this.processQueue(), 500);
+    this.processingQueue = true;
+    
+    try {
+      // Keep processing as long as there are requests
+      while (this.hasQueuedRequests()) {
+        // Check if we need to reset rate limit counter
+        this.checkRateLimit();
+        
+        // Check if we're in backoff mode
+        const now = Date.now();
+        if (this.rateLimitBackoffUntil > now) {
+          // Only log this once, not repeatedly
+          if (!this.rateExceededLogged) {
+            const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+            this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
+            this.rateExceededLogged = true;
+          }
+          
+          // Use a single timer rather than polling
+          await new Promise(resolve => 
+            setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
+          );
+          continue;
+        }
+        
+        // Check if we've hit the rate limit
+        if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
+          const resetTime = this.minuteStartTime + 60000;
+          const waitTime = resetTime - now;
+          
+          // Only log this once, not repeatedly
+          if (!this.rateExceededLogged) {
+            this.logger.info(
+              `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
+              `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
+            );
+            this.rateExceededLogged = true;
+          }
+          
+          // Wait for rate limit reset with a single timer
+          await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
+          continue;
+        }
+        
+        // Check if we need to wait between requests
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+          const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+          
+          // Only log this for debug level, not for every check
+          if (this.logger.isDebug()) {
+            this.logger.debug(`Waiting ${Math.round(waitTime/1000)}s between requests (rate limiting)`);
+          }
+          
+          // Use a single timer instead of polling
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        // Get the next request from prioritized queues
+        const request = this.getNextRequest();
+        
+        if (!request) {
+          break; // No requests to process
+        }
+        
+        // Mark the request as executing
+        request.executing = true;
+        request.lastAttempt = Date.now();
+        
+        try {
+          // Update rate limiting counters
+          this.requestsThisMinute++;
+          this.lastRequestTime = now;
+          
+          // Add auth token to request
+          request.config.headers = {
+            ...(request.config.headers || {}),
+            Authorization: `Bearer ${this.apiToken}`
+          };
+          
+          this.logger.verbose(
+            `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`
+          );
+          
+          const startTime = now;
+          
+          // Execute the request
+          this.stats.totalRequests++;
+          const response = await axios(request.config);
+          this.stats.successfulRequests++;
+          this.stats.lastRequest = new Date();
+          
+          // Track response time
+          const responseTime = Date.now() - startTime;
+          this.updateAverageResponseTime(responseTime);
+          
+          // Resolve the promise with the data
+          request.resolve(response.data);
+          
+          this.logger.verbose(
+            `Request ${request.id} completed in ${responseTime}ms`
+          );
+          
+          // Reset consecutive errors on success
+          this.consecutiveErrors = 0;
+        } catch (error) {
+          const axiosError = error as AxiosError;
+          
+          this.stats.failedRequests++;
+          this.stats.lastError = axiosError;
+          
+          // Handle rate limiting (HTTP 429)
+          if (axiosError.response?.status === 429) {
+            // Implement more effective backoff with jitter
+            this.consecutiveErrors++;
+            
+            // Calculate backoff with jitter to prevent all clients retrying at once
+            const jitter = Math.random() * 5000; // 0-5 seconds of random jitter
+            const backoffTime = Math.min(
+              MAX_BACKOFF_MS, 
+              (INITIAL_BACKOFF_MS * Math.pow(1.5, this.consecutiveErrors)) + jitter
+            );
+            
+            this.rateLimitBackoffUntil = Date.now() + backoffTime;
+            
+            this.logger.warn(
+              `Rate limit exceeded (429). Implementing backoff strategy for ${Math.ceil(backoffTime/1000)}s.`
+            );
+            
+            // Requeue the request based on priority and retry count
+            this.requeueRequest(request);
+          } else {
+            // For other errors, check retry logic by priority
+            this.consecutiveErrors++;
+            
+            // Critical and high priority get more retries
+            const maxRetries = request.priority === RequestPriority.CRITICAL 
+              ? MAX_RETRIES + 2 
+              : request.priority === RequestPriority.HIGH 
+                ? MAX_RETRIES 
+                : MAX_RETRIES - 1;
+                
+            if (request.retryCount < maxRetries) {
+              this.logger.warn(
+                `Request failed (${axiosError.message}), retry ${request.retryCount + 1}/${maxRetries}`
+              );
+              this.requeueRequest(request);
+            } else {
+              // Max retries exceeded
+              this.logger.error(
+                `Request failed after ${request.retryCount} retries: ${axiosError.message}`
+              );
+              request.reject(error);
+            }
+          }
+        } finally {
+          // Remove request from appropriate queue
+          this.removeRequest(request);
+        }
+      }
+    } finally {
+      this.processingQueue = false;
+      
+      // If there are still requests in any queue, continue processing after a short delay
+      if (this.hasQueuedRequests()) {
+        setTimeout(() => this.processQueue(), 500);
+      }
     }
   }
-}
+
+  /**
+   * Determine if there are any queued requests
+   */
+  private hasQueuedRequests(): boolean {
+    return this.criticalQueue.length > 0 || 
+           this.highPriorityQueue.length > 0 || 
+           this.normalPriorityQueue.length > 0 || 
+           this.lowPriorityQueue.length > 0;
+  }
+
   /**
    * Check and reset rate limit counter if needed
    */
@@ -742,50 +770,112 @@ private async processQueue(): Promise<void> {
   }
 
   /**
-   * Get the next request from the queue, prioritizing by type and timestamp
-   * @returns Next request to process or undefined if queue is empty
+   * Get the next request from the appropriate priority queue
+   * @returns Next request to process or undefined if all queues empty
    */
   private getNextRequest(): QueuedRequest | undefined {
-    // Skip requests that are already being executed
-    const pendingRequests = this.requestQueue.filter(r => !r.executing);
+    // Process requests in priority order, with oldest first in each priority level
     
-    if (pendingRequests.length === 0) {
-      return undefined;
+    // First, try critical priority requests
+    if (this.criticalQueue.length > 0) {
+      const pendingRequests = this.criticalQueue.filter(r => !r.executing);
+      if (pendingRequests.length > 0) {
+        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+      }
     }
     
-    // Prioritize requests by priority level
-    const highPriorityRequests = pendingRequests.filter(r => r.priority === RequestPriority.HIGH);
-    const normalPriorityRequests = pendingRequests.filter(r => r.priority === RequestPriority.NORMAL);
-    const lowPriorityRequests = pendingRequests.filter(r => r.priority === RequestPriority.LOW);
-    
-    // First, try high priority requests
-    if (highPriorityRequests.length > 0) {
-      // Sort by timestamp (oldest first)
-      return highPriorityRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+    // Then, try high priority requests
+    if (this.highPriorityQueue.length > 0) {
+      const pendingRequests = this.highPriorityQueue.filter(r => !r.executing);
+      if (pendingRequests.length > 0) {
+        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+      }
     }
     
-    // Then, try normal priority requests
-    if (normalPriorityRequests.length > 0) {
-      return normalPriorityRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+    // Next, try normal priority requests
+    if (this.normalPriorityQueue.length > 0) {
+      const pendingRequests = this.normalPriorityQueue.filter(r => !r.executing);
+      if (pendingRequests.length > 0) {
+        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+      }
     }
     
     // Finally, try low priority requests
-    if (lowPriorityRequests.length > 0) {
-      return lowPriorityRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+    if (this.lowPriorityQueue.length > 0) {
+      const pendingRequests = this.lowPriorityQueue.filter(r => !r.executing);
+      if (pendingRequests.length > 0) {
+        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+      }
     }
     
     return undefined;
   }
 
   /**
-   * Remove a request from the queue
-   * @param id Request ID
+   * Remove a request from its queue
+   * @param request Request to remove
    */
-  private removeRequest(id: string): void {
-    const index = this.requestQueue.findIndex(r => r.id === id);
+  private removeRequest(request: QueuedRequest): void {
+    let queue: QueuedRequest[];
     
+    // Select the appropriate queue based on priority
+    switch (request.priority) {
+      case RequestPriority.CRITICAL:
+        queue = this.criticalQueue;
+        break;
+      case RequestPriority.HIGH:
+        queue = this.highPriorityQueue;
+        break;
+      case RequestPriority.NORMAL:
+        queue = this.normalPriorityQueue;
+        break;
+      case RequestPriority.LOW:
+        queue = this.lowPriorityQueue;
+        break;
+      default:
+        queue = this.normalPriorityQueue;
+    }
+    
+    const index = queue.findIndex(r => r.id === request.id);
     if (index !== -1) {
-      this.requestQueue.splice(index, 1);
+      queue.splice(index, 1);
+    }
+  }
+
+  /**
+   * Requeue a request after a failure, with appropriate priority handling
+   * @param request Request to requeue
+   */
+  private requeueRequest(request: QueuedRequest): void {
+    // Create new request with incremented retry count
+    const newRequest: QueuedRequest = {
+      ...request,
+      executing: false,
+      retryCount: request.retryCount + 1,
+      timestamp: Date.now() // Update timestamp for proper sorting
+    };
+    
+    // Add to the appropriate queue based on priority
+    switch (request.priority) {
+      case RequestPriority.CRITICAL:
+        // Critical requests go to the front of the critical queue
+        this.criticalQueue.unshift(newRequest);
+        break;
+      case RequestPriority.HIGH:
+        // High priority goes to the high priority queue
+        this.highPriorityQueue.push(newRequest);
+        break;
+      case RequestPriority.NORMAL:
+        // Normal priority goes to normal queue
+        this.normalPriorityQueue.push(newRequest);
+        break;
+      case RequestPriority.LOW:
+        // Low priority goes to low priority queue
+        this.lowPriorityQueue.push(newRequest);
+        break;
+      default:
+        // Default to normal priority
+        this.normalPriorityQueue.push(newRequest);
     }
   }
 
@@ -795,25 +885,36 @@ private async processQueue(): Promise<void> {
    * @param operationType Optional type of operation to cancel (if not specified, cancels all)
    */
   private cancelPendingRequests(deviceId: string, operationType?: string): void {
-    // Find requests to cancel
-    const requestsToCancel = this.requestQueue.filter(r => 
-      !r.executing && r.deviceId === deviceId && 
-      (!operationType || r.operationType === operationType)
-    );
-    
-    // Cancel each request
-    for (const request of requestsToCancel) {
-      this.logger.verbose(
-        `Canceling pending ${request.operationType} request for device ${deviceId}`
+    // Function to find and cancel requests in a queue
+    const processQueue = (queue: QueuedRequest[]): void => {
+      const requestsToCancel = queue.filter(r => 
+        !r.executing && r.deviceId === deviceId && 
+        (!operationType || r.operationType === operationType)
       );
       
-      this.removeRequest(request.id);
-      request.resolve(null); // Resolve with null rather than rejecting
-    }
+      for (const request of requestsToCancel) {
+        this.logger.verbose(
+          `Canceling pending ${request.operationType} request for device ${deviceId}`
+        );
+        
+        const index = queue.findIndex(r => r.id === request.id);
+        if (index !== -1) {
+          queue.splice(index, 1);
+        }
+        
+        request.resolve(null); // Resolve with null rather than rejecting
+      }
+    };
+    
+    // Process all priority queues
+    processQueue(this.criticalQueue);
+    processQueue(this.highPriorityQueue);
+    processQueue(this.normalPriorityQueue);
+    processQueue(this.lowPriorityQueue);
   }
 
   /**
-   * Make a request to the SleepMe API
+   * Make a request to the SleepMe API with improved priority handling
    * @param options Request options
    * @returns Promise resolving to response data
    */
@@ -825,32 +926,33 @@ private async processQueue(): Promise<void> {
     deviceId?: string;
     operationType?: string;
   }): Promise<T> {
+    // Set default priority
+    const priority = options.priority || RequestPriority.NORMAL;
+    
     // Skip redundant status updates if queue is getting large
-    if (this.requestQueue.length > 5 && 
+    if (this.criticalQueue.length + this.highPriorityQueue.length > 3 && 
         options.operationType === 'getDeviceStatus' && 
-        options.priority !== RequestPriority.HIGH) {
-      this.logger.debug(`Skipping non-critical status update due to queue backlog (${this.requestQueue.length} pending)`);
+        priority !== RequestPriority.CRITICAL && 
+        priority !== RequestPriority.HIGH) {
+      this.logger.debug(`Skipping non-critical status update due to queue backlog`);
       return Promise.resolve(null as unknown as T);
     }
     
     // Log request at different levels based on operation type to reduce noise
     if (options.operationType === 'getDeviceStatus') {
       this.logger.verbose(
-        `API Request ${options.method} ${options.url} [${options.priority || 'NORMAL'}]` + 
+        `API Request ${options.method} ${options.url} [${priority}]` + 
         (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
       );
     } else {
       this.logger.info(
-        `API Request ${options.method} ${options.url} [${options.priority || 'NORMAL'}]` + 
+        `API Request ${options.method} ${options.url} [${priority}]` + 
         (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
       );
     }
     
-    // Set default priority
-    const priority = options.priority || RequestPriority.NORMAL;
-    
-    // Wait for startup delay to complete for non-high priority requests
-    if (priority !== RequestPriority.HIGH && !this.startupFinished) {
+    // Wait for startup delay to complete for non-critical requests
+    if (priority !== RequestPriority.CRITICAL && !this.startupFinished) {
       await this.startupComplete;
     }
     
@@ -874,8 +976,8 @@ private async processQueue(): Promise<void> {
         config.data = options.data;
       }
       
-      // Add to queue
-      this.requestQueue.push({
+      // Create new request
+      const request: QueuedRequest = {
         id: requestId,
         config,
         priority,
@@ -887,7 +989,25 @@ private async processQueue(): Promise<void> {
         url: options.url,
         deviceId: options.deviceId,
         operationType: options.operationType
-      });
+      };
+      
+      // Add to the appropriate queue based on priority
+      switch (priority) {
+        case RequestPriority.CRITICAL:
+          this.criticalQueue.push(request);
+          break;
+        case RequestPriority.HIGH:
+          this.highPriorityQueue.push(request);
+          break;
+        case RequestPriority.NORMAL:
+          this.normalPriorityQueue.push(request);
+          break;
+        case RequestPriority.LOW:
+          this.lowPriorityQueue.push(request);
+          break;
+        default:
+          this.normalPriorityQueue.push(request);
+      }
       
       // Start processing the queue if not already running
       if (!this.processingQueue) {
