@@ -1,8 +1,3 @@
-/**
- * SleepMe Simple Platform
- * This is the main platform implementation that handles device discovery
- * and accessory management for SleepMe devices
- */
 import {
   API,
   Characteristic,
@@ -47,6 +42,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   
   // Timer for periodic device discovery
   private discoveryTimer?: NodeJS.Timeout;
+  
+  // Flag to indicate if discovery is in progress
+  private discoveryInProgress = false;
 
   // Flag to track if the plugin is properly configured
   // eslint-disable-next-line @typescript-eslint/no-inferrable-types
@@ -73,6 +71,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     this.temperatureUnit = (config.unit as string) || 'C';
 
     // Set polling interval with minimum and maximum bounds for safety
+    // Ensure a reasonable minimum polling interval to avoid rate limiting
     this.pollingInterval = Math.max(60, Math.min(300, 
       parseInt(String(config.pollingInterval)) || DEFAULT_POLLING_INTERVAL));
 
@@ -114,11 +113,15 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         setTimeout(() => {
           this.log.info('Homebridge finished launching, starting device discovery');
           this.discoverDevices();
-        }, 5000); // 5 second delay before starting discovery
+        }, 10000); // 10 second delay before starting discovery (increased from 5s)
         
         // Set up periodic discovery to catch new or changed devices
+        // Check once per day is sufficient
         this.discoveryTimer = setInterval(() => {
-          this.discoverDevices();
+          // Only start discovery if not already in progress
+          if (!this.discoveryInProgress) {
+            this.discoverDevices();
+          }
         }, 24 * 60 * 60 * 1000); // Check once per day
       }
     });
@@ -191,12 +194,19 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
    * Uses staggered initialization to prevent API rate limiting
    */
   async discoverDevices(): Promise<void> {
+    // Skip discovery if already in progress
+    if (this.discoveryInProgress) {
+      this.log.info('Device discovery already in progress, skipping');
+      return;
+    }
+    
     // Skip discovery if the plugin is not properly configured
     if (!this.isConfigured || !this.api) {
       this.log.warn('Skipping device discovery because the plugin is not properly configured');
       return;
     }
 
+    this.discoveryInProgress = true;
     this.log.info('Starting device discovery...');
     
     try {
@@ -224,6 +234,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           this.log.error(
             'No SleepMe devices found. Check your API token and connectivity.'
           );
+          this.discoveryInProgress = false;
           return;
         }
       }
@@ -243,9 +254,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           continue;
         }
         
-        // Stagger device initialization to prevent API rate limiting
+        // Use a more significant stagger to prevent rate limiting
         if (i > 0) {
-          const staggerDelay = 10000; // 10 second delay
+          const staggerDelay = 20000; // 20 seconds delay (increased from 10s)
           this.log.info(`Waiting ${Math.round(staggerDelay/1000)}s before initializing next device...`);
           await new Promise(resolve => setTimeout(resolve, staggerDelay));
         }
@@ -280,17 +291,17 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           // Initialize the accessory handler
           this.initializeAccessory(existingAccessory, device.id);
         } else {
-        // Create a new accessory since one doesn't exist
-this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);
-
-const accessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
-
-// Explicitly set the category to THERMOSTAT
-accessory.category = this.homebridgeApi.hap.Categories.THERMOSTAT;
-
-// Store device info in the accessory context
-accessory.context.device = device;
+          // Create a new accessory since one doesn't exist
+          this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);
           
+          const accessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
+          
+          // Explicitly set the category to THERMOSTAT
+          accessory.category = this.homebridgeApi.hap.Categories.THERMOSTAT;
+          
+          // Store device info in the accessory context
+          accessory.context.device = device;
+                
           // Initialize the accessory
           this.initializeAccessory(accessory, device.id);
           
@@ -308,6 +319,9 @@ accessory.context.device = device;
       this.log.error(
         `Error discovering devices: ${error instanceof Error ? error.message : String(error)}`
       );
+    } finally {
+      // Always clear the in-progress flag when done
+      this.discoveryInProgress = false;
     }
   }
   
