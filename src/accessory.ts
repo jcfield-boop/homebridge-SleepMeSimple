@@ -135,78 +135,75 @@ export class SleepMeAccessory {
       .onGet(this.handlePowerStateGet.bind(this))
       .onSet(this.handlePowerStateSet.bind(this));
   }
-  
-  /**
-   * Set up temperature control using HeaterCooler service
-   * Provides a native temperature interface instead of the percentage-based Lightbulb approach
-   */
   private setupTemperatureControlService(): void {
-    // Use HeaterCooler service for temperature control
-    this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
-      this.accessory.addService(this.platform.Service.HeaterCooler, `${this.displayName} Temperature Control`);
-    
-    // Configure basic characteristics
-    this.temperatureControlService
-      .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature Control`)
-      .setCharacteristic(this.Characteristic.Active, this.isPowered ? 1 : 0)
-      .setCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.IDLE)
-      .setCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.Characteristic.TargetHeaterCoolerState.AUTO);
-    
-    // Set up current temperature characteristic
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.CurrentTemperature)
-      .setProps({
-        minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
-        maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
-        minStep: 0.1
-      })
-      .onGet(() => this.currentTemperature || 20);
-    
-    // Set up target temperature characteristic (cooling)
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
-      .setProps({
-        minValue: MIN_TEMPERATURE_C,
-        maxValue: MAX_TEMPERATURE_C,
-        minStep: 0.5
-      })
-      .onGet(this.handleTargetTemperatureGet.bind(this))
-      .onSet(this.handleTargetTemperatureSet.bind(this));
-    
-    // Set up target temperature characteristic (heating)
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
-      .setProps({
-        minValue: MIN_TEMPERATURE_C,
-        maxValue: MAX_TEMPERATURE_C,
-        minStep: 0.5
-      })
-      .onGet(this.handleTargetTemperatureGet.bind(this))
-      .onSet(this.handleTargetTemperatureSet.bind(this));
-    
-    // Set up active state getter/setter
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.Active)
-      .onGet(() => this.isPowered ? 1 : 0)
-      .onSet((value) => {
-        this.handlePowerStateSet(Boolean(value));
-      });
-    
-    // Set up target heating/cooling state
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
-      .onGet(() => this.Characteristic.TargetHeaterCoolerState.AUTO) // Always AUTO since device handles both
-      .onSet(() => {
-        // Always reset to AUTO since we don't support specific modes
-        setTimeout(() => {
-          this.temperatureControlService.updateCharacteristic(
-            this.Characteristic.TargetHeaterCoolerState,
-            this.Characteristic.TargetHeaterCoolerState.AUTO
-          );
-        }, 100);
-      });
-  }
+  // Use HeaterCooler service for temperature control
+  this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
+    this.accessory.addService(this.platform.Service.HeaterCooler, `${this.displayName} Temperature Control`);
   
+  // Configure basic characteristics
+  this.temperatureControlService
+    .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature Control`)
+    .setCharacteristic(this.Characteristic.Active, this.isPowered ? 1 : 0)
+    .setCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.IDLE)
+    .setCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.Characteristic.TargetHeaterCoolerState.AUTO);
+  
+  // Set up current temperature characteristic
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.CurrentTemperature)
+    .setProps({
+      minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
+      maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
+      minStep: 0.1
+    })
+    .onGet(() => this.currentTemperature || 20);
+  
+  // Set up target temperature characteristic (cooling)
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
+    .setProps({
+      minValue: MIN_TEMPERATURE_C,
+      maxValue: MAX_TEMPERATURE_C,
+      minStep: 0.5
+    })
+    .onGet(this.handleTargetTemperatureGet.bind(this))
+    .onSet(this.handleTargetTemperatureSet.bind(this));
+  
+  // Set up target temperature characteristic (heating)
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
+    .setProps({
+      minValue: MIN_TEMPERATURE_C,
+      maxValue: MAX_TEMPERATURE_C,
+      minStep: 0.5
+    })
+    .onGet(this.handleTargetTemperatureGet.bind(this))
+    .onSet(this.handleTargetTemperatureSet.bind(this));
+  
+  // Set up active state getter/setter
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.Active)
+    .onGet(() => this.isPowered ? 1 : 0)
+    .onSet((value) => {
+      this.handlePowerStateSet(Boolean(value));
+    });
+  
+  // Set up target heating/cooling state
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
+    .onGet(() => this.Characteristic.TargetHeaterCoolerState.AUTO) // Always AUTO since device handles both
+    .onSet(() => {
+      // Always reset to AUTO since we don't support specific modes
+      setTimeout(() => {
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.TargetHeaterCoolerState,
+          this.Characteristic.TargetHeaterCoolerState.AUTO
+        );
+      }, 100);
+    });
+    
+  // Set HeaterCooler as the primary service for this accessory
+  this.accessory.setPrimaryService(this.temperatureControlService);
+}
   /**
    * Add/update the water level service if supported
    * @param waterLevel - Current water level percentage
