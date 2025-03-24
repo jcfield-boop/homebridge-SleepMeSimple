@@ -2,8 +2,6 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "singular": true,
-  "customUi": true,
-  "customUiPath": "./customui",
   "schema": {
     "type": "object",
     "properties": {
