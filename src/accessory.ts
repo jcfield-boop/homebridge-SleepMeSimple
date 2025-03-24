@@ -84,21 +84,23 @@ export class SleepMeAccessory {
     this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
   }
   
-  /**
-   * Set up the accessory information service
-   */
-  private setupInformationService(): void {
-    // Get or create the information service
-    this.informationService = this.accessory.getService(this.platform.Service.AccessoryInformation) || 
-      this.accessory.addService(this.platform.Service.AccessoryInformation);
-    
-    // Set default information
-    this.informationService
-      .setCharacteristic(this.Characteristic.Manufacturer, 'SleepMe Inc.')
-      .setCharacteristic(this.Characteristic.Model, this.deviceModel)
-      .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
-      .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+private setupInformationService(): void {
+  // Get or create the information service
+  this.informationService = this.accessory.getService(this.platform.Service.AccessoryInformation) || 
+    this.accessory.addService(this.platform.Service.AccessoryInformation);
+  
+  // Set default information
+  this.informationService
+    .setCharacteristic(this.Characteristic.Manufacturer, 'SleepMe Inc.')
+    .setCharacteristic(this.Characteristic.Model, this.deviceModel)
+    .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
+    .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+  
+  // Set the category to AIR_CONDITIONER which works better for HeaterCooler devices
+  if (this.accessory.category !== this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER) {
+    this.accessory.category = this.platform.homebridgeApi.hap.Categories.AIR_CONDITIONER;
   }
+}
   
   /**
    * Set up the temperature sensor service
