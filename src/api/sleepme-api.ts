@@ -645,6 +645,31 @@ private async processQueue(): Promise<void> {
         continue;
       }
 
+  // Process critical commands first with higher priority
+  if (this.criticalQueue.length > 0) {
+    const powerCommands = this.criticalQueue.filter(r => 
+      !r.executing && 
+      r.url.includes('/devices/') && 
+      r.data && 
+      (r.data.thermal_control_status === 'standby' || r.data.thermal_control_status === 'active')
+    );
+    
+    // Prioritize power commands (especially OFF commands)
+    if (powerCommands.length > 0) {
+      // Prioritize OFF commands over others
+      const offCommands = powerCommands.filter(r => 
+        r.data && r.data.thermal_control_status === 'standby'
+      );
+      
+      if (offCommands.length > 0) {
+        // Process OFF command first
+        return offCommands[0];
+      }
+      
+      // Then other power commands
+      return powerCommands[0];
+    }
+  }
       // Get the next request from prioritized queues
       const request = this.getNextRequest();
       
