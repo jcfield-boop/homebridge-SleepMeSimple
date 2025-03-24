@@ -121,12 +121,13 @@ this.tempSetterDebounced = debounce((value: CharacteristicValue) => {
 // Set the category to THERMOSTAT which is appropriate for temperature control
 this.accessory.category = this.platform.homebridgeApi.hap.Categories.THERMOSTAT;
   }
- /**
- * Set up the Thermostat service for temperature control
- * This is the only primary service we'll expose to HomeKit
+/**
+ * Set up the HeaterCooler service for temperature control
+ * This is the main service that provides thermostat functionality in HomeKit
+ * We're implementing a simplified model with just Auto mode (no separate Heating/Cooling modes)
  */
 private setupTemperatureControlService(): void {
-  // Remove any existing services to avoid duplication
+  // Remove any existing temperature or switch services to avoid duplication
   const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
   if (existingTempService) {
     this.platform.log.info('Removing existing temperature sensor service');
@@ -139,22 +140,16 @@ private setupTemperatureControlService(): void {
     this.accessory.removeService(existingSwitchService);
   }
   
-  const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
-  if (existingHeaterCoolerService) {
-    this.platform.log.info('Removing existing HeaterCooler service');
-    this.accessory.removeService(existingHeaterCoolerService);
-  }
-  
-  // Use Thermostat service for temperature control and power
-  this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
-    this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
+  // Use HeaterCooler service for temperature control and power
+  this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
+    this.accessory.addService(this.platform.Service.HeaterCooler, this.displayName);
   
   // Configure basic characteristics
   this.temperatureControlService
     .setCharacteristic(this.Characteristic.Name, this.displayName)
-    .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, 
-      this.isPowered ? this.Characteristic.CurrentHeatingCoolingState.HEAT : 
-                      this.Characteristic.CurrentHeatingCoolingState.OFF)
+    .setCharacteristic(this.Characteristic.Active, this.isPowered ? 1 : 0)
+    .setCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.IDLE)
+    .setCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.Characteristic.TargetHeaterCoolerState.AUTO);
   
   // Set up current temperature characteristic
   this.temperatureControlService
@@ -166,33 +161,53 @@ private setupTemperatureControlService(): void {
     })
     .onGet(() => this.currentTemperature || 20);
   
-  // Set up target temperature characteristic (single value)
+  // Both heating and cooling threshold temperatures are required by HomeKit
+  // for the HeaterCooler service, even though we're treating them as a single value
+  // for our simplified Auto-only implementation
+  
+  // Set up target temperature characteristic (cooling)
   this.temperatureControlService
-    .getCharacteristic(this.Characteristic.TargetTemperature)
+    .getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
     .setProps({
       minValue: MIN_TEMPERATURE_C,
       maxValue: MAX_TEMPERATURE_C,
       minStep: 0.5
     })
-    .onGet(() => isNaN(this.targetTemperature) ? 21 : this.targetTemperature)
+    .onGet(this.handleTargetTemperatureGet.bind(this))
     .onSet(this.handleTargetTemperatureSet.bind(this));
   
-  // Set up heating/cooling state getters/setters
+  // Set up target temperature characteristic (heating)
   this.temperatureControlService
-    .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+    .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
     .setProps({
-      validValues: [
-        this.Characteristic.TargetHeatingCoolingState.OFF,
-        this.Characteristic.TargetHeatingCoolingState.AUTO
-      ]
+      minValue: MIN_TEMPERATURE_C,
+      maxValue: MAX_TEMPERATURE_C,
+      minStep: 0.5
     })
-    .onGet(() => this.isPowered ? 
-      this.Characteristic.TargetHeatingCoolingState.AUTO : 
-      this.Characteristic.TargetHeatingCoolingState.OFF)
+    .onGet(this.handleTargetTemperatureGet.bind(this))
+    .onSet(this.handleTargetTemperatureSet.bind(this));
+  
+  // Set up active state getter/setter
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.Active)
+    .onGet(() => this.isPowered ? 1 : 0)
     .onSet((value) => {
-      // Convert HomeKit state to power on/off
-      const newPowerState = value !== this.Characteristic.TargetHeatingCoolingState.OFF;
-      this.handlePowerStateSet(newPowerState);
+      this.handlePowerStateSet(Boolean(value));
+    });
+  
+  // Set up target heating/cooling state
+  // We use AUTO mode exclusively for our simplified implementation
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
+    .onGet(() => this.Characteristic.TargetHeaterCoolerState.AUTO) // Always AUTO since device handles both
+    .onSet(() => {
+      // Always reset to AUTO since we don't support specific modes
+      setTimeout(() => {
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.TargetHeaterCoolerState,
+          this.Characteristic.TargetHeaterCoolerState.AUTO
+        );
+      }, 100);
     });
 }
   /**

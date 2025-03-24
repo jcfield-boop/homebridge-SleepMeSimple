@@ -582,8 +582,8 @@ export class SleepMeApi {
         
         // Check if we're in backoff mode
         if (this.rateLimitBackoffUntil > now) {
-          const backoffTimeRemaining = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-          this.logger.info(`Rate limit backoff active for ${backoffTimeRemaining}s, will retry later`);
+          // Simplified logging without countdown details
+          this.logger.info(`Rate limit backoff active, will retry later`);
           
           // Instead of rapid polling, set a timer to try again after backoff period
           setTimeout(() => {
@@ -690,9 +690,8 @@ export class SleepMeApi {
             const backoffTime = Math.min(120000, 15000 * Math.pow(1.5, this.consecutiveErrors));
             this.rateLimitBackoffUntil = Date.now() + backoffTime;
             
-            this.logger.warn(
-              `Rate limit exceeded (429). Backing off for ${Math.round(backoffTime / 1000)}s`
-            );
+  // Simplified logging
+  this.logger.warn(`Rate limit exceeded (429). Implementing backoff strategy.`);
             
             // Requeue the request
             this.requestQueue.unshift({
