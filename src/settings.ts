@@ -19,8 +19,7 @@ export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * Default polling interval in seconds
- * Increased to 120 seconds (2 minutes) to significantly reduce API calls
- * while still maintaining reasonable responsiveness
+ * Increased to better balance API usage with responsiveness
  */
 export const DEFAULT_POLLING_INTERVAL = 120;
 
@@ -41,22 +40,21 @@ export const TEMPERATURE_STEP = 1;
 
 /**
  * Minimum time between API requests in milliseconds
- * Increased to 10000ms (10 seconds) to strictly avoid rate limiting issues
+ * Provides a safer buffer to prevent rate limiting
  */
-export const MIN_REQUEST_INTERVAL = 10000;
+export const MIN_REQUEST_INTERVAL = 12000;
 
 /**
  * Maximum API requests per minute (to respect rate limits)
- * Reduced to 4 to provide a larger safety margin against rate limiting
- * API documentation suggests a limit of 10, but we're being conservative
+ * More conservative limit to avoid rate limiting
  */
-export const MAX_REQUESTS_PER_MINUTE = 4;
+export const MAX_REQUESTS_PER_MINUTE = 3;
 
 /**
  * Default cache validity period in milliseconds
- * Set to 5 minutes (300000ms) to reduce API calls while keeping data fresh enough
+ * Increased for trusted cache entries
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 300000;
+export const DEFAULT_CACHE_VALIDITY_MS = 600000;
 
 /**
  * Maximum number of retries for API requests 
@@ -66,26 +64,22 @@ export const MAX_RETRIES = 3;
 
 /**
  * Initial backoff time in milliseconds for rate limiting
- * This is how long to wait initially when a rate limit is hit
  */
-export const INITIAL_BACKOFF_MS = 15000; // 15 seconds
+export const INITIAL_BACKOFF_MS = 30000; // 30 seconds
 
 /**
  * Maximum backoff time in milliseconds
- * Upper limit for exponential backoff to prevent excessive waiting
  */
-export const MAX_BACKOFF_MS = 180000; // 3 minutes
+export const MAX_BACKOFF_MS = 300000; // 5 minutes
 
 /**
  * Post-user-action quiet period in milliseconds
- * After a user action, how long to wait before resuming polling
+ * Increased as we trust API responses more
  */
-export const USER_ACTION_QUIET_PERIOD_MS = 45000; // 45 seconds
+export const USER_ACTION_QUIET_PERIOD_MS = 60000; // 60 seconds
 
 /**
  * Command debounce delay in milliseconds
- * How long to wait after receiving a command before processing it
- * to allow for multiple rapid inputs to be consolidated
  */
 export const COMMAND_DEBOUNCE_DELAY_MS = 800; // 800ms
 
