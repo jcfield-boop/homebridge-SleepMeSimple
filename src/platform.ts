@@ -279,16 +279,15 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           // Initialize the accessory handler
           this.initializeAccessory(existingAccessory, device.id);
         } else {
-          // Create a new accessory since one doesn't exist
-          this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);
-          this.log.info(
-  `Initializing SleepMe device as HeaterCooler service for ${displayName} (ID: ${device.id})`
-);
-          
-          const accessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
-          
-          // Store device info in the accessory context
-          accessory.context.device = device;
+        // Create a new accessory since one doesn't exist
+this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);
+
+const accessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
+// Explicitly set the category to AIR_CONDITIONER
+accessory.category = this.homebridgeApi.hap.Categories.AIR_CONDITIONER;
+
+// Store device info in the accessory context
+accessory.context.device = device;
           
           // Initialize the accessory
           this.initializeAccessory(accessory, device.id);
