@@ -305,42 +305,6 @@ export class SleepMeAccessory {
       this.Characteristic.TargetHeatingCoolingState.OFF;
   }
 
-  /**
-   * Handle setting the target heating/cooling state
-   * This translates HomeKit states to SleepMe power states
-   */
-  private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
-    this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
-    
-    // Mark user action time
-    this.lastUserActionTime = Date.now();
-    
-    switch (value) {
-      case this.Characteristic.TargetHeatingCoolingState.OFF:
-        // Turn off
-        if (this.isPowered) {
-          this.powerStateSetterDebounced(false);
-        }
-        break;
-    
-      case this.Characteristic.TargetHeatingCoolingState.AUTO:
-      case this.Characteristic.TargetHeatingCoolingState.HEAT:
-      case this.Characteristic.TargetHeatingCoolingState.COOL:
-        // Turn on
-        if (!this.isPowered) {
-          this.powerStateSetterDebounced(true);
-        }
-        
-        // For SleepMe devices, we treat all active modes as AUTO
-        setTimeout(() => {
-          this.temperatureControlService.updateCharacteristic(
-            this.Characteristic.TargetHeatingCoolingState,
-            this.Characteristic.TargetHeatingCoolingState.AUTO
-          );
-        }, 100);
-        break;
-    }
-  }
 
   /**
    * Update the current heating/cooling state in HomeKit
@@ -359,79 +323,138 @@ export class SleepMeAccessory {
       this.getTargetHeatingCoolingState()
     );
   }
-
-  /**
-   * Handler for target temperature GET
-   * @returns Current target temperature
-   */
-  private handleTargetTemperatureGet(): CharacteristicValue {
-    const temp = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-    this.platform.log.debug(`GET Target Temperature: ${temp}°C`);
-    return temp;
-  }
-
-  /**
-   * Debounced implementation of power state setting
-   * @param turnOn Whether to turn on the device
-   */
-  private async handlePowerStateSetImpl(turnOn: boolean): Promise<void> {
-    this.platform.log.info(`Setting power state: ${turnOn ? 'ON' : 'OFF'}`);
-    
-    // Skip redundant updates
-    if ((turnOn && this.isPowered) || (!turnOn && !this.isPowered)) {
-      this.platform.log.debug(`Ignoring redundant power state change to ${turnOn ? 'ON' : 'OFF'}`);
-      return;
-    }
-    
-    // Mark that we shouldn't poll right after this user action
-    this.skipNextUpdate = true;
-    this.lastUserActionTime = Date.now();
-    
-    try {
-      let success = false;
-      
-      if (turnOn) {
-        // Turn on the device with current target temperature
-        const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-        success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
-        
-        if (success) {
-          this.isPowered = true;
-          this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
-        }
-      } else {
-        // Turn off the device
-        success = await this.apiClient.turnDeviceOff(this.deviceId);
-        
-        if (success) {
-          this.isPowered = false;
-          this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
-        }
-      }
-      
-      if (!success) {
-        throw new Error(`Failed to ${turnOn ? 'turn on' : 'turn off'} device`);
-      }
-      
-      // Update the UI state immediately for responsiveness
-      this.updateCurrentHeatingCoolingState();
-      
-      // Refresh the status after a short delay, but only once
-      setTimeout(() => {
-        this.refreshDeviceStatus(true).catch(e => {
-          this.platform.log.debug(`Error refreshing status after power change: ${e}`);
+/**
+ * Handle setting the target heating/cooling state with trust-based approach
+ * @param value Target heating/cooling state value
+ */
+private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
+  this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
+  
+  // Mark user action time
+  this.lastUserActionTime = Date.now();
+  
+  // Increment command epoch to invalidate previous commands
+  const currentEpoch = ++this.commandEpoch;
+  
+  switch (value) {
+    case this.Characteristic.TargetHeatingCoolingState.OFF:
+      // Turn off
+      if (this.isPowered) {
+        await this.executeOperation('power', currentEpoch, async () => {
+          const success = await this.apiClient.turnDeviceOff(this.deviceId);
+          
+          if (success) {
+            // Trust the API response - device is now off
+            this.isPowered = false;
+            this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
+            
+            // Update UI immediately for responsiveness
+            this.updateCurrentHeatingCoolingState();
+          } else {
+            throw new Error('Failed to turn off device');
+          }
         });
-      }, 10000); // Increased delay to 10 seconds to avoid rate limiting
-    } catch (error) {
-      this.platform.log.error(
-        `Failed to set power state: ${error instanceof Error ? error.message : String(error)}`
-      );
+      }
+      break;
+    
+    case this.Characteristic.TargetHeatingCoolingState.AUTO:
+    case this.Characteristic.TargetHeatingCoolingState.HEAT:
+    case this.Characteristic.TargetHeatingCoolingState.COOL:
+      // Turn on with current temperature
+      if (!this.isPowered) {
+        const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+        
+        await this.executeOperation('power', currentEpoch, async () => {
+          const success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
+          
+          if (success) {
+            // Trust the API response - device is now on
+            this.isPowered = true;
+            this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
+            
+            // Update UI immediately for responsiveness
+            this.updateCurrentHeatingCoolingState();
+          } else {
+            throw new Error('Failed to turn on device');
+          }
+        });
+      }
       
-      // Revert the state if there was an error
-      this.updateCurrentHeatingCoolingState();
-    }
+      // For SleepMe devices, we treat all active modes as AUTO
+      setTimeout(() => {
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.TargetHeatingCoolingState,
+          this.Characteristic.TargetHeatingCoolingState.AUTO
+        );
+      }, 100);
+      break;
+  }
+}
+
+/**
+ * Handle target temperature setting with trust-based approach
+ * @param value New target temperature value
+ */
+private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
+  const newTemp = value as number;
+  
+  // Skip if no real change
+  if (!isNaN(this.targetTemperature) && Math.abs(this.targetTemperature - newTemp) < 0.5) {
+    return;
   }
   
+  // Store previous temperature before updating UI
+  const previousTemp = this.targetTemperature;
+  
+  // Mark user action time
+  this.lastUserActionTime = Date.now();
+  
+  // Update UI immediately for responsiveness
+  this.targetTemperature = newTemp;
+  
+  // Log the change
+  this.platform.log.info(`Target temperature change request: ${previousTemp}°C → ${newTemp}°C`);
+  
+  // Increment command epoch to invalidate previous commands
+  const currentEpoch = ++this.commandEpoch;
+  
+  // Execute the temperature change operation
+  await this.executeOperation('temperature', currentEpoch, async () => {
+    // If device is off and we're changing temperature, turn it on
+    if (!this.isPowered) {
+      const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
+      
+      if (success) {
+        this.isPowered = true;
+        this.platform.log.info(`Device turned ON with new temperature ${newTemp}°C`);
+        
+        // Update heating/cooling state after power change
+        this.updateCurrentHeatingCoolingState();
+      } else {
+        throw new Error(`Failed to turn on device with temperature ${newTemp}°C`);
+      }
+    } else {
+      // Device is already on, just change temperature
+      const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
+      
+      if (success) {
+        this.platform.log.info(`Temperature set to ${newTemp}°C`);
+      } else {
+        throw new Error(`Failed to set temperature to ${newTemp}°C`);
+        
+        // Revert UI to previous temperature on error
+        this.targetTemperature = previousTemp;
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.TargetTemperature,
+          previousTemp
+        );
+      }
+    }
+    
+    // Update the current heating/cooling state based on temperature difference
+    this.updateCurrentHeatingCoolingState();
+  });
+}
   /**
    * Add/update the water level service if supported
    * @param waterLevel Current water level percentage
@@ -477,69 +500,87 @@ export class SleepMeAccessory {
       }
     }
   }
+/**
+ * Set up the status polling mechanism with trust-based adaptive intervals
+ */
+private setupStatusPolling(): void {
+  // Clear any existing timer
+  if (this.statusUpdateTimer) {
+    clearInterval(this.statusUpdateTimer);
+  }
+  
+  // Convert polling interval from seconds to milliseconds
+  const pollingIntervalMs = this.platform.pollingInterval * 1000;
+  
+  this.platform.log.debug(
+    `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
+  );
+  
+  // Set up regular polling with adaptive interval
+  this.statusUpdateTimer = setInterval(() => {
+    // Skip update if another one is in progress to prevent queue buildup
+    if (this.updateInProgress) {
+      this.platform.log.debug('Skipping update, another one already in progress');
+      return;
+    }
 
-  /**
-   * Set up the status polling mechanism with adaptive intervals
-   * to reduce API calls and prevent rate limiting
-   */
-  private setupStatusPolling(): void {
-    // Clear any existing timer
-    if (this.statusUpdateTimer) {
-      clearInterval(this.statusUpdateTimer);
+    // Skip update if there's a pending operation
+    if (this.pendingOperation) {
+      this.platform.log.debug('Skipping update, pending operation in progress');
+      return;
+    }
+
+    // Skip update if manually marked to skip (after user interaction)
+    if (this.skipNextUpdate) {
+      this.platform.log.debug('Skipping scheduled update due to recent user interaction');
+      this.skipNextUpdate = false;
+      return;
+    }
+
+    // Significantly longer quiet period for trust-based approach
+    // Since we trust API responses, we can go longer between polls
+    const quietPeriod = USER_ACTION_QUIET_PERIOD_MS * 1.5;
+    const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+    if (timeSinceUserAction < quietPeriod) {
+      this.platform.log.debug(
+        `Skipping update, within quiet period after user action (${Math.round(timeSinceUserAction/1000)}s of ${Math.round(quietPeriod/1000)}s)`
+      );
+      return;
+    }
+
+    // Dynamic polling frequency based on device state
+    let shouldPoll = true;
+    
+    if (!this.isPowered) {
+      // Device is off - poll much less frequently
+      // Only poll every 3x the interval when device is off
+      if (this.lastStatusUpdate && Date.now() - this.lastStatusUpdate < pollingIntervalMs * 3) {
+        shouldPoll = false;
+        this.platform.log.debug('Device is inactive, using extended polling interval');
+      }
     }
     
-    // Convert polling interval from seconds to milliseconds
-    const pollingIntervalMs = this.platform.pollingInterval * 1000;
-    
-    this.platform.log.debug(
-      `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
-    );
-    
-    // Set up regular polling with adaptive interval
-    this.statusUpdateTimer = setInterval(() => {
-      // Skip update if another one is in progress to prevent queue buildup
-      if (this.updateInProgress) {
-        this.platform.log.debug('Skipping update, another one already in progress');
-        return;
+    // If we've had several failed attempts, back off exponentially
+    if (this.failedUpdateAttempts > 1) {
+      const backoffFactor = Math.min(8, Math.pow(2, this.failedUpdateAttempts - 1));
+      const extendedInterval = pollingIntervalMs * backoffFactor;
+      
+      if (this.lastStatusUpdate && Date.now() - this.lastStatusUpdate < extendedInterval) {
+        shouldPoll = false;
+        this.platform.log.debug(`Backing off polling due to ${this.failedUpdateAttempts} failed attempts`);
       }
+    }
 
-      // Skip update if manually marked to skip (after user interaction)
-      if (this.skipNextUpdate) {
-        this.platform.log.debug('Skipping scheduled update due to recent user interaction');
-        this.skipNextUpdate = false;
-        return;
-      }
-
-      // Check if we're in the quiet period after a user action
-      const timeSinceUserAction = Date.now() - this.lastUserActionTime;
-      if (timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS) {
-        this.platform.log.debug(
-          `Skipping update, within quiet period after user action (${Math.round(timeSinceUserAction/1000)}s of ${USER_ACTION_QUIET_PERIOD_MS/1000}s)`
-        );
-        return;
-      }
-
-      // Adaptive polling: If we've had several failed attempts, slow down polling
-      const now = Date.now();
-      if (this.failedUpdateAttempts > 2) {
-        const timeSinceLastUpdate = now - this.lastStatusUpdate;
-        // If it's been less than 2x the polling interval since last successful update,
-        // skip this update to reduce API load
-        if (timeSinceLastUpdate < pollingIntervalMs * 2) {
-          this.platform.log.debug('Skipping update due to recent failures, slowing down polling');
-          return;
-        }
-      }
-
+    if (shouldPoll) {
       this.refreshDeviceStatus().catch(error => {
         this.failedUpdateAttempts++;
         this.platform.log.error(
           `Error updating device status (attempt ${this.failedUpdateAttempts}): ${error instanceof Error ? error.message : String(error)}`
         );
       });
-    }, pollingIntervalMs);
-  }
-  
+    }
+  }, pollingIntervalMs);
+}
   /**
    * Detect device model based on attachments or other characteristics
    * @param data Raw device data from API
