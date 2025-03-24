@@ -822,188 +822,171 @@ private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
       );
     }
   }
+/**
+ * Process the request queue with improved priority handling
+ * and adaptive rate limiting
+ */
+private async processQueue(): Promise<void> {
+  // If already processing, exit
+  if (this.processingQueue) {
+    return;
+  }
   
-  /**
-   * Process the request queue with improved priority handling
-   * and adaptive rate limiting
-   */
-  private async processQueue(): Promise<void> {
-    // If already processing, exit
-    if (this.processingQueue) {
-      return;
-    }
-    
-    this.processingQueue = true;
-    
-    try {
-      // Keep processing as long as there are requests
-      while (this.hasQueuedRequests()) {
-        // Check if we need to reset rate limit counter
-        this.checkRateLimit();
+  this.processingQueue = true;
+  
+  try {
+    // Keep processing as long as there are requests
+    while (this.hasQueuedRequests()) {
+      // Check if we need to reset rate limit counter
+      this.checkRateLimit();
+      
+      // Check if we're in backoff mode
+      const now = Date.now();
+      if (this.rateLimitBackoffUntil > now) {
+        // Only log this once, not repeatedly
+        if (!this.rateExceededLogged) {
+          const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+          this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
+          this.rateExceededLogged = true;
+        }
         
-        // Check if we're in backoff mode
-        const now = Date.now();
-        if (this.rateLimitBackoffUntil > now) {
-          // Only log this once, not repeatedly
-          if (!this.rateExceededLogged) {
-            const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-            this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
-            this.rateExceededLogged = true;
-          }
-          
-          // Use a single timer rather than polling
-          await new Promise(resolve => 
-            setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
+        // Use a single timer rather than polling
+        await new Promise(resolve => 
+          setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
+        );
+        continue;
+      }
+      
+      // Check if we've hit the rate limit
+      if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
+        const resetTime = this.minuteStartTime + 60000;
+        const waitTime = resetTime - now;
+        
+        // Only log this once, not repeatedly
+        if (!this.rateExceededLogged) {
+          this.logger.info(
+            `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
+            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
           );
-          continue;
+          this.rateExceededLogged = true;
         }
         
-        // Check if we've hit the rate limit
-        if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
-          const resetTime = this.minuteStartTime + 60000;
-          const waitTime = resetTime - now;
-          
-          // Only log this once, not repeatedly
-          if (!this.rateExceededLogged) {
-            this.logger.info(
-              `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-              `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
-            );
-            this.rateExceededLogged = true;
-          }
-          
-          // Wait for rate limit reset with a single timer
-          await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-          continue;
-        }
+        // Wait for rate limit reset with a single timer
+        await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
+        continue;
+      }
+
+      // Get the next request from prioritized queues
+      const request = this.getNextRequest();
+      
+      if (!request) {
+        break; // No requests to process
+      }
+      
+      // Mark the request as executing
+      request.executing = true;
+      request.lastAttempt = Date.now();
+      
+      try {
+        // Update rate limiting counters
+        this.requestsThisMinute++;
+        this.lastRequestTime = now;
         
-        // Check if we need to wait between requests
-        const timeSinceLastRequest = now - this.lastRequestTime;
-        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-          const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-          
-          // Only log this for debug level, not for every check
-          if (this.logger.isDebug()) {
-            this.logger.debug(`Waiting ${Math.round(waitTime/1000)}s between requests (rate limiting)`);
-          }
-          
-          // Use a single timer instead of polling
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          continue;
-        }
+        // Add auth token to request
+        request.config.headers = {
+          ...(request.config.headers || {}),
+          Authorization: `Bearer ${this.apiToken}`
+        };
         
-        // Get the next request from prioritized queues
-        const request = this.getNextRequest();
+        this.logger.verbose(
+          `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`
+        );
         
-        if (!request) {
-          break; // No requests to process
-        }
+        const startTime = now;
         
-        // Mark the request as executing
-        request.executing = true;
-        request.lastAttempt = Date.now();
+        // Execute the request
+        this.stats.totalRequests++;
+        const response = await axios(request.config);
+        this.stats.successfulRequests++;
+        this.stats.lastRequest = new Date();
         
-        try {
-          // Update rate limiting counters
-          this.requestsThisMinute++;
-          this.lastRequestTime = now;
+        // Track response time
+        const responseTime = Date.now() - startTime;
+        this.updateAverageResponseTime(responseTime);
+        
+        // Resolve the promise with the data
+        request.resolve(response.data);
+        
+        this.logger.verbose(
+          `Request ${request.id} completed in ${responseTime}ms`
+        );
+        
+        // Reset consecutive errors on success
+        this.consecutiveErrors = 0;
+      } catch (error) {
+        const axiosError = error as AxiosError;
+        
+        this.stats.failedRequests++;
+        this.stats.lastError = axiosError;
+        
+        // Handle rate limiting (HTTP 429)
+        if (axiosError.response?.status === 429) {
+          // Implement more effective backoff with jitter
+          this.consecutiveErrors++;
           
-          // Add auth token to request
-          request.config.headers = {
-            ...(request.config.headers || {}),
-            Authorization: `Bearer ${this.apiToken}`
-          };
-          
-          this.logger.verbose(
-            `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`
-          );
-          
-          const startTime = now;
-          
-          // Execute the request
-          this.stats.totalRequests++;
-          const response = await axios(request.config);
-          this.stats.successfulRequests++;
-          this.stats.lastRequest = new Date();
-          
-          // Track response time
-          const responseTime = Date.now() - startTime;
-          this.updateAverageResponseTime(responseTime);
-          
-          // Resolve the promise with the data
-          request.resolve(response.data);
-          
-          this.logger.verbose(
-            `Request ${request.id} completed in ${responseTime}ms`
+          // Calculate backoff with jitter to prevent all clients retrying at once
+          const jitter = Math.random() * 8000; // 0-8 seconds of random jitter
+          const backoffTime = Math.min(
+            MAX_BACKOFF_MS, 
+            (INITIAL_BACKOFF_MS * Math.pow(2, this.consecutiveErrors)) + jitter
           );
           
-          // Reset consecutive errors on success
-          this.consecutiveErrors = 0;
-        } catch (error) {
-          const axiosError = error as AxiosError;
+          this.rateLimitBackoffUntil = Date.now() + backoffTime;
           
-          this.stats.failedRequests++;
-          this.stats.lastError = axiosError;
+          this.logger.warn(
+            `Rate limit exceeded (429). Implementing backoff strategy for ${Math.ceil(backoffTime/1000)}s.`
+          );
           
-          // Handle rate limiting (HTTP 429)
-          if (axiosError.response?.status === 429) {
-            // Implement more effective backoff with jitter
-            this.consecutiveErrors++;
-            
-            // Calculate backoff with jitter to prevent all clients retrying at once
-            const jitter = Math.random() * 5000; // 0-5 seconds of random jitter
-            const backoffTime = Math.min(
-              MAX_BACKOFF_MS, 
-              (INITIAL_BACKOFF_MS * Math.pow(1.5, this.consecutiveErrors)) + jitter
-            );
-            
-            this.rateLimitBackoffUntil = Date.now() + backoffTime;
-            
+          // Requeue the request based on priority and retry count
+          this.requeueRequest(request);
+        } else {
+          // For other errors, check retry logic by priority
+          this.consecutiveErrors++;
+          
+          // Critical and high priority get more retries
+          const maxRetries = request.priority === RequestPriority.CRITICAL 
+            ? MAX_RETRIES + 2 
+            : request.priority === RequestPriority.HIGH 
+              ? MAX_RETRIES 
+              : MAX_RETRIES - 1;
+              
+          if (request.retryCount < maxRetries) {
             this.logger.warn(
-              `Rate limit exceeded (429). Implementing backoff strategy for ${Math.ceil(backoffTime/1000)}s.`
+              `Request failed (${axiosError.message}), retry ${request.retryCount + 1}/${maxRetries}`
             );
-            
-            // Requeue the request based on priority and retry count
             this.requeueRequest(request);
           } else {
-            // For other errors, check retry logic by priority
-            this.consecutiveErrors++;
-            
-            // Critical and high priority get more retries
-            const maxRetries = request.priority === RequestPriority.CRITICAL 
-              ? MAX_RETRIES + 2 
-              : request.priority === RequestPriority.HIGH 
-                ? MAX_RETRIES 
-                : MAX_RETRIES - 1;
-                
-            if (request.retryCount < maxRetries) {
-              this.logger.warn(
-                `Request failed (${axiosError.message}), retry ${request.retryCount + 1}/${maxRetries}`
-              );
-              this.requeueRequest(request);
-            } else {
-              // Max retries exceeded
-              this.logger.error(
-                `Request failed after ${request.retryCount} retries: ${axiosError.message}`
-              );
-              request.reject(error);
-            }
+            // Max retries exceeded
+            this.logger.error(
+              `Request failed after ${request.retryCount} retries: ${axiosError.message}`
+            );
+            request.reject(error);
           }
-        } finally {
-          // Remove request from appropriate queue
-          this.removeRequest(request);
         }
-      }
-    } finally {
-      this.processingQueue = false;
-      
-      // If there are still requests in any queue, continue processing after a short delay
-      if (this.hasQueuedRequests()) {
-        setTimeout(() => this.processQueue(), 500);
+      } finally {
+        // Remove request from appropriate queue
+        this.removeRequest(request);
       }
     }
+  } finally {
+    this.processingQueue = false;
+    
+    // If there are still requests in any queue, continue processing after a short delay
+    if (this.hasQueuedRequests()) {
+      setTimeout(() => this.processQueue(), 1000);
+    }
   }
-
+}
   /**
    * Determine if there are any queued requests
    */
