@@ -49,6 +49,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   private discoveryTimer?: NodeJS.Timeout;
 
   // Flag to track if the plugin is properly configured
+  // eslint-disable-next-line @typescript-eslint/no-inferrable-types
   private isConfigured: boolean = true;
   
   /**
@@ -283,8 +284,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
 this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);
 
 const accessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
-// Explicitly set the category to AIR_CONDITIONER
-accessory.category = this.homebridgeApi.hap.Categories.AIR_CONDITIONER;
+
+// Explicitly set the category to THERMOSTAT
+accessory.category = this.homebridgeApi.hap.Categories.THERMOSTAT;
 
 // Store device info in the accessory context
 accessory.context.device = device;
