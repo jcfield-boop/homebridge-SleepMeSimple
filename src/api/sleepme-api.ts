@@ -69,6 +69,7 @@ export class SleepMeApi {
   private processingQueue = false;
   private rateLimitBackoffUntil = 0;
   private consecutiveErrors = 0;
+  private rateExceededLogged = false; // Flag to prevent redundant log messages
   
   // Request ID counter
   private requestIdCounter = 0;
@@ -577,13 +578,17 @@ export class SleepMeApi {
         if (now - this.minuteStartTime >= 60000) {
           this.requestsThisMinute = 0;
           this.minuteStartTime = now;
+          this.rateExceededLogged = false; // Reset logging flag
           this.logger.debug('Resetting rate limit counter (1 minute has passed)');
         }
         
         // Check if we're in backoff mode
         if (this.rateLimitBackoffUntil > now) {
-          // Simplified logging without countdown details
-          this.logger.info(`Rate limit backoff active, will retry later`);
+          // Only log this once, not repeatedly
+          if (!this.rateExceededLogged) {
+            this.logger.info(`Rate limit backoff active, will retry later`);
+            this.rateExceededLogged = true;
+          }
           
           // Instead of rapid polling, set a timer to try again after backoff period
           setTimeout(() => {
@@ -598,10 +603,14 @@ export class SleepMeApi {
           const resetTime = this.minuteStartTime + 60000;
           const waitTime = resetTime - now;
           
-          this.logger.info(
-            `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
-          );
+          // Only log this once, not repeatedly
+          if (!this.rateExceededLogged) {
+            this.logger.info(
+              `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
+              `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
+            );
+            this.rateExceededLogged = true;
+          }
           
           // Wait for rate limit reset with a single timer
           setTimeout(() => {
@@ -690,8 +699,8 @@ export class SleepMeApi {
             const backoffTime = Math.min(120000, 15000 * Math.pow(1.5, this.consecutiveErrors));
             this.rateLimitBackoffUntil = Date.now() + backoffTime;
             
-  // Simplified logging
-  this.logger.warn(`Rate limit exceeded (429). Implementing backoff strategy.`);
+            // Simplified logging
+            this.logger.warn(`Rate limit exceeded (429). Implementing backoff strategy for ${Math.ceil(backoffTime/1000)}s.`);
             
             // Requeue the request
             this.requestQueue.unshift({
@@ -730,6 +739,7 @@ export class SleepMeApi {
     if (now - this.minuteStartTime >= 60000) {
       this.requestsThisMinute = 0;
       this.minuteStartTime = now;
+      this.rateExceededLogged = false; // Reset logging flag
       
       // If we've passed the backoff period, clear the rate limit flag
       if (now > this.rateLimitBackoffUntil) {
@@ -824,12 +834,26 @@ export class SleepMeApi {
     deviceId?: string;
     operationType?: string;
   }): Promise<T> {
-    // Log EVERY request
-    this.logger.info(
-      `API Request ${options.method} ${options.url} [${options.priority || 'NORMAL'}]` + 
-      (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '') +
-      ` Queue size: ${this.requestQueue.length}, Requests this minute: ${this.requestsThisMinute}`
-    );
+    // Skip redundant status updates if queue is getting large
+    if (this.requestQueue.length > 5 && 
+        options.operationType === 'getDeviceStatus' && 
+        options.priority !== RequestPriority.HIGH) {
+      this.logger.debug(`Skipping non-critical status update due to queue backlog (${this.requestQueue.length} pending)`);
+      return Promise.resolve(null as unknown as T);
+    }
+    
+    // Log request at different levels based on operation type to reduce noise
+    if (options.operationType === 'getDeviceStatus') {
+      this.logger.verbose(
+        `API Request ${options.method} ${options.url} [${options.priority || 'NORMAL'}]` + 
+        (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
+      );
+    } else {
+      this.logger.info(
+        `API Request ${options.method} ${options.url} [${options.priority || 'NORMAL'}]` + 
+        (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
+      );
+    }
     
     // Set default priority
     const priority = options.priority || RequestPriority.NORMAL;
