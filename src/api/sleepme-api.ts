@@ -20,7 +20,17 @@ import {
   PowerState,
   Logger
 } from './types.js';
-
+/**
+ * Interface for a cached device status entry
+ * Enhanced with confidence level
+ */
+interface DeviceStatusCache {
+  status: DeviceStatus;                      // Cached device status
+  timestamp: number;                         // When the status was cached
+  isOptimistic: boolean;                     // Whether this is an optimistic update
+  confidence?: 'low' | 'medium' | 'high';    // Confidence in the cache data
+  source?: 'get' | 'patch' | 'inferred';     // Source of the cache data
+}
 /**
  * Interface for a request in the queue
  */
@@ -84,6 +94,98 @@ export class SleepMeApi {
     lastError: null,
     averageResponseTime: 0
   };
+  
+  // Command sequencing control
+private commandEpoch = 0; // Track "freshness" of commands
+private pendingOperation: {
+  type: 'power' | 'temperature' | null;
+  epoch: number;
+  promise: Promise<void>;
+} | null = null;
+
+  /**
+ * Execute an operation with proper sequencing and epoch tracking
+ * to prevent outdated commands from executing
+ * @param type Operation type (power or temperature)
+ * @param epoch Command epoch number for freshness tracking
+ * @param operation Function to execute the operation
+ */
+private async executeOperation(
+  type: 'power' | 'temperature',
+  epoch: number,
+  operation: () => Promise<void>
+): Promise<void> {
+  // If there's a pending operation, wait for it to complete
+  if (this.pendingOperation) {
+    try {
+      // Only wait for previous operation if it's a different type
+      // (e.g., wait for power change before temperature change)
+      if (this.pendingOperation.type !== type) {
+        this.platform.log.debug(
+          `Waiting for pending ${this.pendingOperation.type} operation to complete before ${type}`
+        );
+        await this.pendingOperation.promise;
+      } else {
+        // For same operation type, we can cancel the previous one
+        // by just not waiting for it - the new operation will take precedence
+        this.platform.log.debug(`Canceling previous ${type} operation in favor of newer command`);
+      }
+    } catch (error) {
+      // Previous operation failed, but we'll still try this one
+      this.platform.log.debug(`Previous operation failed: ${error}`);
+    }
+    
+    // If our command is outdated after waiting, skip it
+    if (epoch < this.commandEpoch) {
+      this.platform.log.debug(`Skipping outdated ${type} command from epoch ${epoch}`);
+      return;
+    }
+  }
+  
+  // Create a promise for this operation
+  let resolveOperation!: () => void;
+  let rejectOperation!: (error: Error) => void;
+  
+  const operationPromise = new Promise<void>((resolve, reject) => {
+    resolveOperation = resolve;
+    rejectOperation = reject;
+  });
+  
+  // Register this as the pending operation
+  this.pendingOperation = {
+    type,
+    epoch,
+    promise: operationPromise
+  };
+  
+  // Mark that we shouldn't poll right after this user action
+  this.skipNextUpdate = true;
+  
+  try {
+    // Execute the operation
+    this.platform.log.debug(`Executing ${type} operation at epoch ${epoch}`);
+    await operation();
+    
+    // Skip the next status update and extend the quiet period
+    this.lastUserActionTime = Date.now();
+    this.skipNextUpdate = true;
+    
+    // Resolve the operation promise
+    resolveOperation();
+  } catch (error) {
+    this.platform.log.error(
+      `Operation failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+    
+    // Reject the operation promise
+    rejectOperation(error instanceof Error ? error : new Error(String(error)));
+  } finally {
+    // Clear the pending operation if it's still ours
+    if (this.pendingOperation && this.pendingOperation.epoch === epoch) {
+      this.pendingOperation = null;
+    }
+  }
+}
   
   // Initial startup delay 
   private readonly startupComplete: Promise<void>;
@@ -193,53 +295,86 @@ export class SleepMeApi {
     }
   }
 
-  /**
-   * Get status for a specific device with intelligent caching
-   * @param deviceId Device identifier
-   * @param forceFresh Whether to force a fresh status update
-   * @returns Device status or null if error
-   */
-  public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<DeviceStatus | null> {
-    if (!deviceId) {
-      this.logger.error('Missing device ID in getDeviceStatus');
-      return null;
-    }
-    
-    try {
-      // Check cache first if not forcing fresh data
-      if (!forceFresh) {
-        const cachedStatus = this.deviceStatusCache.get(deviceId);
-        const now = Date.now();
+ /**
+ * Get status for a specific device with trust-based caching
+ * @param deviceId Device identifier
+ * @param forceFresh Whether to force a fresh status update
+ * @returns Device status or null if error
+ */
+public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<DeviceStatus | null> {
+  if (!deviceId) {
+    this.logger.error('Missing device ID in getDeviceStatus');
+    return null;
+  }
+  
+  try {
+    // Check cache first if not forcing fresh data
+    if (!forceFresh) {
+      const cachedStatus = this.deviceStatusCache.get(deviceId);
+      const now = Date.now();
+      
+      // Use cache with dynamic validity based on confidence and source
+      // High confidence cache (from PATCH responses) can be used longer
+      if (cachedStatus) {
+        let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
         
-        // Use cache if valid - even if optimistic but for a shorter time
-        if (cachedStatus && 
-            (now - cachedStatus.timestamp < (cachedStatus.isOptimistic ? 
-            DEFAULT_CACHE_VALIDITY_MS/2 : DEFAULT_CACHE_VALIDITY_MS))) {
-            
+        // Adjust validity period based on confidence and source
+        if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
+          validityPeriod = DEFAULT_CACHE_VALIDITY_MS * 2;
+        } else if (cachedStatus.isOptimistic) {
+          validityPeriod = DEFAULT_CACHE_VALIDITY_MS / 2;
+        }
+        
+        if (now - cachedStatus.timestamp < validityPeriod) {
           const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
+          const confidenceInfo = cachedStatus.confidence 
+            ? ` (${cachedStatus.confidence} confidence)` 
+            : '';
           const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
+          
           this.logger.verbose(
-            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag})`
+            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo})`
           );
           
           return cachedStatus.status;
         }
       }
-      
-      this.logger.debug(`Fetching status for device ${deviceId}...`);
-      
-      const response = await this.makeRequest<Record<string, unknown>>({
-        method: 'GET',
-        url: `/devices/${deviceId}`,
-        priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
-        deviceId,
-        operationType: 'getDeviceStatus'
-      });
-      
-      if (!response) {
-        this.logger.error(`Empty response for device ${deviceId}`);
-        return null;
-      }
+    }
+    
+    // At this point, we need fresh data
+    this.logger.debug(`Fetching status for device ${deviceId}...`);
+    
+    const response = await this.makeRequest<Record<string, unknown>>({
+      method: 'GET',
+      url: `/devices/${deviceId}`,
+      priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
+      deviceId,
+      operationType: 'getDeviceStatus'
+    });
+    
+    if (!response) {
+      this.logger.error(`Empty response for device ${deviceId}`);
+      return null;
+    }
+    
+    // Parse the device status from the response
+    const status = this.parseDeviceStatus(response);
+    
+    // Update cache with fresh data
+    this.deviceStatusCache.set(deviceId, {
+      status,
+      timestamp: Date.now(),
+      isOptimistic: false,
+      confidence: 'high',
+      source: 'get'
+    });
+    
+    return status;
+  } catch (error) {
+    this.handleApiError(`getDeviceStatus(${deviceId})`, error);
+    return null;
+  }
+}
       
       // Parse the device status from the response
       const status: DeviceStatus = {
@@ -334,143 +469,143 @@ export class SleepMeApi {
     
     return value;
   }
-  
   /**
-   * Turn device on and set temperature in a single operation
-   * @param deviceId Device identifier
-   * @param temperature Target temperature in Celsius
-   * @returns Whether operation was successful
-   */
-  public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean> {
-    try {
-      // Default temperature if none provided
-      const targetTemp = temperature !== undefined ? temperature : 21;
+ * Turn device on and set temperature in a single operation
+ * With trust-based approach (no verification GET)
+ * @param deviceId Device identifier
+ * @param temperature Target temperature in Celsius
+ * @returns Whether operation was successful
+ */
+public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean> {
+  try {
+    // Default temperature if none provided
+    const targetTemp = temperature !== undefined ? temperature : 21;
+    
+    this.logger.info(`Turning device ${deviceId} ON with temperature ${targetTemp}°C`);
+    
+    // Cancel any pending requests for this device to prevent race conditions
+    this.cancelAllDeviceRequests(deviceId);
+    
+    // Create payload for API - using integers for temperature values
+    const payload: Record<string, unknown> = {
+      // Set Fahrenheit as primary temp (matching API expectation)
+      set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
+      thermal_control_status: 'active'
+    };
+    
+    this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
+    
+    const success = await this.updateDeviceSettings(deviceId, payload);
+    
+    if (success) {
+      // Update cache with complete device state based on our command
+      // This is critical for the trust-based approach
+      this.updateCacheWithTrustedState(deviceId, {
+        powerState: PowerState.ON,
+        targetTemperature: targetTemp,
+        thermalStatus: ThermalStatus.ACTIVE,
+        // We don't know current temperature yet, but we'll assume it's moving toward target
+        // This gives better UX without requiring a GET
+        currentTemperature: this.getLastKnownTemperature(deviceId, targetTemp)
+      });
       
-      this.logger.info(`Turning device ${deviceId} ON with temperature ${targetTemp}°C`);
-      
-      // Cancel any pending requests for this device to prevent race conditions
-      this.cancelAllDeviceRequests(deviceId);
-      
-      // Create payload for API - using integers for temperature values
-      const payload: Record<string, unknown> = {
-        // Set Fahrenheit as primary temp (matching API expectation)
-        set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
-        thermal_control_status: 'active'
-      };
-      
-      this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
-      
-      const success = await this.updateDeviceSettings(deviceId, payload);
-      
-      if (success) {
-        // Update cache optimistically
-        this.updateCacheOptimistically(deviceId, {
-          powerState: PowerState.ON,
-          targetTemperature: targetTemp,
-          thermalStatus: ThermalStatus.ACTIVE
-        });
-        
-        this.logger.verbose(`Device ${deviceId} turned ON successfully`);
-        return true;
-      } else {
-        this.logger.error(`Failed to turn device ${deviceId} ON`);
-        return false;
-      }
-    } catch (error) {
-      this.handleApiError(`turnDeviceOn(${deviceId})`, error);
+      this.logger.verbose(`Device ${deviceId} turned ON successfully`);
+      return true;
+    } else {
+      this.logger.error(`Failed to turn device ${deviceId} ON`);
       return false;
     }
+  } catch (error) {
+    this.handleApiError(`turnDeviceOn(${deviceId})`, error);
+    return false;
   }
+}
 
-  /**
-   * Turn device off
-   * @param deviceId Device identifier
-   * @returns Whether operation was successful
-   */
-  public async turnDeviceOff(deviceId: string): Promise<boolean> {
-    try {
-      this.logger.info(`Turning device ${deviceId} OFF`);
+/**
+ * Turn device off
+ * With trust-based approach (no verification GET)
+ * @param deviceId Device identifier
+ * @returns Whether operation was successful
+ */
+public async turnDeviceOff(deviceId: string): Promise<boolean> {
+  try {
+    this.logger.info(`Turning device ${deviceId} OFF`);
+    
+    // Cancel any pending requests for this device to prevent race conditions
+    this.cancelAllDeviceRequests(deviceId);
+    
+    // Create payload with standby status
+    const payload = {
+      thermal_control_status: 'standby'
+    };
+    
+    this.logger.verbose(`Turn OFF payload: ${JSON.stringify(payload)}`);
+    
+    const success = await this.updateDeviceSettings(deviceId, payload);
+    
+    if (success) {
+      // Update cache with trusted state - this is key to trust-based approach
+      this.updateCacheWithTrustedState(deviceId, {
+        powerState: PowerState.OFF,
+        thermalStatus: ThermalStatus.STANDBY
+        // We don't update current temperature as it will continue to be valid
+      });
       
-      // Cancel any pending requests for this device to prevent race conditions
-      this.cancelAllDeviceRequests(deviceId);
-      
-      // Create payload with standby status
-      const payload = {
-        thermal_control_status: 'standby'
-      };
-      
-      this.logger.verbose(`Turn OFF payload: ${JSON.stringify(payload)}`);
-      
-      const success = await this.updateDeviceSettings(deviceId, payload);
-      
-      if (success) {
-        // Update cache optimistically
-        this.updateCacheOptimistically(deviceId, {
-          powerState: PowerState.OFF,
-          thermalStatus: ThermalStatus.STANDBY
-        });
-        
-        this.logger.verbose(`Device ${deviceId} turned OFF successfully`);
-      } else {
-        this.logger.error(`Failed to turn device ${deviceId} OFF`);
-        return false;
-      }
-      
-      // Verify the state change
-      const newStatus = await this.getDeviceStatus(deviceId, true);
-      if (newStatus && 
-         (newStatus.thermalStatus === ThermalStatus.STANDBY ||
-          newStatus.powerState === PowerState.OFF)) {
-        return true;
-      }
-      
-      return success;
-    } catch (error) {
-      this.handleApiError(`turnDeviceOff(${deviceId})`, error);
+      this.logger.verbose(`Device ${deviceId} turned OFF successfully`);
+      return true;
+    } else {
+      this.logger.error(`Failed to turn device ${deviceId} OFF`);
       return false;
     }
+  } catch (error) {
+    this.handleApiError(`turnDeviceOff(${deviceId})`, error);
+    return false;
   }
+}
 
-  /**
-   * Set device temperature
-   * @param deviceId Device identifier
-   * @param temperature Target temperature in Celsius
-   * @returns Whether operation was successful
-   */
-  public async setTemperature(deviceId: string, temperature: number): Promise<boolean> {
-    try {
-      this.logger.info(`Setting device ${deviceId} temperature to ${temperature}°C`);
+/**
+ * Set device temperature
+ * With trust-based approach (no verification GET)
+ * @param deviceId Device identifier
+ * @param temperature Target temperature in Celsius
+ * @returns Whether operation was successful
+ */
+public async setTemperature(deviceId: string, temperature: number): Promise<boolean> {
+  try {
+    this.logger.info(`Setting device ${deviceId} temperature to ${temperature}°C`);
+    
+    // Convert to Fahrenheit and round to integer (matching API expectation)
+    const tempF = Math.round(this.convertCtoF(temperature));
+    
+    // Create payload following API format
+    const payload = {
+      set_temperature_f: tempF
+    };
+    
+    this.logger.verbose(`Set temperature payload: ${JSON.stringify(payload)}`);
+    
+    const success = await this.updateDeviceSettings(deviceId, payload);
+    
+    if (success) {
+      // Update cache with trusted state - key to trust-based approach
+      this.updateCacheWithTrustedState(deviceId, {
+        targetTemperature: temperature,
+        // Setting temperature implies the device is ON
+        powerState: PowerState.ON,
+        thermalStatus: ThermalStatus.ACTIVE
+      });
       
-      // Convert to Fahrenheit and round to integer (matching API expectation)
-      const tempF = Math.round(this.convertCtoF(temperature));
-      
-      // Create payload following API format
-      const payload = {
-        set_temperature_f: tempF
-      };
-      
-      this.logger.verbose(`Set temperature payload: ${JSON.stringify(payload)}`);
-      
-      const success = await this.updateDeviceSettings(deviceId, payload);
-      
-      if (success) {
-        // Update cache optimistically
-        this.updateCacheOptimistically(deviceId, {
-          targetTemperature: temperature
-        });
-        
-        this.logger.verbose(`Device ${deviceId} temperature set successfully to ${temperature}°C`);
-      } else {
-        this.logger.error(`Failed to set device ${deviceId} temperature to ${temperature}°C`);
-      }
-      
-      return success;
-    } catch (error) {
-      this.handleApiError(`setTemperature(${deviceId})`, error);
+      this.logger.verbose(`Device ${deviceId} temperature set successfully to ${temperature}°C`);
+      return true;
+    } else {
+      this.logger.error(`Failed to set device ${deviceId} temperature to ${temperature}°C`);
       return false;
     }
+  } catch (error) {
+    this.handleApiError(`setTemperature(${deviceId})`, error);
+    return false;
   }
-
+}
   /**
    * Cancel all pending requests for a device
    * @param deviceId Device ID
@@ -524,7 +659,138 @@ export class SleepMeApi {
       return false;
     }
   }
+/**
+ * Update cache with a trusted device state based on our commands
+ * This is a more comprehensive version of optimistic updates
+ * @param deviceId Device identifier
+ * @param updates Status updates to apply
+ */
+private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceStatus>): void {
+  // Get current cached status
+  const cachedEntry = this.deviceStatusCache.get(deviceId);
+  
+  let updatedStatus: DeviceStatus;
+  
+  if (cachedEntry) {
+    // Merge updates with current status
+    updatedStatus = {
+      ...cachedEntry.status,
+      ...updates
+    };
+  } else {
+    // Create a new status with reasonable defaults for anything not provided
+    updatedStatus = {
+      currentTemperature: 21, // Default room temperature
+      targetTemperature: 21,
+      thermalStatus: ThermalStatus.UNKNOWN,
+      powerState: PowerState.UNKNOWN,
+      ...updates
+    };
+  }
+  
+  // Store updated status as trusted (not optimistic)
+  this.deviceStatusCache.set(deviceId, {
+    status: updatedStatus,
+    timestamp: Date.now(),
+    isOptimistic: false, // We're treating this as authoritative
+    confidence: 'high',  // High confidence since it's directly from our command
+    source: 'patch'      // Source is a PATCH operation
+  });
+  
+  this.logger.verbose(
+    `Updated cache with trusted state for device ${deviceId}: ` +
+    `Power=${updatedStatus.powerState}, ` +
+    `Target=${updatedStatus.targetTemperature}°C, ` +
+    `Status=${updatedStatus.thermalStatus}`
+  );
+}
 
+/**
+ * Get the last known temperature or a reasonable approximation
+ * This helps provide a smoother UX during temperature transitions
+ * @param deviceId Device identifier
+ * @param targetTemp Target temperature to use if no cached temperature
+ * @returns Best guess at current temperature
+ */
+private getLastKnownTemperature(deviceId: string, targetTemp: number): number {
+  const cachedEntry = this.deviceStatusCache.get(deviceId);
+  
+  if (cachedEntry && !isNaN(cachedEntry.status.currentTemperature)) {
+    // We have a cached temperature, use it
+    return cachedEntry.status.currentTemperature;
+  }
+  
+  // No cached temperature, approximate based on target
+  return targetTemp;
+}
+
+/**
+ * Parse a device status from raw API response
+ * Extracted to a separate method for reuse
+ * @param response API response data
+ * @returns Parsed device status
+ */
+private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
+  const status: DeviceStatus = {
+    currentTemperature: this.extractTemperature(response, [
+      'status.water_temperature_c',
+      'water_temperature_c',
+      'control.current_temperature_c',
+      'current_temperature_c'
+    ], 21),
+    
+    targetTemperature: this.extractTemperature(response, [
+      'control.set_temperature_c',
+      'set_temperature_c'
+    ], 21),
+    
+    thermalStatus: this.extractThermalStatus(response),
+    powerState: this.extractPowerState(response),
+    rawResponse: response
+  };
+  
+  // Extract firmware version and other details
+  const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') || 
+                        this.extractNestedValue(response, 'firmware_version');
+  
+  if (firmwareVersion) {
+    status.firmwareVersion = String(firmwareVersion);
+  }
+  
+  // Extract connection status if available
+  const connected = this.extractNestedValue(response, 'status.is_connected') ||
+                  this.extractNestedValue(response, 'is_connected');
+  
+  if (connected !== undefined) {
+    status.connected = Boolean(connected);
+  }
+  
+  // Extract water level information if available
+  const waterLevel = this.extractNestedValue(response, 'status.water_level') || 
+                    this.extractNestedValue(response, 'water_level');
+                    
+  if (waterLevel !== undefined) {
+    status.waterLevel = Number(waterLevel);
+  }
+  
+  const isWaterLow = this.extractNestedValue(response, 'status.is_water_low') || 
+                    this.extractNestedValue(response, 'is_water_low');
+                    
+  if (isWaterLow !== undefined) {
+    status.isWaterLow = Boolean(isWaterLow);
+  }
+  
+  // Log the status information
+  this.logger.verbose(
+    `Device status: Temp=${status.currentTemperature}°C, ` +
+    `Target=${status.targetTemperature}°C, ` +
+    `Status=${status.thermalStatus}, ` +
+    `Power=${status.powerState}` +
+    (status.waterLevel !== undefined ? `, Water=${status.waterLevel}%` : '')
+  );
+  
+  return status;
+}
   /**
    * Update the device status cache optimistically based on settings changes
    * @param deviceId Device identifier
