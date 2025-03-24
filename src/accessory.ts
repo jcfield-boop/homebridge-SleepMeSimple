@@ -52,8 +52,8 @@ export class SleepMeAccessory {
   private waterLevel = 100; // Default full water level
   private isWaterLow = false;
   
-  // Debounced function for temperature setting
-  private tempSetterDebounced: (value: CharacteristicValue) => void;
+// Debounced function for temperature setting
+private tempSetterDebounced: (newTemp: number, previousTemp: number) => void;
   
   // Device properties
   private readonly deviceId: string;
@@ -98,11 +98,11 @@ export class SleepMeAccessory {
     
     // Create Thermostat service (main control)
     this.setupTemperatureControlService();
-    
+
     // Create debounced temperature setter
-    this.tempSetterDebounced = debounce((value: CharacteristicValue) => {
-      this.handleTargetTemperatureSetImpl(value);
-    }, 500); // 500ms debounce time
+this.tempSetterDebounced = debounce((newTemp: number, previousTemp: number) => {
+  this.handleTargetTemperatureSetImpl(newTemp, previousTemp);
+}, 500); // 500ms debounce time
     
     // Initialize the device state by fetching current status
     // Wait a moment before first status fetch to avoid immediate API call
@@ -670,40 +670,85 @@ export class SleepMeAccessory {
       this.updateInProgress = false;
     }
   }
+ 
+/**
+ * Handler for target temperature SET
+ * @param value - New target temperature
+ */
+private handleTargetTemperatureSet(value: CharacteristicValue): void {
+  const newTemp = value as number;
   
-  /**
-   * Handler for target temperature SET
-   * @param value - New target temperature
-   */
-  private handleTargetTemperatureSet(value: CharacteristicValue): void {
-    // Update UI immediately for responsiveness
-    this.targetTemperature = value as number;
-    
-    // Call the debounced implementation
-    this.tempSetterDebounced(value);
-  }
+  // Store previous temperature before updating UI
+  const previousTemp = this.targetTemperature;
+  
+  // Update UI immediately for responsiveness
+  this.targetTemperature = newTemp;
+  
+  // Log the change
+  this.platform.log.info(`Target temperature change request: ${previousTemp}°C → ${newTemp}°C`);
+  
+  // Pass both current and previous temperature to the debounced implementation
+  this.tempSetterDebounced(newTemp, previousTemp);
+}
 
-  /**
-   * Implementation of target temperature setting that makes the API call
-   * @param value - New target temperature
-   */
-  private async handleTargetTemperatureSetImpl(value: CharacteristicValue): Promise<void> {
-    const newTemp = value as number;
-    
-    this.platform.log.info(`SET Target Temperature: ${newTemp}°C`);
-    
-    // Skip redundant updates
-    if (Math.abs(newTemp - this.targetTemperature) < 0.1) {
-      this.platform.log.debug(`Ignoring redundant temperature change to ${newTemp}°C`);
-      return;
+ /**
+ * Implementation of target temperature setting that makes the API call
+ * @param newTemp - New target temperature
+ * @param previousTemp - Previous target temperature before UI update
+ */
+private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: number): Promise<void> {
+  this.platform.log.info(`Processing temperature change: ${previousTemp}°C → ${newTemp}°C`);
+  
+  // Skip truly redundant updates (using previous temp for comparison)
+  // Allow very small changes (>= 0.5°C) which is the minimum HomeKit step
+  if (Math.abs(newTemp - previousTemp) < 0.5) {
+    this.platform.log.debug(`Skipping minor temperature adjustment (${Math.abs(newTemp - previousTemp).toFixed(1)}°C difference)`);
+    return;
+  }
+  
+  // Mark that we shouldn't poll right after this user action
+  this.skipNextUpdate = true;
+  this.lastTemperatureSetTime = Date.now();
+  
+  try {
+    // Only send the command if the device is powered on
+    if (this.isPowered) {
+      const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
+      
+      if (success) {
+        this.platform.log.info(`Temperature set to ${newTemp}°C`);
+      } else {
+        throw new Error(`Failed to set temperature to ${newTemp}°C`);
+      }
+    } else {
+      // If device is off, turning on with the new temperature
+      const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
+      
+      if (success) {
+        this.isPowered = true;
+        this.platform.log.info(`Device turned ON and temperature set to ${newTemp}°C`);
+      } else {
+        throw new Error(`Failed to turn on device and set temperature to ${newTemp}°C`);
+      }
     }
     
-    // Mark that we shouldn't poll right after this user action
-    this.skipNextUpdate = true;
-    this.lastTemperatureSetTime = Date.now();
+    // Update the current heating/cooling state based on temperature difference
+    this.updateCurrentHeatingCoolingState();
     
-    try {
-      // Only send the command if the device is powered on
+    // Refresh the status after a delay to get any other changes
+    // but use a longer delay to avoid rate limiting
+    setTimeout(() => {
+      this.refreshDeviceStatus(true).catch(e => {
+        this.platform.log.debug(`Error refreshing status after temperature change: ${e}`);
+      });
+    }, 5000); // 5 seconds
+  } catch (error) {
+    this.platform.log.error(
+      `Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+  // Only send the command if the device is powered on
       if (this.isPowered) {
         const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
         
