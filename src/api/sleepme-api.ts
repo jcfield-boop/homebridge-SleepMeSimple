@@ -193,134 +193,129 @@ export class SleepMeApi {
       return [];
     }
   }
-
-  /**
-   * Get status for a specific device with intelligent caching
-   * @param deviceId Device identifier
-   * @param forceFresh Whether to force a fresh status update
-   * @returns Device status or null if error
-   */
-  public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<DeviceStatus | null> {
+/**
+ * Get status for a specific device with intelligent caching
+ * @param deviceId Device identifier
+ * @param forceFresh Whether to force a fresh status update
+ * @returns Device status or null if error
+ */
+public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<DeviceStatus | null> {
     if (!deviceId) {
-      this.logger.error('Missing device ID in getDeviceStatus');
-      return null;
+        this.logger.error('Missing device ID in getDeviceStatus');
+        return null;
     }
     
     try {
-      // Check cache first if not forcing fresh data
-      if (!forceFresh) {
-        const cachedStatus = this.deviceStatusCache.get(deviceId);
-        const now = Date.now();
-        
-        // Use cache if valid - even if optimistic but for a shorter time
-        if (cachedStatus && 
-            (now - cachedStatus.timestamp < (cachedStatus.isOptimistic ? 
-            DEFAULT_CACHE_VALIDITY_MS/2 : DEFAULT_CACHE_VALIDITY_MS))) {
-          
-          const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
-          const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
-          this.logger.verbose(
-            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag})`
-          );
-          
-          return cachedStatus.status;
+        // Check cache first if not forcing fresh data
+        if (!forceFresh) {
+            const cachedStatus = this.deviceStatusCache.get(deviceId);
+            const now = Date.now();
+            
+            // Use cache if valid - even if optimistic but for a shorter time
+            if (cachedStatus && 
+                (now - cachedStatus.timestamp < (cachedStatus.isOptimistic ? 
+                DEFAULT_CACHE_VALIDITY_MS/2 : DEFAULT_CACHE_VALIDITY_MS))) {
+                
+                const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
+                const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
+                this.logger.verbose(
+                    `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag})`
+                );
+                
+                return cachedStatus.status;
+            }
         }
-      }
-      
-      this.logger.debug(`Fetching status for device ${deviceId}...`);
-      
-      const response = await this.makeRequest<Record<string, unknown>>({
-        method: 'GET',
-        url: `/devices/${deviceId}`,
-        priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
-        deviceId,
-        operationType: 'getDeviceStatus'
-      });
-      
-      if (!response) {
-        this.logger.error(`Empty response for device ${deviceId}`);
-        return null;
-      }
-      
-      // Parse the device status from the response
-      const status: DeviceStatus = {
-        // Extract current temperature (various possible locations in API)
-        currentTemperature: this.extractTemperature(response, [
-          'status.water_temperature_c',
-          'water_temperature_c',
-          'control.current_temperature_c',
-          'current_temperature_c'
-        ], 21),
         
-        // Extract target temperature
-        targetTemperature: this.extractTemperature(response, [
-          'control.set_temperature_c',
-          'set_temperature_c'
-        ], 21),
+        this.logger.debug(`Fetching status for device ${deviceId}...`);
         
-        // Extract thermal status
-        thermalStatus: this.extractThermalStatus(response),
+        const response = await this.makeRequest<Record<string, unknown>>({
+            method: 'GET',
+            url: `/devices/${deviceId}`,
+            priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
+            deviceId,
+            operationType: 'getDeviceStatus'
+        });
         
-        // Extract power state
-        powerState: this.extractPowerState(response),
+        if (!response) {
+            this.logger.error(`Empty response for device ${deviceId}`);
+            return null;
+        }
         
-        // Include raw response for debugging
-        rawResponse: response
-      };
-      
-      // Extract firmware version
-      const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') || 
-                             this.extractNestedValue(response, 'firmware_version');
-      
-      if (firmwareVersion) {
-        status.firmwareVersion = String(firmwareVersion);
-      }
-      
-      // Extract connection status if available
-      const connected = this.extractNestedValue(response, 'status.is_connected') ||
+        // Parse the device status from the response
+        const status: DeviceStatus = {
+            // Status parsing code remains the same...
+            currentTemperature: this.extractTemperature(response, [
+                'status.water_temperature_c',
+                'water_temperature_c',
+                'control.current_temperature_c',
+                'current_temperature_c'
+            ], 21),
+            
+            targetTemperature: this.extractTemperature(response, [
+                'control.set_temperature_c',
+                'set_temperature_c'
+            ], 21),
+            
+            thermalStatus: this.extractThermalStatus(response),
+            powerState: this.extractPowerState(response),
+            rawResponse: response
+        };
+        
+        // Extract firmware version and other details...
+        // (Keeping the rest of the status parsing code intact)
+        
+        const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') || 
+                              this.extractNestedValue(response, 'firmware_version');
+        
+        if (firmwareVersion) {
+            status.firmwareVersion = String(firmwareVersion);
+        }
+        
+        // Extract connection status if available
+        const connected = this.extractNestedValue(response, 'status.is_connected') ||
                         this.extractNestedValue(response, 'is_connected');
-      
-      if (connected !== undefined) {
-        status.connected = Boolean(connected);
-      }
-      
-      // Extract water level information if available
-      const waterLevel = this.extractNestedValue(response, 'status.water_level') || 
-                         this.extractNestedValue(response, 'water_level');
-                         
-      if (waterLevel !== undefined) {
-        status.waterLevel = Number(waterLevel);
-      }
-      
-      const isWaterLow = this.extractNestedValue(response, 'status.is_water_low') || 
-                         this.extractNestedValue(response, 'is_water_low');
-                         
-      if (isWaterLow !== undefined) {
-        status.isWaterLow = Boolean(isWaterLow);
-      }
-      
-      // Log the status information
-      this.logger.verbose(
-        `Device status: Temp=${status.currentTemperature}°C, ` +
-        `Target=${status.targetTemperature}°C, ` +
-        `Status=${status.thermalStatus}, ` +
-        `Power=${status.powerState}` +
-        (status.waterLevel !== undefined ? `, Water=${status.waterLevel}%` : '')
-      );
-      
-      // Update cache with fresh data
-      this.deviceStatusCache.set(deviceId, {
-        status,
-        timestamp: Date.now(),
-        isOptimistic: false
-      });
-      
-      return status;
+        
+        if (connected !== undefined) {
+            status.connected = Boolean(connected);
+        }
+        
+        // Extract water level information if available
+        const waterLevel = this.extractNestedValue(response, 'status.water_level') || 
+                          this.extractNestedValue(response, 'water_level');
+                          
+        if (waterLevel !== undefined) {
+            status.waterLevel = Number(waterLevel);
+        }
+        
+        const isWaterLow = this.extractNestedValue(response, 'status.is_water_low') || 
+                          this.extractNestedValue(response, 'is_water_low');
+                          
+        if (isWaterLow !== undefined) {
+            status.isWaterLow = Boolean(isWaterLow);
+        }
+        
+        // Log the status information
+        this.logger.verbose(
+            `Device status: Temp=${status.currentTemperature}°C, ` +
+            `Target=${status.targetTemperature}°C, ` +
+            `Status=${status.thermalStatus}, ` +
+            `Power=${status.powerState}` +
+            (status.waterLevel !== undefined ? `, Water=${status.waterLevel}%` : '')
+        );
+        
+        // Update cache with fresh data
+        this.deviceStatusCache.set(deviceId, {
+            status,
+            timestamp: Date.now(),
+            isOptimistic: false
+        });
+        
+        return status;
     } catch (error) {
-      this.handleApiError(`getDeviceStatus(${deviceId})`, error);
-      return null;
+        this.handleApiError(`getDeviceStatus(${deviceId})`, error);
+        return null;
     }
-  }
+}
   
   /**
    * Extract a nested property value from an object
