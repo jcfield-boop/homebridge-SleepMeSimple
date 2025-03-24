@@ -5,6 +5,11 @@
   "type": "module",
   "description": "Simplified HomeKit control for SleepMe devices (ChiliPad, OOLER, Dock Pro)",
   "license": "MIT",
+   "files": [
+    "dist",
+    "config.schema.json",
+    "customui"
+  ],
   "keywords": [
     "homebridge-plugin",
     "sleepme",
