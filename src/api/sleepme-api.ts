@@ -20,6 +20,7 @@ import {
   PowerState,
   Logger
 } from './types.js';
+
 /**
  * Interface for a cached device status entry
  * Enhanced with confidence level
@@ -31,6 +32,7 @@ interface DeviceStatusCache {
   confidence?: 'low' | 'medium' | 'high';    // Confidence in the cache data
   source?: 'get' | 'patch' | 'inferred';     // Source of the cache data
 }
+
 /**
  * Interface for a request in the queue
  */
@@ -48,15 +50,6 @@ interface QueuedRequest {
   deviceId?: string;                   // Device ID if applicable
   operationType?: string;              // Operation type for deduplication
   lastAttempt?: number;                // When the request was last attempted
-}
-
-/**
- * Interface for a cached device status entry
- */
-interface DeviceStatusCache {
-  status: DeviceStatus;                // Cached device status
-  timestamp: number;                   // When the status was cached
-  isOptimistic: boolean;               // Whether this is an optimistic update
 }
 
 /**
@@ -94,98 +87,6 @@ export class SleepMeApi {
     lastError: null,
     averageResponseTime: 0
   };
-  
-  // Command sequencing control
-private commandEpoch = 0; // Track "freshness" of commands
-private pendingOperation: {
-  type: 'power' | 'temperature' | null;
-  epoch: number;
-  promise: Promise<void>;
-} | null = null;
-
-  /**
- * Execute an operation with proper sequencing and epoch tracking
- * to prevent outdated commands from executing
- * @param type Operation type (power or temperature)
- * @param epoch Command epoch number for freshness tracking
- * @param operation Function to execute the operation
- */
-private async executeOperation(
-  type: 'power' | 'temperature',
-  epoch: number,
-  operation: () => Promise<void>
-): Promise<void> {
-  // If there's a pending operation, wait for it to complete
-  if (this.pendingOperation) {
-    try {
-      // Only wait for previous operation if it's a different type
-      // (e.g., wait for power change before temperature change)
-      if (this.pendingOperation.type !== type) {
-        this.platform.log.debug(
-          `Waiting for pending ${this.pendingOperation.type} operation to complete before ${type}`
-        );
-        await this.pendingOperation.promise;
-      } else {
-        // For same operation type, we can cancel the previous one
-        // by just not waiting for it - the new operation will take precedence
-        this.platform.log.debug(`Canceling previous ${type} operation in favor of newer command`);
-      }
-    } catch (error) {
-      // Previous operation failed, but we'll still try this one
-      this.platform.log.debug(`Previous operation failed: ${error}`);
-    }
-    
-    // If our command is outdated after waiting, skip it
-    if (epoch < this.commandEpoch) {
-      this.platform.log.debug(`Skipping outdated ${type} command from epoch ${epoch}`);
-      return;
-    }
-  }
-  
-  // Create a promise for this operation
-  let resolveOperation!: () => void;
-  let rejectOperation!: (error: Error) => void;
-  
-  const operationPromise = new Promise<void>((resolve, reject) => {
-    resolveOperation = resolve;
-    rejectOperation = reject;
-  });
-  
-  // Register this as the pending operation
-  this.pendingOperation = {
-    type,
-    epoch,
-    promise: operationPromise
-  };
-  
-  // Mark that we shouldn't poll right after this user action
-  this.skipNextUpdate = true;
-  
-  try {
-    // Execute the operation
-    this.platform.log.debug(`Executing ${type} operation at epoch ${epoch}`);
-    await operation();
-    
-    // Skip the next status update and extend the quiet period
-    this.lastUserActionTime = Date.now();
-    this.skipNextUpdate = true;
-    
-    // Resolve the operation promise
-    resolveOperation();
-  } catch (error) {
-    this.platform.log.error(
-      `Operation failed: ${error instanceof Error ? error.message : String(error)}`
-    );
-    
-    // Reject the operation promise
-    rejectOperation(error instanceof Error ? error : new Error(String(error)));
-  } finally {
-    // Clear the pending operation if it's still ours
-    if (this.pendingOperation && this.pendingOperation.epoch === epoch) {
-      this.pendingOperation = null;
-    }
-  }
-}
   
   // Initial startup delay 
   private readonly startupComplete: Promise<void>;
@@ -251,7 +152,6 @@ private async executeOperation(
       this.logger.debug(`Cleaned up ${expiredCount} expired cache entries`);
     }
   }
-  
   /**
    * Get devices from the SleepMe API
    * @returns Array of devices or empty array if error
@@ -375,101 +275,7 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     return null;
   }
 }
-      
-      // Parse the device status from the response
-      const status: DeviceStatus = {
-        currentTemperature: this.extractTemperature(response, [
-          'status.water_temperature_c',
-          'water_temperature_c',
-          'control.current_temperature_c',
-          'current_temperature_c'
-        ], 21),
-        
-        targetTemperature: this.extractTemperature(response, [
-          'control.set_temperature_c',
-          'set_temperature_c'
-        ], 21),
-        
-        thermalStatus: this.extractThermalStatus(response),
-        powerState: this.extractPowerState(response),
-        rawResponse: response
-      };
-      
-      // Extract firmware version and other details
-      const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') || 
-                            this.extractNestedValue(response, 'firmware_version');
-      
-      if (firmwareVersion) {
-        status.firmwareVersion = String(firmwareVersion);
-      }
-      
-      // Extract connection status if available
-      const connected = this.extractNestedValue(response, 'status.is_connected') ||
-                      this.extractNestedValue(response, 'is_connected');
-      
-      if (connected !== undefined) {
-        status.connected = Boolean(connected);
-      }
-      
-      // Extract water level information if available
-      const waterLevel = this.extractNestedValue(response, 'status.water_level') || 
-                        this.extractNestedValue(response, 'water_level');
-                        
-      if (waterLevel !== undefined) {
-        status.waterLevel = Number(waterLevel);
-      }
-      
-      const isWaterLow = this.extractNestedValue(response, 'status.is_water_low') || 
-                        this.extractNestedValue(response, 'is_water_low');
-                        
-      if (isWaterLow !== undefined) {
-        status.isWaterLow = Boolean(isWaterLow);
-      }
-      
-      // Log the status information
-      this.logger.verbose(
-        `Device status: Temp=${status.currentTemperature}°C, ` +
-        `Target=${status.targetTemperature}°C, ` +
-        `Status=${status.thermalStatus}, ` +
-        `Power=${status.powerState}` +
-        (status.waterLevel !== undefined ? `, Water=${status.waterLevel}%` : '')
-      );
-      
-      // Update cache with fresh data
-      this.deviceStatusCache.set(deviceId, {
-        status,
-        timestamp: Date.now(),
-        isOptimistic: false
-      });
-      
-      return status;
-    } catch (error) {
-      this.handleApiError(`getDeviceStatus(${deviceId})`, error);
-      return null;
-    }
-  }
-  
-  /**
-   * Extract a nested property value from an object
-   * @param obj Object to extract from
-   * @param path Dot-notation path to property
-   * @returns Extracted value or undefined if not found
-   */
-  public extractNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    const parts = path.split('.');
-    let value: unknown = obj;
-    
-    for (const part of parts) {
-      if (value === null || value === undefined || typeof value !== 'object') {
-        return undefined;
-      }
-      
-      value = (value as Record<string, unknown>)[part];
-    }
-    
-    return value;
-  }
-  /**
+/**
  * Turn device on and set temperature in a single operation
  * With trust-based approach (no verification GET)
  * @param deviceId Device identifier
@@ -659,6 +465,7 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
       return false;
     }
   }
+
 /**
  * Update cache with a trusted device state based on our commands
  * This is a more comprehensive version of optimistic updates
@@ -748,7 +555,6 @@ private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
     powerState: this.extractPowerState(response),
     rawResponse: response
   };
-  
   // Extract firmware version and other details
   const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') || 
                         this.extractNestedValue(response, 'firmware_version');
@@ -791,37 +597,7 @@ private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
   
   return status;
 }
-  /**
-   * Update the device status cache optimistically based on settings changes
-   * @param deviceId Device identifier
-   * @param updates Status updates to apply
-   */
-  private updateCacheOptimistically(deviceId: string, updates: Partial<DeviceStatus>): void {
-    // Get current cached status
-    const cachedEntry = this.deviceStatusCache.get(deviceId);
-    
-    if (cachedEntry) {
-      // Merge updates with current status
-      const updatedStatus: DeviceStatus = {
-        ...cachedEntry.status,
-        ...updates
-      };
-      
-      // Store updated status as optimistic
-      this.deviceStatusCache.set(deviceId, {
-        status: updatedStatus,
-        timestamp: Date.now(),
-        isOptimistic: true
-      });
-      
-      this.logger.verbose(
-        `Optimistically updated cache for device ${deviceId}: ` +
-        `Power=${updatedStatus.powerState}, ` +
-        `Target=${updatedStatus.targetTemperature}°C, ` +
-        `Status=${updatedStatus.thermalStatus}`
-      );
-    }
-  }
+
 /**
  * Process the request queue with improved priority handling
  * and adaptive rate limiting
@@ -903,7 +679,6 @@ private async processQueue(): Promise<void> {
         );
         
         const startTime = now;
-        
         // Execute the request
         this.stats.totalRequests++;
         const response = await axios(request.config);
@@ -987,6 +762,7 @@ private async processQueue(): Promise<void> {
     }
   }
 }
+
   /**
    * Determine if there are any queued requests
    */
@@ -1032,7 +808,6 @@ private async processQueue(): Promise<void> {
         return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
       }
     }
-    
     // Then, try high priority requests
     if (this.highPriorityQueue.length > 0) {
       const pendingRequests = this.highPriorityQueue.filter(r => !r.executing);
@@ -1298,7 +1073,6 @@ private async processQueue(): Promise<void> {
       this.logger.error(`Error in ${context}: ${errorMessage}`);
     }
   }
-  
   /**
    * Update the average response time
    * @param newResponseTime New response time in milliseconds
@@ -1311,6 +1085,27 @@ private async processQueue(): Promise<void> {
       this.stats.averageResponseTime = 
         (this.stats.averageResponseTime * 0.9) + (newResponseTime * 0.1);
     }
+  }
+
+  /**
+   * Extract a nested property value from an object
+   * @param obj Object to extract from
+   * @param path Dot-notation path to property
+   * @returns Extracted value or undefined if not found
+   */
+  public extractNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    const parts = path.split('.');
+    let value: unknown = obj;
+    
+    for (const part of parts) {
+      if (value === null || value === undefined || typeof value !== 'object') {
+        return undefined;
+      }
+      
+      value = (value as Record<string, unknown>)[part];
+    }
+    
+    return value;
   }
 
   /**
