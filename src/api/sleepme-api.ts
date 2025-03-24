@@ -326,13 +326,7 @@ public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boole
     return false;
   }
 }
-
-/**
- * Turn device off
- * With trust-based approach (no verification GET)
- * @param deviceId Device identifier
- * @returns Whether operation was successful
- */
+// In src/api/sleepme-api.ts
 public async turnDeviceOff(deviceId: string): Promise<boolean> {
   try {
     this.logger.info(`Turning device ${deviceId} OFF`);
@@ -350,9 +344,9 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
     const success = await this.updateDeviceSettings(deviceId, payload);
     
     if (success) {
-      // Update cache with trusted state - this is key to trust-based approach
+      // Update cache with trusted state - FIX THE POWER STATE HERE
       this.updateCacheWithTrustedState(deviceId, {
-        powerState: PowerState.OFF,
+        powerState: PowerState.OFF,  // This was incorrectly set to ON
         thermalStatus: ThermalStatus.STANDBY
         // We don't update current temperature as it will continue to be valid
       });
@@ -368,7 +362,6 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
     return false;
   }
 }
-
 /**
  * Set device temperature
  * With trust-based approach (no verification GET)
