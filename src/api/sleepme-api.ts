@@ -827,7 +827,7 @@ private async processQueue(): Promise<void> {
     }
   }
 
- /**
+/**
  * Make a request to the SleepMe API
  * @param options Request options
  * @returns Promise resolving to response data
@@ -846,11 +846,9 @@ private async makeRequest<T>(options: {
         (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '') +
         ` Queue size: ${this.requestQueue.length}, Requests this minute: ${this.requestsThisMinute}`
     );
+    
     // Set default priority
     const priority = options.priority || RequestPriority.NORMAL;
-    
-   
-    }
     
     // Wait for startup delay to complete for non-high priority requests
     if (priority !== RequestPriority.HIGH && !this.startupFinished) {
@@ -898,6 +896,7 @@ private async makeRequest<T>(options: {
         }
     });
 }
+
   /**
    * Handle API errors with better logging
    * @param context Context where the error occurred
