@@ -2,7 +2,7 @@
  * SleepMe Accessory
  * 
  * This class implements a HomeKit interface for SleepMe devices,
- * using the HeaterCooler service as the primary control interface
+ * using the Thermostat service as the primary control interface
  */
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
@@ -36,7 +36,7 @@ function debounce<T extends (...args: any[]) => any>(
 
 /**
  * SleepMe Accessory
- * Provides a simplified interface for SleepMe devices using the HeaterCooler service
+ * Provides a simplified interface for SleepMe devices using the Thermostat service
  */
 export class SleepMeAccessory {
   // HomeKit services
@@ -96,7 +96,7 @@ export class SleepMeAccessory {
     // Initialize accessory information service
     this.setupInformationService();
     
-    // Create HeaterCooler service (main control)
+    // Create Thermostat service (main control)
     this.setupTemperatureControlService();
     
     // Create debounced temperature setter
@@ -119,6 +119,9 @@ export class SleepMeAccessory {
     this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
   }
 
+  /**
+   * Set up the accessory information service
+   */
   private setupInformationService(): void {
     // Get or create the information service
     this.informationService = this.accessory.getService(this.platform.Service.AccessoryInformation) || 
@@ -135,245 +138,245 @@ export class SleepMeAccessory {
     this.accessory.category = this.platform.homebridgeApi.hap.Categories.THERMOSTAT;
   }
 
-/**
- * Set up the Thermostat service for temperature control
- * This is the main service that provides thermostat functionality in HomeKit
- */
-private setupTemperatureControlService(): void {
-  // Remove any existing temperature or switch services to avoid duplication
-  const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
-  if (existingTempService) {
-    this.platform.log.info('Removing existing temperature sensor service');
-    this.accessory.removeService(existingTempService);
-  }
-  
-  const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
-  if (existingSwitchService) {
-    this.platform.log.info('Removing existing switch service');
-    this.accessory.removeService(existingSwitchService);
-  }
-  
-  // Remove existing HeaterCooler service if present
-  const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
-  if (existingHeaterCoolerService) {
-    this.platform.log.info('Removing existing HeaterCooler service');
-    this.accessory.removeService(existingHeaterCoolerService);
-  }
-  
-  // Use Thermostat service for temperature control
-  this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
-    this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
-  
-  // Configure basic characteristics
-  this.temperatureControlService
-    .setCharacteristic(this.Characteristic.Name, this.displayName)
-    .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.Characteristic.CurrentHeatingCoolingState.OFF)
-    .setCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.OFF);
-  
-  // Set up current temperature characteristic
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.CurrentTemperature)
-    .setProps({
-      minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
-      maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
-      minStep: 0.1
-    })
-    .onGet(() => this.currentTemperature || 20);
-  
-  // Set up target temperature characteristic
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.TargetTemperature)
-    .setProps({
-      minValue: MIN_TEMPERATURE_C,
-      maxValue: MAX_TEMPERATURE_C,
-      minStep: 0.5
-    })
-    .onGet(this.handleTargetTemperatureGet.bind(this))
-    .onSet(this.handleTargetTemperatureSet.bind(this));
-  
-  // Set up current heating/cooling state
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-    .onGet(() => this.getCurrentHeatingCoolingState());
-  
-  // Set up target heating/cooling state
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-    .onGet(() => this.getTargetHeatingCoolingState())
-    .onSet((value) => {
-      this.handleTargetHeatingCoolingStateSet(value as number);
-    });
-  
-  // Set initial display unit (Celsius)
-  this.temperatureControlService
-    .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
-    .setProps({
-      validValues: [
-        this.Characteristic.TemperatureDisplayUnits.CELSIUS,
-        this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
-      ]
-    })
-    .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
-}
-
-/**
- * Get the current heating/cooling state based on device status
- */
-private getCurrentHeatingCoolingState(): number {
-  if (!this.isPowered) {
-    return this.Characteristic.CurrentHeatingCoolingState.OFF;
-  }
-  
-  // If we don't have valid temperature readings
-  if (isNaN(this.currentTemperature) || isNaN(this.targetTemperature)) {
-    return this.Characteristic.CurrentHeatingCoolingState.HEAT; // Default to HEAT
-  }
-  
-  // Determine if we're heating or cooling based on current vs target temperature
-  if (this.currentTemperature < this.targetTemperature - 0.5) {
-    // Heating up (with 0.5° threshold to prevent oscillation)
-    return this.Characteristic.CurrentHeatingCoolingState.HEAT;
-  } else if (this.currentTemperature > this.targetTemperature + 0.5) {
-    // Cooling down
-    return this.Characteristic.CurrentHeatingCoolingState.COOL;
-  } else {
-    // At target temperature (within threshold)
-    // Use OFF as state when at target temperature
-    return this.Characteristic.CurrentHeatingCoolingState.OFF;
-  }
-}
-
-/**
- * Get the target heating/cooling state
- */
-private getTargetHeatingCoolingState(): number {
-  return this.isPowered ? 
-    this.Characteristic.TargetHeatingCoolingState.AUTO : 
-    this.Characteristic.TargetHeatingCoolingState.OFF;
-}
-
-/**
- * Handle setting the target heating/cooling state
- */
-private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
-  this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
-  
-  switch (value) {
-    case this.Characteristic.TargetHeatingCoolingState.OFF:
-      // Turn off
-      if (this.isPowered) {
-        await this.handlePowerStateSet(false);
-      }
-      break;
-    
-    case this.Characteristic.TargetHeatingCoolingState.AUTO:
-    case this.Characteristic.TargetHeatingCoolingState.HEAT:
-    case this.Characteristic.TargetHeatingCoolingState.COOL:
-      // Turn on
-      if (!this.isPowered) {
-        await this.handlePowerStateSet(true);
-      }
-      
-      // For SleepMe devices, we treat all active modes as AUTO
-      setTimeout(() => {
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.TargetHeatingCoolingState,
-          this.Characteristic.TargetHeatingCoolingState.AUTO
-        );
-      }, 100);
-      break;
-  }
-}
-
-/**
- * Update the current heating/cooling state in HomeKit
- */
-private updateCurrentHeatingCoolingState(): void {
-  const state = this.getCurrentHeatingCoolingState();
-  
-  this.temperatureControlService.updateCharacteristic(
-    this.Characteristic.CurrentHeatingCoolingState,
-    state
-  );
-  
-  // Update target state too
-  this.temperatureControlService.updateCharacteristic(
-    this.Characteristic.TargetHeatingCoolingState,
-    this.getTargetHeatingCoolingState()
-  );
-}
-
-/**
- * Handler for target temperature GET
- * @returns Current target temperature
- */
-private async handleTargetTemperatureGet(): Promise<CharacteristicValue> {
-  const temp = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-  this.platform.log.debug(`GET Target Temperature: ${temp}°C`);
-  return temp;
-}
-
-/**
- * Handler for power state SET - now using heating/cooling state
- * @param turnOn - Whether to turn on the device
- */
-private async handlePowerStateSet(turnOn: boolean): Promise<void> {
-  this.platform.log.info(`SET Power State: ${turnOn ? 'ON' : 'OFF'}`);
-  
-  // Skip redundant updates
-  if ((turnOn && this.isPowered) || (!turnOn && !this.isPowered)) {
-    this.platform.log.debug(`Ignoring redundant power state change to ${turnOn ? 'ON' : 'OFF'}`);
-    return;
-  }
-  
-  // Mark that we shouldn't poll right after this user action
-  this.skipNextUpdate = true;
-  this.lastTemperatureSetTime = Date.now();
-  
-  try {
-    let success = false;
-    
-    if (turnOn) {
-      // Turn on the device with current target temperature
-      const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-      success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
-      
-      if (success) {
-        this.isPowered = true;
-        this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
-      }
-    } else {
-      // Turn off the device
-      success = await this.apiClient.turnDeviceOff(this.deviceId);
-      
-      if (success) {
-        this.isPowered = false;
-        this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
-      }
+  /**
+   * Set up the Thermostat service for temperature control
+   * This is the main service that provides thermostat functionality in HomeKit
+   */
+  private setupTemperatureControlService(): void {
+    // Remove any existing temperature or switch services to avoid duplication
+    const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+    if (existingTempService) {
+      this.platform.log.info('Removing existing temperature sensor service');
+      this.accessory.removeService(existingTempService);
     }
     
-    if (!success) {
-      throw new Error(`Failed to ${turnOn ? 'turn on' : 'turn off'} device`);
+    const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
+    if (existingSwitchService) {
+      this.platform.log.info('Removing existing switch service');
+      this.accessory.removeService(existingSwitchService);
     }
     
-    // Update the UI state immediately for responsiveness
-    this.updateCurrentHeatingCoolingState();
+    // Remove existing HeaterCooler service if present
+    const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
+    if (existingHeaterCoolerService) {
+      this.platform.log.info('Removing existing HeaterCooler service');
+      this.accessory.removeService(existingHeaterCoolerService);
+    }
     
-    // Refresh the status after a short delay, but only once
-    setTimeout(() => {
-      this.refreshDeviceStatus(true).catch(e => {
-        this.platform.log.debug(`Error refreshing status after power change: ${e}`);
+    // Use Thermostat service for temperature control
+    this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
+      this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
+    
+    // Configure basic characteristics
+    this.temperatureControlService
+      .setCharacteristic(this.Characteristic.Name, this.displayName)
+      .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.Characteristic.CurrentHeatingCoolingState.OFF)
+      .setCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.OFF);
+    
+    // Set up current temperature characteristic
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.CurrentTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
+        maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
+        minStep: 0.1
+      })
+      .onGet(() => this.currentTemperature || 20);
+    
+    // Set up target temperature characteristic
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.TargetTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C,
+        maxValue: MAX_TEMPERATURE_C,
+        minStep: 0.5
+      })
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
+    
+    // Set up current heating/cooling state
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+      .onGet(() => this.getCurrentHeatingCoolingState());
+    
+    // Set up target heating/cooling state
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+      .onGet(() => this.getTargetHeatingCoolingState())
+      .onSet((value) => {
+        this.handleTargetHeatingCoolingStateSet(value as number);
       });
-    }, 5000);
-  } catch (error) {
-    this.platform.log.error(
-      `Failed to set power state: ${error instanceof Error ? error.message : String(error)}`
+    
+    // Set initial display unit (Celsius)
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
+      .setProps({
+        validValues: [
+          this.Characteristic.TemperatureDisplayUnits.CELSIUS,
+          this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
+        ]
+      })
+      .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
+  }
+
+  /**
+   * Get the current heating/cooling state based on device status
+   */
+  private getCurrentHeatingCoolingState(): number {
+    if (!this.isPowered) {
+      return this.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+    
+    // If we don't have valid temperature readings
+    if (isNaN(this.currentTemperature) || isNaN(this.targetTemperature)) {
+      return this.Characteristic.CurrentHeatingCoolingState.HEAT; // Default to HEAT
+    }
+    
+    // Determine if we're heating or cooling based on current vs target temperature
+    if (this.currentTemperature < this.targetTemperature - 0.5) {
+      // Heating up (with 0.5° threshold to prevent oscillation)
+      return this.Characteristic.CurrentHeatingCoolingState.HEAT;
+    } else if (this.currentTemperature > this.targetTemperature + 0.5) {
+      // Cooling down
+      return this.Characteristic.CurrentHeatingCoolingState.COOL;
+    } else {
+      // At target temperature (within threshold)
+      // Use OFF as state when at target temperature
+      return this.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+  }
+
+  /**
+   * Get the target heating/cooling state
+   */
+  private getTargetHeatingCoolingState(): number {
+    return this.isPowered ? 
+      this.Characteristic.TargetHeatingCoolingState.AUTO : 
+      this.Characteristic.TargetHeatingCoolingState.OFF;
+  }
+
+  /**
+   * Handle setting the target heating/cooling state
+   */
+  private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
+    this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
+    
+    switch (value) {
+      case this.Characteristic.TargetHeatingCoolingState.OFF:
+        // Turn off
+        if (this.isPowered) {
+          await this.handlePowerStateSet(false);
+        }
+        break;
+    
+      case this.Characteristic.TargetHeatingCoolingState.AUTO:
+      case this.Characteristic.TargetHeatingCoolingState.HEAT:
+      case this.Characteristic.TargetHeatingCoolingState.COOL:
+        // Turn on
+        if (!this.isPowered) {
+          await this.handlePowerStateSet(true);
+        }
+        
+        // For SleepMe devices, we treat all active modes as AUTO
+        setTimeout(() => {
+          this.temperatureControlService.updateCharacteristic(
+            this.Characteristic.TargetHeatingCoolingState,
+            this.Characteristic.TargetHeatingCoolingState.AUTO
+          );
+        }, 100);
+        break;
+    }
+  }
+
+  /**
+   * Update the current heating/cooling state in HomeKit
+   */
+  private updateCurrentHeatingCoolingState(): void {
+    const state = this.getCurrentHeatingCoolingState();
+    
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.CurrentHeatingCoolingState,
+      state
     );
     
-    // Revert the state if there was an error
-    this.updateCurrentHeatingCoolingState();
+    // Update target state too
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.TargetHeatingCoolingState,
+      this.getTargetHeatingCoolingState()
+    );
   }
-}
+
+  /**
+   * Handler for target temperature GET
+   * @returns Current target temperature
+   */
+  private handleTargetTemperatureGet(): CharacteristicValue {
+    const temp = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+    this.platform.log.debug(`GET Target Temperature: ${temp}°C`);
+    return temp;
+  }
+
+  /**
+   * Handler for power state SET - using heating/cooling state
+   * @param turnOn - Whether to turn on the device
+   */
+  private async handlePowerStateSet(turnOn: boolean): Promise<void> {
+    this.platform.log.info(`SET Power State: ${turnOn ? 'ON' : 'OFF'}`);
+    
+    // Skip redundant updates
+    if ((turnOn && this.isPowered) || (!turnOn && !this.isPowered)) {
+      this.platform.log.debug(`Ignoring redundant power state change to ${turnOn ? 'ON' : 'OFF'}`);
+      return;
+    }
+    
+    // Mark that we shouldn't poll right after this user action
+    this.skipNextUpdate = true;
+    this.lastTemperatureSetTime = Date.now();
+    
+    try {
+      let success = false;
+      
+      if (turnOn) {
+        // Turn on the device with current target temperature
+        const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+        success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
+        
+        if (success) {
+          this.isPowered = true;
+          this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
+        }
+      } else {
+        // Turn off the device
+        success = await this.apiClient.turnDeviceOff(this.deviceId);
+        
+        if (success) {
+          this.isPowered = false;
+          this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
+        }
+      }
+      
+      if (!success) {
+        throw new Error(`Failed to ${turnOn ? 'turn on' : 'turn off'} device`);
+      }
+      
+      // Update the UI state immediately for responsiveness
+      this.updateCurrentHeatingCoolingState();
+      
+      // Refresh the status after a short delay, but only once
+      setTimeout(() => {
+        this.refreshDeviceStatus(true).catch(e => {
+          this.platform.log.debug(`Error refreshing status after power change: ${e}`);
+        });
+      }, 5000);
+    } catch (error) {
+      this.platform.log.error(
+        `Failed to set power state: ${error instanceof Error ? error.message : String(error)}`
+      );
+      
+      // Revert the state if there was an error
+      this.updateCurrentHeatingCoolingState();
+    }
+  }
   /**
    * Add/update the water level service if supported
    * @param waterLevel - Current water level percentage
@@ -514,18 +517,18 @@ private async handlePowerStateSet(turnOn: boolean): Promise<void> {
                     this.apiClient.extractNestedValue(data, 'firmware_version');
     
     if (firmware) {
-      if (firmware.toString().startsWith('5.')) {
+      const firmwareStr = String(firmware);
+      if (firmwareStr.startsWith('5.')) {
         return 'Dock Pro';
-      } else if (firmware.toString().startsWith('4.')) {
+      } else if (firmwareStr.startsWith('4.')) {
         return 'OOLER Sleep System';
-      } else if (firmware.toString().startsWith('3.')) {
+      } else if (firmwareStr.startsWith('3.')) {
         return 'ChiliPad';
       }
     }
     
     return 'SleepMe Device';
   }
-  
   /**
    * Refresh the device status from the API
    * @param isInitialSetup - Whether this is the initial setup refresh
@@ -611,7 +614,7 @@ private async handlePowerStateSet(turnOn: boolean): Promise<void> {
       if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
         this.currentTemperature = status.currentTemperature;
         
-        // Update the current temperature in HeaterCooler service
+        // Update the current temperature in Thermostat service
         this.temperatureControlService.updateCharacteristic(
           this.Characteristic.CurrentTemperature,
           this.currentTemperature
@@ -624,29 +627,22 @@ private async handlePowerStateSet(turnOn: boolean): Promise<void> {
       if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
         this.targetTemperature = status.targetTemperature;
         
-        // Update both heating and cooling threshold temperatures
+        // Update target temperature in Thermostat service
         this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.CoolingThresholdTemperature,
-          this.targetTemperature
-        );
-        
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.HeatingThresholdTemperature,
+          this.Characteristic.TargetTemperature,
           this.targetTemperature
         );
         
         this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C`);
       }
       
-      // Update power state
+      // Update power state based on thermal status and power state
       const newPowerState = status.powerState === PowerState.ON || 
-                          status.thermalStatus !== ThermalStatus.STANDBY && 
-                          status.thermalStatus !== ThermalStatus.OFF;
+                          (status.thermalStatus !== ThermalStatus.STANDBY && 
+                           status.thermalStatus !== ThermalStatus.OFF);
                           
       if (this.isPowered !== newPowerState) {
         this.isPowered = newPowerState;
-
-        
         this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
       }
       
@@ -672,136 +668,6 @@ private async handlePowerStateSet(turnOn: boolean): Promise<void> {
     } finally {
       // Always clear the in-progress flag when done
       this.updateInProgress = false;
-    }
-  }
-  
-  /**
-   * Update the current heating/cooling state based on target vs current temperature
-   * This helps HomeKit display the appropriate heating/cooling state icon
-   */
-  private updateCurrentHeatingCoolingState(): void {
-    if (!this.isPowered) {
-      // If not powered, set to off
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.CurrentHeaterCoolerState,
-        this.Characteristic.CurrentHeaterCoolerState.INACTIVE
-      );
-      return;
-    }
-    
-    // Check if we have valid temperature readings
-    if (isNaN(this.currentTemperature) || isNaN(this.targetTemperature)) {
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.CurrentHeaterCoolerState,
-        this.Characteristic.CurrentHeaterCoolerState.HEATING // Use HEATING as default
-      );
-      return;
-    }
-    
-    // Determine if we're heating or cooling based on current vs target temperature
-    if (this.currentTemperature < this.targetTemperature - 0.5) {
-      // Heating up (with 0.5° threshold to prevent oscillation)
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.CurrentHeaterCoolerState,
-        this.Characteristic.CurrentHeaterCoolerState.HEATING
-      );
-    } else if (this.currentTemperature > this.targetTemperature + 0.5) {
-      // Cooling down
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.CurrentHeaterCoolerState,
-        this.Characteristic.CurrentHeaterCoolerState.COOLING
-      );
-    } else {
-      // At target temperature (within threshold)
-      // Use HEAT as default state when at target temperature for better icon appearance
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.CurrentHeaterCoolerState,
-        this.Characteristic.CurrentHeaterCoolerState.HEATING
-      );
-    } 
-  }
-  
-  /**
-   * Handler for target temperature GET (used by both heating and cooling threshold temperatures)
-   * @returns Current target temperature
-   */
-  private async handleTargetTemperatureGet(): Promise<CharacteristicValue> {
-    const temp = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-    this.platform.log.debug(`GET Target Temperature: ${temp}°C`);
-    return temp;
-  }
-  
-  /**
-   * Handler for power state SET
-   * @param value - New power state value
-   */
-  private async handlePowerStateSet(value: boolean): Promise<void> {
-    const turnOn = value;
-    this.platform.log.info(`SET Power State: ${turnOn ? 'ON' : 'OFF'}`);
-    
-    // Skip redundant updates
-    if ((turnOn && this.isPowered) || (!turnOn && !this.isPowered)) {
-      this.platform.log.debug(`Ignoring redundant power state change to ${turnOn ? 'ON' : 'OFF'}`);
-      return;
-    }
-    
-    // Mark that we shouldn't poll right after this user action
-    this.skipNextUpdate = true;
-    this.lastTemperatureSetTime = Date.now();
-    
-    try {
-      let success = false;
-      
-      if (turnOn) {
-        // Turn on the device with current target temperature
-        const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-        success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
-        
-        if (success) {
-          this.isPowered = true;
-          this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
-        }
-      } else {
-        // Turn off the device
-        success = await this.apiClient.turnDeviceOff(this.deviceId);
-        
-        if (success) {
-          this.isPowered = false;
-          this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
-        }
-      }
-      
-      if (!success) {
-        throw new Error(`Failed to ${turnOn ? 'turn on' : 'turn off'} device`);
-      }
-      
-      // Update the UI state immediately for responsiveness
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.Active,
-        this.isPowered ? 1 : 0
-      );
-      
-      // Update the current heating/cooling state
-      this.updateCurrentHeatingCoolingState();
-      
-      // Refresh the status after a short delay, but only once
-      setTimeout(() => {
-        this.refreshDeviceStatus(true).catch(e => {
-          this.platform.log.debug(`Error refreshing status after power change: ${e}`);
-        });
-      }, 5000); // Increased from 1000ms to 5000ms
-    } catch (error) {
-      this.platform.log.error(
-        `Failed to set power state: ${error instanceof Error ? error.message : String(error)}`
-      );
-      
-      // Revert the switch if there was an error
-      setTimeout(() => {
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.Active,
-          !turnOn ? 1 : 0
-        );
-      }, 500);
     }
   }
   
@@ -852,13 +718,6 @@ private async handlePowerStateSet(turnOn: boolean): Promise<void> {
         
         if (success) {
           this.isPowered = true;
-          
-          // Update the power state
-          this.temperatureControlService.updateCharacteristic(
-            this.Characteristic.Active,
-            1
-          );
-          
           this.platform.log.info(`Device turned ON and temperature set to ${newTemp}°C`);
         } else {
           throw new Error(`Failed to turn on device and set temperature to ${newTemp}°C`);
@@ -874,7 +733,7 @@ private async handlePowerStateSet(turnOn: boolean): Promise<void> {
         this.refreshDeviceStatus(true).catch(e => {
           this.platform.log.debug(`Error refreshing status after temperature change: ${e}`);
         });
-      }, 5000); // Increased from 1000ms to 5000ms
+      }, 5000); // 5 seconds
     } catch (error) {
       this.platform.log.error(
         `Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`
