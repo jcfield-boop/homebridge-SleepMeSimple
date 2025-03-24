@@ -691,7 +691,7 @@ private handleTargetTemperatureSet(value: CharacteristicValue): void {
   this.tempSetterDebounced(newTemp, previousTemp);
 }
 
- /**
+/**
  * Implementation of target temperature setting that makes the API call
  * @param newTemp - New target temperature
  * @param previousTemp - Previous target temperature before UI update
@@ -748,44 +748,6 @@ private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: numb
     );
   }
 }
-  // Only send the command if the device is powered on
-      if (this.isPowered) {
-        const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
-        
-        if (success) {
-          this.platform.log.info(`Temperature set to ${newTemp}°C`);
-        } else {
-          throw new Error(`Failed to set temperature to ${newTemp}°C`);
-        }
-      } else {
-        // If device is off, turning on with the new temperature
-        const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
-        
-        if (success) {
-          this.isPowered = true;
-          this.platform.log.info(`Device turned ON and temperature set to ${newTemp}°C`);
-        } else {
-          throw new Error(`Failed to turn on device and set temperature to ${newTemp}°C`);
-        }
-      }
-      
-      // Update the current heating/cooling state based on temperature difference
-      this.updateCurrentHeatingCoolingState();
-      
-      // Refresh the status after a delay to get any other changes
-      // but use a longer delay to avoid rate limiting
-      setTimeout(() => {
-        this.refreshDeviceStatus(true).catch(e => {
-          this.platform.log.debug(`Error refreshing status after temperature change: ${e}`);
-        });
-      }, 5000); // 5 seconds
-    } catch (error) {
-      this.platform.log.error(
-        `Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
-  
   /**
    * Clean up resources when this accessory is removed
    */
