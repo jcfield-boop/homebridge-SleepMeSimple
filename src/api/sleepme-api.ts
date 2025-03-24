@@ -326,12 +326,17 @@ public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boole
     return false;
   }
 }
-// In src/api/sleepme-api.ts
+
+  /**
+ * Turn device off
+ * @param deviceId Device identifier
+ * @returns Whether operation was successful
+ */
 public async turnDeviceOff(deviceId: string): Promise<boolean> {
   try {
     this.logger.info(`Turning device ${deviceId} OFF`);
     
-    // Cancel any pending requests for this device to prevent race conditions
+    // Cancel any pending requests for this device
     this.cancelAllDeviceRequests(deviceId);
     
     // Create payload with standby status
@@ -344,11 +349,11 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
     const success = await this.updateDeviceSettings(deviceId, payload);
     
     if (success) {
-      // Update cache with trusted state - FIX THE POWER STATE HERE
+      // Update cache with correct power state
+      // This MUST set both thermalStatus AND powerState
       this.updateCacheWithTrustedState(deviceId, {
-        powerState: PowerState.OFF,  // This was incorrectly set to ON
+        powerState: PowerState.OFF,
         thermalStatus: ThermalStatus.STANDBY
-        // We don't update current temperature as it will continue to be valid
       });
       
       this.logger.verbose(`Device ${deviceId} turned OFF successfully`);
@@ -362,6 +367,7 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
     return false;
   }
 }
+  
 /**
  * Set device temperature
  * With trust-based approach (no verification GET)
@@ -458,10 +464,9 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
       return false;
     }
   }
-
 /**
  * Update cache with a trusted device state based on our commands
- * This is a more comprehensive version of optimistic updates
+ * This is a key method that needs fixing
  * @param deviceId Device identifier
  * @param updates Status updates to apply
  */
@@ -472,29 +477,62 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
   let updatedStatus: DeviceStatus;
   
   if (cachedEntry) {
-    // Merge updates with current status
+    // Merge updates with current status - this is where the bug is
+    // When we set PowerState.OFF, we must ensure it overrides all other conflicting settings
     updatedStatus = {
       ...cachedEntry.status,
       ...updates
     };
+    
+    // Critical fix: Power state must be explicitly set based on thermal status
+    // This ensures consistency between power state and thermal status
+    if (updates.thermalStatus !== undefined) {
+      if (updates.thermalStatus === ThermalStatus.STANDBY || 
+          updates.thermalStatus === ThermalStatus.OFF) {
+        // Always set power to OFF when thermal status is STANDBY or OFF
+        updatedStatus.powerState = PowerState.OFF;
+      } else if (updates.thermalStatus === ThermalStatus.ACTIVE ||
+                 updates.thermalStatus === ThermalStatus.COOLING ||
+                 updates.thermalStatus === ThermalStatus.HEATING) {
+        // Always set power to ON for active states
+        updatedStatus.powerState = PowerState.ON;
+      }
+    }
+    
+    // Explicitly log the before and after power states for debugging
+    this.logger.verbose(
+      `Cache update: Previous power=${cachedEntry.status.powerState}, ` +
+      `New power=${updatedStatus.powerState}, ` +
+      `Update requested=${updates.powerState || 'none'}`
+    );
   } else {
-    // Create a new status with reasonable defaults for anything not provided
+    // Create a new status with reasonable defaults
     updatedStatus = {
-      currentTemperature: 21, // Default room temperature
+      currentTemperature: 21,
       targetTemperature: 21,
       thermalStatus: ThermalStatus.UNKNOWN,
       powerState: PowerState.UNKNOWN,
       ...updates
     };
+    
+    // Same consistency check for new status
+    if (updates.thermalStatus === ThermalStatus.STANDBY || 
+        updates.thermalStatus === ThermalStatus.OFF) {
+      updatedStatus.powerState = PowerState.OFF;
+    } else if (updates.thermalStatus === ThermalStatus.ACTIVE ||
+               updates.thermalStatus === ThermalStatus.COOLING ||
+               updates.thermalStatus === ThermalStatus.HEATING) {
+      updatedStatus.powerState = PowerState.ON;
+    }
   }
   
   // Store updated status as trusted (not optimistic)
   this.deviceStatusCache.set(deviceId, {
     status: updatedStatus,
     timestamp: Date.now(),
-    isOptimistic: false, // We're treating this as authoritative
-    confidence: 'high',  // High confidence since it's directly from our command
-    source: 'patch'      // Source is a PATCH operation
+    isOptimistic: false,
+    confidence: 'high',
+    source: 'patch'
   });
   
   this.logger.verbose(
@@ -504,7 +542,6 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
     `Status=${updatedStatus.thermalStatus}`
   );
 }
-
 /**
  * Get the last known temperature or a reasonable approximation
  * This helps provide a smoother UX during temperature transitions
@@ -818,7 +855,47 @@ private async processQueue(): Promise<void> {
    */
   private getNextRequest(): QueuedRequest | undefined {
     // Process requests in priority order, with oldest first in each priority level
+  /**
+ * Get the next request from the appropriate priority queue
+ * With improved OFF command prioritization
+ * @returns Next request to process or undefined if all queues empty
+ */
+private getNextRequest(): QueuedRequest | undefined {
+  // First identify and prioritize OFF commands (they're the most important for UX)
+  const findOffCommands = (queue: QueuedRequest[]): QueuedRequest | undefined => {
+    const pendingRequests = queue.filter(r => !r.executing);
+    if (pendingRequests.length === 0) return undefined;
     
+    // Look for standby commands (OFF commands)
+    const offCommands = pendingRequests.filter(r => 
+      r.data && 
+      typeof r.data === 'object' && 
+      'thermal_control_status' in r.data && 
+      r.data.thermal_control_status === 'standby'
+    );
+    
+    if (offCommands.length > 0) {
+      // Sort by timestamp and return the oldest
+      return offCommands.sort((a, b) => a.timestamp - b.timestamp)[0];
+    }
+    
+    return undefined;
+  };
+  
+  // Check each queue for OFF commands first
+  let nextRequest = findOffCommands(this.criticalQueue);
+  if (nextRequest) return nextRequest;
+  
+  nextRequest = findOffCommands(this.highPriorityQueue);
+  if (nextRequest) return nextRequest;
+  
+  // Then process remaining commands in priority order
+  if (this.criticalQueue.length > 0) {
+    const pendingRequests = this.criticalQueue.filter(r => !r.executing);
+    if (pendingRequests.length > 0) {
+      return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+    }
+  }
     // First, try critical priority requests
     if (this.criticalQueue.length > 0) {
       const pendingRequests = this.criticalQueue.filter(r => !r.executing);
