@@ -339,35 +339,43 @@ export class SleepMeAccessory {
    * Handle setting the target heating/cooling state with trust-based approach
    * @param value Target heating/cooling state value
    */
-  private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
-    this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
-    
-    // Mark user action time
-    this.lastUserActionTime = Date.now();
-    
-    // Increment command epoch to invalidate previous commands
-    const currentEpoch = ++this.commandEpoch;
-    
-    switch (value) {
-      case this.Characteristic.TargetHeatingCoolingState.OFF:
-        // Turn off
-        if (this.isPowered) {
-          await this.executeOperation('power', currentEpoch, async () => {
-            const success = await this.apiClient.turnDeviceOff(this.deviceId);
+private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
+  this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
+  
+  // Mark user action time
+  this.lastUserActionTime = Date.now();
+  
+  // Increment command epoch to invalidate previous commands
+  const currentEpoch = ++this.commandEpoch;
+  
+  // Cancel any pending requests to ensure this command takes priority
+  if (this.apiClient) {
+    this.apiClient.cancelAllDeviceRequests(this.deviceId);
+  }
+  
+  switch (value) {
+    case this.Characteristic.TargetHeatingCoolingState.OFF:
+      // Turn off
+      if (this.isPowered) {
+        await this.executeOperation('power', currentEpoch, async () => {
+          const success = await this.apiClient.turnDeviceOff(this.deviceId);
+          
+          if (success) {
+            // Trust the API response - device is now off
+            this.isPowered = false;
+            this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
             
-            if (success) {
-              // Trust the API response - device is now off
-              this.isPowered = false;
-              this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
-              
-              // Update UI immediately for responsiveness
-              this.updateCurrentHeatingCoolingState();
-            } else {
-              throw new Error('Failed to turn off device');
-            }
-          });
-        }
-        break;
+            // Update UI immediately for responsiveness
+            this.updateCurrentHeatingCoolingState();
+            
+            // Double-check power state after a brief delay
+            setTimeout(() => this.verifyPowerState(), 1000);
+          } else {
+            throw new Error('Failed to turn off device');
+          }
+        });
+      }
+      break;
       
       case this.Characteristic.TargetHeatingCoolingState.AUTO:
       case this.Characteristic.TargetHeatingCoolingState.HEAT:
@@ -402,7 +410,21 @@ export class SleepMeAccessory {
         break;
     }
   }
-
+// Add a verification method for power state
+private async verifyPowerState(): Promise<void> {
+  // Only verify if we're showing different states
+  if (this.isPowered !== this.getTargetHeatingCoolingState()) {
+    this.platform.log.debug('Verifying power state consistency...');
+    
+    // Force UI to match our internal state
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.TargetHeatingCoolingState,
+      this.isPowered ? 
+        this.Characteristic.TargetHeatingCoolingState.AUTO : 
+        this.Characteristic.TargetHeatingCoolingState.OFF
+    );
+  }
+}
   /**
    * Execute an operation with epoch tracking for cancellation
    * @param operationType Type of operation
