@@ -1,7 +1,7 @@
 /**
  * SleepMe Accessory
  * 
- * This class implements a simplified HomeKit interface for SleepMe devices,
+ * This class implements a HomeKit interface for SleepMe devices,
  * using separate services for temperature reporting, power control, and temperature adjustment
  */
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
@@ -9,7 +9,6 @@ import { SleepMeSimplePlatform } from './platform.js';
 import { SleepMeApi } from './api/sleepme-api.js';
 import { ThermalStatus, PowerState } from './api/types.js';
 import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C } from './settings.js';
-// Remove unused TEMPERATURE_STEP import
 
 /**
  * SleepMe Accessory
@@ -47,7 +46,6 @@ export class SleepMeAccessory {
    * Constructor for the SleepMe accessory
    */
   constructor(
-    // Mark parameters as used with protected/private to prevent ESLint warnings
     private readonly platform: SleepMeSimplePlatform,
     private readonly accessory: PlatformAccessory,
     private readonly apiClient: SleepMeApi
@@ -139,31 +137,73 @@ export class SleepMeAccessory {
   }
   
   /**
-   * Set up the temperature control service (using Lightbulb)
+   * Set up temperature control using HeaterCooler service
+   * Provides a native temperature interface instead of the percentage-based Lightbulb approach
    */
   private setupTemperatureControlService(): void {
-    // Use a Lightbulb service to create a slider for temperature
-    this.temperatureControlService = this.accessory.getService(this.platform.Service.Lightbulb) ||
-      this.accessory.addService(this.platform.Service.Lightbulb, `${this.displayName} Temperature Control`);
+    // Use HeaterCooler service for temperature control
+    this.temperatureControlService = this.accessory.getService(this.platform.Service.HeaterCooler) ||
+      this.accessory.addService(this.platform.Service.HeaterCooler, `${this.displayName} Temperature Control`);
     
-    // Configure brightness characteristic as temperature control
+    // Configure basic characteristics
     this.temperatureControlService
       .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature Control`)
-      .getCharacteristic(this.Characteristic.Brightness)
-      .setProps({
-        minValue: 0,
-        maxValue: 100,
-        minStep: 1
-      })
-      .onGet(this.handleTemperatureControlGet.bind(this))
-      .onSet(this.handleTemperatureControlSet.bind(this));
-      
-    // Configure On characteristic to match power switch
+      .setCharacteristic(this.Characteristic.Active, this.isPowered ? 1 : 0)
+      .setCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.IDLE)
+      .setCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.Characteristic.TargetHeaterCoolerState.AUTO);
+    
+    // Set up current temperature characteristic
     this.temperatureControlService
-      .getCharacteristic(this.Characteristic.On)
-      .onGet(() => this.isPowered)
+      .getCharacteristic(this.Characteristic.CurrentTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
+        maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
+        minStep: 0.1
+      })
+      .onGet(() => this.currentTemperature || 20);
+    
+    // Set up target temperature characteristic (cooling)
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C,
+        maxValue: MAX_TEMPERATURE_C,
+        minStep: 0.5
+      })
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
+    
+    // Set up target temperature characteristic (heating)
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C,
+        maxValue: MAX_TEMPERATURE_C,
+        minStep: 0.5
+      })
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
+    
+    // Set up active state getter/setter
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.Active)
+      .onGet(() => this.isPowered ? 1 : 0)
       .onSet((value) => {
-        this.handlePowerStateSet(value);
+        this.handlePowerStateSet(Boolean(value));
+      });
+    
+    // Set up target heating/cooling state
+    this.temperatureControlService
+      .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
+      .onGet(() => this.Characteristic.TargetHeaterCoolerState.AUTO) // Always AUTO since device handles both
+      .onSet(() => {
+        // Always reset to AUTO since we don't support specific modes
+        setTimeout(() => {
+          this.temperatureControlService.updateCharacteristic(
+            this.Characteristic.TargetHeaterCoolerState,
+            this.Characteristic.TargetHeaterCoolerState.AUTO
+          );
+        }, 100);
       });
   }
   
@@ -369,6 +409,12 @@ export class SleepMeAccessory {
           this.currentTemperature
         );
         
+        // Update the current temperature in HeaterCooler service
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.CurrentTemperature,
+          this.currentTemperature
+        );
+        
         this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
       }
       
@@ -376,14 +422,18 @@ export class SleepMeAccessory {
       if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
         this.targetTemperature = status.targetTemperature;
         
-        // Also update the temperature control UI
-        const tempPercentage = this.temperatureToPercentage(this.targetTemperature);
+        // Update both heating and cooling threshold temperatures
         this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.Brightness,
-          tempPercentage
+          this.Characteristic.CoolingThresholdTemperature,
+          this.targetTemperature
         );
         
-        this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C (${tempPercentage}%)`);
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.HeatingThresholdTemperature,
+          this.targetTemperature
+        );
+        
+        this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C`);
       }
       
       // Update power state
@@ -394,19 +444,23 @@ export class SleepMeAccessory {
       if (this.isPowered !== newPowerState) {
         this.isPowered = newPowerState;
         
-        // Update both services that show power state
+        // Update power switch
         this.switchService.updateCharacteristic(
           this.Characteristic.On,
           this.isPowered
         );
         
+        // Update the active state in HeaterCooler service
         this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.On,
-          this.isPowered
+          this.Characteristic.Active,
+          this.isPowered ? 1 : 0
         );
         
         this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
       }
+      
+      // Update heater/cooler state
+      this.updateHeaterCoolerState();
       
       // Update water level if available
       if (status.waterLevel !== undefined) {
@@ -426,31 +480,48 @@ export class SleepMeAccessory {
   }
   
   /**
-   * Convert temperature to percentage (for the brightness control)
-   * @param temperature - Temperature in Celsius
-   * @returns Percentage value for slider (0-100)
+   * Update the current heater/cooler state based on target vs current temperature
+   * This helps HomeKit display the appropriate heating/cooling state icon
    */
-  private temperatureToPercentage(temperature: number): number {
-    // Convert temperature to percentage (scaled between MIN_TEMP and MAX_TEMP)
-    const temp = isNaN(temperature) ? MIN_TEMPERATURE_C : temperature;
-    const percentage = Math.round(
-      ((temp - MIN_TEMPERATURE_C) / (MAX_TEMPERATURE_C - MIN_TEMPERATURE_C)) * 100
-    );
-    return Math.max(0, Math.min(100, percentage));
-  }
-  
-  /**
-   * Convert percentage to temperature
-   * @param percentage - Percentage value from slider (0-100)
-   * @returns Temperature in Celsius
-   */
-  private percentageToTemperature(percentage: number): number {
-    // Convert percentage to temperature
-    const tempRange = MAX_TEMPERATURE_C - MIN_TEMPERATURE_C;
-    const temp = MIN_TEMPERATURE_C + ((percentage / 100) * tempRange);
+  private updateHeaterCoolerState(): void {
+    if (!this.isPowered) {
+      // If not powered, set to inactive
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.CurrentHeaterCoolerState,
+        this.Characteristic.CurrentHeaterCoolerState.INACTIVE
+      );
+      return;
+    }
     
-    // Round to nearest 0.5°C
-    return Math.round(temp * 2) / 2;
+    // Check if we have valid temperature readings
+    if (isNaN(this.currentTemperature) || isNaN(this.targetTemperature)) {
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.CurrentHeaterCoolerState,
+        this.Characteristic.CurrentHeaterCoolerState.IDLE
+      );
+      return;
+    }
+    
+    // Determine if we're heating or cooling based on current vs target temperature
+    if (this.currentTemperature < this.targetTemperature - 0.5) {
+      // Heating up (with 0.5° threshold to prevent oscillation)
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.CurrentHeaterCoolerState,
+        this.Characteristic.CurrentHeaterCoolerState.HEATING
+      );
+    } else if (this.currentTemperature > this.targetTemperature + 0.5) {
+      // Cooling down
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.CurrentHeaterCoolerState,
+        this.Characteristic.CurrentHeaterCoolerState.COOLING
+      );
+    } else {
+      // At target temperature (within threshold)
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.CurrentHeaterCoolerState,
+        this.Characteristic.CurrentHeaterCoolerState.IDLE
+      );
+    }
   }
   
   /**
@@ -471,6 +542,16 @@ export class SleepMeAccessory {
   private async handlePowerStateGet(): Promise<CharacteristicValue> {
     this.platform.log.debug(`GET Power State: ${this.isPowered ? 'ON' : 'OFF'}`);
     return this.isPowered;
+  }
+  
+  /**
+   * Handler for target temperature GET (used by both heating and cooling threshold temperatures)
+   * @returns Current target temperature
+   */
+  private async handleTargetTemperatureGet(): Promise<CharacteristicValue> {
+    const temp = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+    this.platform.log.debug(`GET Target Temperature: ${temp}°C`);
+    return temp;
   }
   
   /**
@@ -514,9 +595,19 @@ export class SleepMeAccessory {
       );
       
       this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.On,
-        this.isPowered
+        this.Characteristic.Active,
+        this.isPowered ? 1 : 0
       );
+      
+      // Update the heater/cooler state
+      if (!this.isPowered) {
+        this.temperatureControlService.updateCharacteristic(
+          this.Characteristic.CurrentHeaterCoolerState,
+          this.Characteristic.CurrentHeaterCoolerState.INACTIVE
+        );
+      } else {
+        this.updateHeaterCoolerState();
+      }
       
       // Refresh the status to get any other changes
       setTimeout(() => {
@@ -536,33 +627,21 @@ export class SleepMeAccessory {
       );
       
       this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.On,
-        !turnOn
+        this.Characteristic.Active,
+        !turnOn ? 1 : 0
       );
     }
   }
   
   /**
-   * Handler for temperature control GET
-   * @returns Current temperature as percentage for slider
+   * Handler for target temperature SET (used by both heating and cooling threshold temperatures)
+   * Controls the temperature of the device directly with actual temperature values
+   * @param value - New target temperature
    */
-  private async handleTemperatureControlGet(): Promise<CharacteristicValue> {
-    const percentage = this.temperatureToPercentage(this.targetTemperature);
-    this.platform.log.debug(`GET Temperature Control: ${this.targetTemperature}°C (${percentage}%)`);
-    return percentage;
-  }
-  
-  /**
-   * Handler for temperature control SET
-   * @param value - New temperature percentage from slider
-   */
-  private async handleTemperatureControlSet(value: CharacteristicValue): Promise<void> {
-    const percentage = value as number;
+  private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
+    const newTemp = value as number;
     
-    // Convert percentage to temperature
-    const newTemp = this.percentageToTemperature(percentage);
-    
-    this.platform.log.info(`SET Temperature Control: ${percentage}% (${newTemp}°C)`);
+    this.platform.log.info(`SET Target Temperature: ${newTemp}°C`);
     
     try {
       // Remember the last time we changed the temperature
@@ -570,6 +649,17 @@ export class SleepMeAccessory {
       
       // Update internal state
       this.targetTemperature = newTemp;
+      
+      // Sync both threshold temperatures
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.CoolingThresholdTemperature,
+        newTemp
+      );
+      
+      this.temperatureControlService.updateCharacteristic(
+        this.Characteristic.HeatingThresholdTemperature,
+        newTemp
+      );
       
       // Only send the command if the device is powered on
       if (this.isPowered) {
@@ -594,8 +684,8 @@ export class SleepMeAccessory {
           );
           
           this.temperatureControlService.updateCharacteristic(
-            this.Characteristic.On,
-            true
+            this.Characteristic.Active,
+            1
           );
           
           this.platform.log.info(`Device turned ON and temperature set to ${newTemp}°C`);
@@ -603,6 +693,9 @@ export class SleepMeAccessory {
           throw new Error(`Failed to turn on device and set temperature to ${newTemp}°C`);
         }
       }
+      
+      // Update the heater/cooler state based on the new target temperature
+      this.updateHeaterCoolerState();
       
       // Refresh the status after a short delay
       setTimeout(() => {
