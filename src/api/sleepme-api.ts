@@ -558,7 +558,7 @@ export class SleepMeApi {
       );
     }
   }
-/**
+ /**
  * Process the request queue
  * This is the core method for rate-limiting and prioritizing requests
  */
@@ -720,7 +720,6 @@ private async processQueue(): Promise<void> {
     }
   }
 }
-
   /**
    * Check and reset rate limit counter if needed
    */
