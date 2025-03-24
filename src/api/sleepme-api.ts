@@ -343,62 +343,52 @@ export class SleepMeApi {
     return value;
   }
   
-  /**
-   * Turn device on
-   * @param deviceId Device identifier
-   * @param temperature Optional target temperature in Celsius
-   * @returns Whether operation was successful
-   */
-  public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean> {
+/**
+ * Turn device on
+ * @param deviceId Device identifier
+ * @param temperature Optional target temperature in Celsius
+ * @returns Whether operation was successful
+ */
+public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean> {
     try {
-      // Default temperature if none provided
-      const targetTemp = temperature !== undefined ? temperature : 21;
-      
-      this.logger.info(`Turning device ${deviceId} ON with temperature ${targetTemp}°C`);
-      
-      // Cancel any pending requests for this device to prevent race conditions
-      this.cancelAllDeviceRequests(deviceId);
-      
-      // Create payload for API - using integers for temperature values
-      const payload: Record<string, unknown> = {
-        // Set Fahrenheit as primary temp (matching API expectation)
-        set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
-        thermal_control_status: 'active'
-      };
-      
-      this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
-      
-      const success = await this.updateDeviceSettings(deviceId, payload);
-      
-      if (success) {
-        // Update cache optimistically
-        this.updateCacheOptimistically(deviceId, {
-          powerState: PowerState.ON,
-          targetTemperature: targetTemp,
-          thermalStatus: ThermalStatus.ACTIVE
-        });
+        // Default temperature if none provided
+        const targetTemp = temperature !== undefined ? temperature : 21;
         
-        this.logger.verbose(`Device ${deviceId} turned ON successfully`);
-      } else {
-        this.logger.error(`Failed to turn device ${deviceId} ON`);
-        return false;
-      }
-      
-      // Verify the state change
-      const newStatus = await this.getDeviceStatus(deviceId, true);
-      if (newStatus && 
-         (newStatus.thermalStatus === ThermalStatus.ACTIVE || 
-          newStatus.powerState === PowerState.ON)) {
-        return true;
-      }
-      
-      return success;
+        this.logger.info(`Turning device ${deviceId} ON with temperature ${targetTemp}°C`);
+        
+        // Cancel any pending requests for this device to prevent race conditions
+        this.cancelAllDeviceRequests(deviceId);
+        
+        // Create payload for API - using integers for temperature values
+        const payload: Record<string, unknown> = {
+            // Set Fahrenheit as primary temp (matching API expectation)
+            set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
+            thermal_control_status: 'active'
+        };
+        
+        this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
+        
+        const success = await this.updateDeviceSettings(deviceId, payload);
+        
+        if (success) {
+            // Update cache optimistically
+            this.updateCacheOptimistically(deviceId, {
+                powerState: PowerState.ON,
+                targetTemperature: targetTemp,
+                thermalStatus: ThermalStatus.ACTIVE
+            });
+            
+            this.logger.verbose(`Device ${deviceId} turned ON successfully`);
+            return true;
+        } else {
+            this.logger.error(`Failed to turn device ${deviceId} ON`);
+            return false;
+        }
     } catch (error) {
-      this.handleApiError(`turnDeviceOn(${deviceId})`, error);
-      return false;
+        this.handleApiError(`turnDeviceOn(${deviceId})`, error);
+        return false;
     }
-  }
-
+}
   /**
    * Turn device off
    * @param deviceId Device identifier
@@ -496,60 +486,51 @@ export class SleepMeApi {
     this.cancelPendingRequests(deviceId);
   }
 
-  /**
-   * Update device settings
-   * @param deviceId Device identifier
-   * @param settings Settings to update
-   * @returns Whether operation was successful
-   */
-  private async updateDeviceSettings(deviceId: string, settings: Record<string, unknown>): Promise<boolean> {
+ /**
+ * Update device settings
+ * @param deviceId Device identifier
+ * @param settings Settings to update
+ * @returns Whether operation was successful
+ */
+private async updateDeviceSettings(deviceId: string, settings: Record<string, unknown>): Promise<boolean> {
     if (!deviceId) {
-      this.logger.error('Missing device ID in updateDeviceSettings');
-      return false;
+        this.logger.error('Missing device ID in updateDeviceSettings');
+        return false;
     }
     
     if (!settings || Object.keys(settings).length === 0) {
-      this.logger.error('Empty settings in updateDeviceSettings');
-      return false;
+        this.logger.error('Empty settings in updateDeviceSettings');
+        return false;
     }
     
     try {
-      this.logger.debug(`Updating device ${deviceId} settings: ${JSON.stringify(settings)}`);
-      
-      // Cancel any pending device status requests for this device
-      this.cancelPendingRequests(deviceId, 'getDeviceStatus');
-      
-      const response = await this.makeRequest<Record<string, unknown>>({
-        method: 'PATCH',
-        url: `/devices/${deviceId}`,
-        data: settings,
-        priority: RequestPriority.HIGH, // User-initiated actions are high priority
-        deviceId,
-        operationType: 'updateDeviceSettings'
-      });
-      
-      // If successful response
-      if (response) {
-        this.logger.info(`Successfully updated device ${deviceId} settings`);
+        this.logger.debug(`Updating device ${deviceId} settings: ${JSON.stringify(settings)}`);
         
-        // Log full response in verbose mode
-        if (this.logger.isVerbose()) {
-          this.logger.verbose(`Update response: ${JSON.stringify(response)}`);
-        }
+        // Cancel any pending device status requests for this device
+        this.cancelPendingRequests(deviceId, 'getDeviceStatus');
+        
+        // Make the request
+        await this.makeRequest<Record<string, unknown>>({
+            method: 'PATCH',
+            url: `/devices/${deviceId}`,
+            data: settings,
+            priority: RequestPriority.HIGH, // User-initiated actions are high priority
+            deviceId,
+            operationType: 'updateDeviceSettings'
+        });
+        
+        // If we reach here, no exception was thrown, so the request succeeded
+        this.logger.info(`Successfully updated device ${deviceId} settings`);
         
         // Reset consecutive errors on success
         this.consecutiveErrors = 0;
         
         return true;
-      }
-      
-      return false;
     } catch (error) {
-      this.handleApiError(`updateDeviceSettings(${deviceId})`, error);
-      return false;
+        this.handleApiError(`updateDeviceSettings(${deviceId})`, error);
+        return false;
     }
-  }
-
+}
   /**
    * Update the device status cache optimistically based on settings changes
    * @param deviceId Device identifier
@@ -817,73 +798,76 @@ export class SleepMeApi {
     }
   }
 
-  /**
-   * Make a request to the SleepMe API
-   * @param options Request options
-   * @returns Promise resolving to response data
-   */
-  private async makeRequest<T>(options: {
+ /**
+ * Make a request to the SleepMe API
+ * @param options Request options
+ * @returns Promise resolving to response data
+ */
+private async makeRequest<T>(options: {
     method: string;
     url: string;
     data?: unknown;
     priority?: RequestPriority;
     deviceId?: string;
     operationType?: string;
-  }): Promise<T> {
+}): Promise<T> {
     // Set default priority
     const priority = options.priority || RequestPriority.NORMAL;
     
     // Add detailed logging for the request
     if (this.logger.isVerbose()) {
-      this.logger.verbose(
-        `API Request ${options.method} ${options.url} [${priority}]` + 
-        (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
-      );
+        this.logger.verbose(
+            `API Request ${options.method} ${options.url} [${priority}]` + 
+            (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
+        );
     }
     
     // Wait for startup delay to complete for non-high priority requests
     if (priority !== RequestPriority.HIGH && !this.startupFinished) {
-      await this.startupComplete;
+        await this.startupComplete;
     }
     
     // Return a new promise
     return new Promise<T>((resolve, reject) => {
-      // Generate a unique ID for this request
-      const requestId = `req_${++this.requestIdCounter}`;
-      
-      // Create request config
-      const config: AxiosRequestConfig = {
-        method: options.method,
-        url: API_BASE_URL + options.url
-      };
-      
-      // Add data if provided
-      if (options.data) {
-        config.data = options.data;
-      }
-      
-      // Add to queue
-      this.requestQueue.push({
-        id: requestId,
-        config,
-        priority,
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        retryCount: 0,
-        timestamp: Date.now(),
-        method: options.method,
-        url: options.url,
-        deviceId: options.deviceId,
-        operationType: options.operationType
-      });
-      
-      // Start processing the queue if not already running
-      if (!this.processingQueue) {
-        this.processQueue();
-      }
+        // Generate a unique ID for this request
+        const requestId = `req_${++this.requestIdCounter}`;
+        
+        // Create request config
+        const config: AxiosRequestConfig = {
+            method: options.method,
+            url: API_BASE_URL + options.url,
+            validateStatus: (status) => {
+                // Consider 2xx status codes as successful
+                return status >= 200 && status < 300;
+            }
+        };
+        
+        // Add data if provided
+        if (options.data) {
+            config.data = options.data;
+        }
+        
+        // Add to queue
+        this.requestQueue.push({
+            id: requestId,
+            config,
+            priority,
+            resolve: resolve as (value: unknown) => void,
+            reject,
+            retryCount: 0,
+            timestamp: Date.now(),
+            method: options.method,
+            url: options.url,
+            deviceId: options.deviceId,
+            operationType: options.operationType
+        });
+        
+        // Start processing the queue if not already running
+        if (!this.processingQueue) {
+            this.processQueue();
+        }
     });
-  }
-  
+}
   /**
    * Handle API errors with better logging
    * @param context Context where the error occurred
