@@ -225,32 +225,31 @@ export class SleepMeAccessory {
       }
     }
   }
-  
-  /**
-   * Set up the status polling mechanism
-   */
-  private setupStatusPolling(): void {
+/**
+ * Set up the status polling mechanism
+ */
+private setupStatusPolling(): void {
     // Clear any existing timer
     if (this.statusUpdateTimer) {
-      clearInterval(this.statusUpdateTimer);
+        clearInterval(this.statusUpdateTimer);
     }
     
     // Convert polling interval from seconds to milliseconds
     const intervalMs = this.platform.pollingInterval * 1000;
     
     this.platform.log.debug(
-      `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
+        `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
     );
     
     // Set up regular polling
     this.statusUpdateTimer = setInterval(() => {
-      this.refreshDeviceStatus().catch(error => {
-        this.platform.log.error(
-          `Error updating device status: ${error instanceof Error ? error.message : String(error)}`
-        );
-      });
+        this.refreshDeviceStatus().catch(error => {
+            this.platform.log.error(
+                `Error updating device status: ${error instanceof Error ? error.message : String(error)}`
+            );
+        });
     }, intervalMs);
-  }
+}
   /**
    * Detect device model based on attachments or other characteristics
    * @param data - Raw device data from API
