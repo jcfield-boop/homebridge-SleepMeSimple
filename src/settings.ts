@@ -20,7 +20,7 @@ export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 /**
  * Default polling interval in seconds
  */
-export const DEFAULT_POLLING_INTERVAL = 120;
+export const DEFAULT_POLLING_INTERVAL = 180;
 
 /**
  * Minimum allowed temperature in Celsius
@@ -40,17 +40,17 @@ export const TEMPERATURE_STEP = 0.5;
 /**
  * Minimum time between API requests in milliseconds
  */
-export const MIN_REQUEST_INTERVAL = 2000; // 2 seconds
+export const MIN_REQUEST_INTERVAL = 5000; // 2 seconds
 
 /**
  * Maximum API requests per minute (to respect rate limits)
  */
-export const MAX_REQUESTS_PER_MINUTE = 8; // published limit is 10 - safety margin
+export const MAX_REQUESTS_PER_MINUTE = 5; // published limit is 10 - safety margin
 
 /**
  * Default cache validity period in milliseconds
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 90000; // 90 seconds
+export const DEFAULT_CACHE_VALIDITY_MS = 300000; // 5 minutes
 
 /**
  * Logging levels
