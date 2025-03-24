@@ -563,11 +563,27 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
     }
   }
 
-  /**
-   * Process the request queue
-   * This is the core method for rate-limiting and prioritizing requests
-   */
-  private async processQueue(): Promise<void> {
+                }
+            } finally {
+                // Remove request from queue
+                this.removeRequest(request.id);
+            }
+        }
+    } finally {
+        this.processingQueue = false;
+        
+        // If there are still requests in the queue, continue processing
+        if (this.requestQueue.length > 0) {
+            // Small delay to prevent CPU spinning
+            setTimeout(() => this.processQueue(), 100);
+        }
+    }
+  }
+/**
+ * Process the request queue
+ * This is the core method for rate-limiting and prioritizing requests
+ */
+private async processQueue(): Promise<void> {
     // If already processing, exit
     if (this.processingQueue) {
         return;
@@ -578,32 +594,46 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
     try {
         while (this.requestQueue.length > 0) {
             // Check if we need to reset rate limit counter
-            this.checkRateLimit();
+            const now = Date.now();
+            if (now - this.minuteStartTime >= 60000) {
+                this.requestsThisMinute = 0;
+                this.minuteStartTime = now;
+                this.logger.debug('Resetting rate limit counter (1 minute has passed)');
+            }
             
             // Check if we're in backoff mode
-            if (this.rateLimitBackoffUntil > Date.now()) {
-                const backoffTimeRemaining = Math.ceil((this.rateLimitBackoffUntil - Date.now()) / 1000);
-                this.logger.info(`In rate limit backoff mode for ${backoffTimeRemaining}s`);
-                break;
+            if (this.rateLimitBackoffUntil > now) {
+                const backoffTimeRemaining = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+                this.logger.info(`Rate limit backoff active for ${backoffTimeRemaining}s, will retry later`);
+                
+                // Instead of rapid polling, set a timer to try again after backoff period
+                setTimeout(() => {
+                    this.processingQueue = false;
+                    this.processQueue();
+                }, this.rateLimitBackoffUntil - now + 1000);
+                return;
             }
             
             // Check if we've hit the rate limit
             if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
                 const resetTime = this.minuteStartTime + 60000;
-                const waitTime = resetTime - Date.now();
+                const waitTime = resetTime - now;
                 
                 this.logger.info(
                     `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
                     `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
                 );
                 
-                // Wait for rate limit reset
-                setTimeout(() => this.processQueue(), waitTime + 1000);
+                // Wait for rate limit reset with a single timer
+                setTimeout(() => {
+                    this.processingQueue = false;
+                    this.processQueue();
+                }, waitTime + 1000);
                 return;
             }
             
             // Check if we need to wait between requests
-            const timeSinceLastRequest = Date.now() - this.lastRequestTime;
+            const timeSinceLastRequest = now - this.lastRequestTime;
             if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
                 const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
                 
@@ -612,8 +642,11 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
                     this.logger.verbose(`Waiting ${waitTime}ms between requests to prevent rate limiting`);
                 }
                 
-                // Wait for minimum interval
-                setTimeout(() => this.processQueue(), waitTime);
+                // Wait for minimum interval with a single timer
+                setTimeout(() => {
+                    this.processingQueue = false;
+                    this.processQueue();
+                }, waitTime);
                 return;
             }
             
@@ -630,7 +663,7 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
             try {
                 // Update rate limiting counters
                 this.requestsThisMinute++;
-                this.lastRequestTime = Date.now();
+                this.lastRequestTime = now;
                 
                 // Add auth token to request
                 request.config.headers = {
@@ -642,7 +675,7 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
                     `Executing request ${request.id}: ${request.method} ${request.url}`
                 );
                 
-                const startTime = Date.now();
+                const startTime = now;
                 
                 // Execute the request
                 this.stats.totalRequests++;
@@ -671,13 +704,15 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
                 
                 // Handle rate limiting (HTTP 429)
                 if (axiosError.response?.status === 429) {
-                    // Implement backoff
+                    // Implement more effective backoff
                     this.consecutiveErrors++;
-                    const backoffTime = Math.min(30000, 1000 * Math.pow(2, this.consecutiveErrors));
+                    // Start with 15 seconds backoff, increasing with consecutive errors
+                    // Cap at 2 minutes max backoff
+                    const backoffTime = Math.min(120000, 15000 * Math.pow(1.5, this.consecutiveErrors));
                     this.rateLimitBackoffUntil = Date.now() + backoffTime;
                     
                     this.logger.warn(
-                        `Rate limit exceeded (429). Backing off for ${backoffTime / 1000}s`
+                        `Rate limit exceeded (429). Backing off for ${Math.round(backoffTime / 1000)}s`
                     );
                     
                     // Requeue the request
@@ -701,12 +736,11 @@ private async updateDeviceSettings(deviceId: string, settings: Record<string, un
         
         // If there are still requests in the queue, continue processing
         if (this.requestQueue.length > 0) {
-            // Small delay to prevent CPU spinning
-            setTimeout(() => this.processQueue(), 100);
+            // Use a real delay here instead of immediate re-processing
+            setTimeout(() => this.processQueue(), 500);
         }
     }
-  }
-
+}
   /**
    * Check and reset rate limit counter if needed
    */
