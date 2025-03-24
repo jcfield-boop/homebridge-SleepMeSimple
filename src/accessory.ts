@@ -271,7 +271,38 @@ export class SleepMeAccessory {
       })
       .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
   }
-
+/**
+ * Verify the current device state by forcing a refresh
+ * Used after critical operations like power changes
+ */
+private async verifyDeviceState(): Promise<void> {
+  try {
+    this.platform.log.debug('Verifying device state consistency...');
+    
+    // Force a fresh status update
+    const status = await this.apiClient.getDeviceStatus(this.deviceId, true);
+    
+    if (status) {
+      // Update our internal state to match reality
+      const actualPowerState = status.powerState === PowerState.ON;
+      
+      if (this.isPowered !== actualPowerState) {
+        this.platform.log.info(
+          `Power state mismatch detected. UI shows: ${this.isPowered ? 'ON' : 'OFF'}, ` +
+          `Actual: ${actualPowerState ? 'ON' : 'OFF'}. Updating UI.`
+        );
+        
+        // Update internal state
+        this.isPowered = actualPowerState;
+        
+        // Update UI
+        this.updateCurrentHeatingCoolingState();
+      }
+    }
+  } catch (error) {
+    this.platform.log.error(`Error verifying device state: ${error}`);
+  }
+}
   /**
    * Get the current heating/cooling state based on device status
    */
@@ -335,10 +366,6 @@ export class SleepMeAccessory {
     return this.targetTemperature || 21; // Default to 21°C if not set
   }
 
-  /**
-   * Handle setting the target heating/cooling state with trust-based approach
-   * @param value Target heating/cooling state value
-   */
 private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
   this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
   
@@ -348,10 +375,8 @@ private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
   // Increment command epoch to invalidate previous commands
   const currentEpoch = ++this.commandEpoch;
   
-  // Cancel any pending requests to ensure this command takes priority
-  if (this.apiClient) {
-    this.apiClient.cancelAllDeviceRequests(this.deviceId);
-  }
+  // Cancel any pending operations for this device
+  this.apiClient.cancelAllDeviceRequests(this.deviceId);
   
   switch (value) {
     case this.Characteristic.TargetHeatingCoolingState.OFF:
@@ -368,8 +393,8 @@ private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
             // Update UI immediately for responsiveness
             this.updateCurrentHeatingCoolingState();
             
-            // Double-check power state after a brief delay
-            setTimeout(() => this.verifyPowerState(), 1000);
+            // Verify the state after a short delay
+            setTimeout(() => this.verifyDeviceState(), 5000);
           } else {
             throw new Error('Failed to turn off device');
           }
