@@ -281,6 +281,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         } else {
           // Create a new accessory since one doesn't exist
           this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);
+          this.log.info(
+  `Initializing SleepMe device as HeaterCooler service for ${displayName} (ID: ${device.id})`
+);
           
           const accessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
           
