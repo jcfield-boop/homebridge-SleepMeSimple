@@ -23,7 +23,7 @@ import {
 
 /**
  * Interface for a cached device status entry
- * Enhanced with confidence level
+ * Enhanced with confidence level and trust status
  */
 interface DeviceStatusCache {
   status: DeviceStatus;                      // Cached device status
@@ -31,6 +31,7 @@ interface DeviceStatusCache {
   isOptimistic: boolean;                     // Whether this is an optimistic update
   confidence?: 'low' | 'medium' | 'high';    // Confidence in the cache data
   source?: 'get' | 'patch' | 'inferred';     // Source of the cache data
+  verified?: boolean;                        // Whether this has been verified by GET
 }
 
 /**
@@ -50,6 +51,7 @@ interface QueuedRequest {
   deviceId?: string;                   // Device ID if applicable
   operationType?: string;              // Operation type for deduplication
   lastAttempt?: number;                // When the request was last attempted
+  data?: Record<string, unknown>;      // Optional data payload for convenience
 }
 
 /**
@@ -220,9 +222,12 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
         
         // Adjust validity period based on confidence and source
         if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
-          validityPeriod = DEFAULT_CACHE_VALIDITY_MS * 2;
+          // Extend validity for high confidence updates, especially if they came from a PATCH
+          validityPeriod = cachedStatus.source === 'patch' ? 
+                          DEFAULT_CACHE_VALIDITY_MS * 3 : // Much longer validity for PATCH responses
+                          DEFAULT_CACHE_VALIDITY_MS * 2;  // Standard extension for high confidence
         } else if (cachedStatus.isOptimistic) {
-          validityPeriod = DEFAULT_CACHE_VALIDITY_MS / 2;
+          validityPeriod = DEFAULT_CACHE_VALIDITY_MS / 2; // Shorter validity for optimistic updates
         }
         
         if (now - cachedStatus.timestamp < validityPeriod) {
@@ -231,9 +236,10 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
             ? ` (${cachedStatus.confidence} confidence)` 
             : '';
           const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
+          const verifiedFlag = cachedStatus.verified ? ' (verified)' : '';
           
           this.logger.verbose(
-            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo})`
+            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo}${verifiedFlag})`
           );
           
           return cachedStatus.status;
@@ -260,13 +266,14 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     // Parse the device status from the response
     const status = this.parseDeviceStatus(response);
     
-    // Update cache with fresh data
+    // Update cache with fresh data and mark it as verified
     this.deviceStatusCache.set(deviceId, {
       status,
       timestamp: Date.now(),
       isOptimistic: false,
       confidence: 'high',
-      source: 'get'
+      source: 'get',
+      verified: true  // This is from a GET so it's verified by definition
     });
     
     return status;
@@ -275,7 +282,7 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     return null;
   }
 }
-/**
+  /**
  * Turn device on and set temperature in a single operation
  * With trust-based approach (no verification GET)
  * @param deviceId Device identifier
@@ -367,8 +374,7 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
     return false;
   }
 }
-  
-/**
+  /**
  * Set device temperature
  * With trust-based approach (no verification GET)
  * @param deviceId Device identifier
@@ -411,6 +417,7 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
     return false;
   }
 }
+
   /**
    * Cancel all pending requests for a device
    * @param deviceId Device ID
@@ -464,9 +471,9 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
       return false;
     }
   }
-/**
+  /**
  * Update cache with a trusted device state based on our commands
- * This is a key method that needs fixing
+ * Enhanced with better consistency handling
  * @param deviceId Device identifier
  * @param updates Status updates to apply
  */
@@ -477,8 +484,7 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
   let updatedStatus: DeviceStatus;
   
   if (cachedEntry) {
-    // Merge updates with current status - this is where the bug is
-    // When we set PowerState.OFF, we must ensure it overrides all other conflicting settings
+    // Merge updates with current status
     updatedStatus = {
       ...cachedEntry.status,
       ...updates
@@ -532,7 +538,8 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
     timestamp: Date.now(),
     isOptimistic: false,
     confidence: 'high',
-    source: 'patch'
+    source: 'patch',
+    verified: false  // Not verified yet, but trusted until proven otherwise
   });
   
   this.logger.verbose(
@@ -542,6 +549,7 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
     `Status=${updatedStatus.thermalStatus}`
   );
 }
+
 /**
  * Get the last known temperature or a reasonable approximation
  * This helps provide a smoother UX during temperature transitions
@@ -560,8 +568,7 @@ private getLastKnownTemperature(deviceId: string, targetTemp: number): number {
   // No cached temperature, approximate based on target
   return targetTemp;
 }
-
-/**
+  /**
  * Parse a device status from raw API response
  * Extracted to a separate method for reuse
  * @param response API response data
@@ -627,8 +634,7 @@ private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
   
   return status;
 }
-
-/**
+  /**
  * Process the request queue with improved priority handling
  * and adaptive rate limiting
  */
@@ -682,31 +688,6 @@ private async processQueue(): Promise<void> {
         continue;
       }
 
-  // Process critical commands first with higher priority
-  if (this.criticalQueue.length > 0) {
-    const powerCommands = this.criticalQueue.filter(r => 
-      !r.executing && 
-      r.url.includes('/devices/') && 
-      r.data && 
-      (r.data.thermal_control_status === 'standby' || r.data.thermal_control_status === 'active')
-    );
-    
-    // Prioritize power commands (especially OFF commands)
-    if (powerCommands.length > 0) {
-      // Prioritize OFF commands over others
-      const offCommands = powerCommands.filter(r => 
-        r.data && r.data.thermal_control_status === 'standby'
-      );
-      
-      if (offCommands.length > 0) {
-        // Process OFF command first
-        return offCommands[0];
-      }
-      
-      // Then other power commands
-      return powerCommands[0];
-    }
-  }
       // Get the next request from prioritized queues
       const request = this.getNextRequest();
       
@@ -716,7 +697,7 @@ private async processQueue(): Promise<void> {
       
       // Mark the request as executing
       request.executing = true;
-      request.lastAttempt = Date.now();
+      request.lastAttempt = now;
       
       try {
         // Update rate limiting counters
@@ -817,45 +798,37 @@ private async processQueue(): Promise<void> {
     }
   }
 }
-
   /**
-   * Determine if there are any queued requests
-   */
-  private hasQueuedRequests(): boolean {
-    return this.criticalQueue.length > 0 || 
-           this.highPriorityQueue.length > 0 || 
-           this.normalPriorityQueue.length > 0 || 
-           this.lowPriorityQueue.length > 0;
-  }
+ * Determine if there are any queued requests
+ */
+private hasQueuedRequests(): boolean {
+  return this.criticalQueue.length > 0 || 
+         this.highPriorityQueue.length > 0 || 
+         this.normalPriorityQueue.length > 0 || 
+         this.lowPriorityQueue.length > 0;
+}
 
-  /**
-   * Check and reset rate limit counter if needed
-   */
-  private checkRateLimit(): void {
-    const now = Date.now();
+/**
+ * Check and reset rate limit counter if needed
+ */
+private checkRateLimit(): void {
+  const now = Date.now();
+  
+  // Reset rate limit counter if a minute has passed
+  if (now - this.minuteStartTime >= 60000) {
+    this.requestsThisMinute = 0;
+    this.minuteStartTime = now;
+    this.rateExceededLogged = false; // Reset logging flag
     
-    // Reset rate limit counter if a minute has passed
-    if (now - this.minuteStartTime >= 60000) {
-      this.requestsThisMinute = 0;
-      this.minuteStartTime = now;
-      this.rateExceededLogged = false; // Reset logging flag
-      
-      // If we've passed the backoff period, clear the rate limit flag
-      if (now > this.rateLimitBackoffUntil) {
-        this.rateLimitBackoffUntil = 0;
-      }
-      
-      this.logger.debug('Resetting rate limit counter (1 minute has passed)');
+    // If we've passed the backoff period, clear the rate limit flag
+    if (now > this.rateLimitBackoffUntil) {
+      this.rateLimitBackoffUntil = 0;
     }
+    
+    this.logger.debug('Resetting rate limit counter (1 minute has passed)');
   }
-
-  /**
-   * Get the next request from the appropriate priority queue
-   * @returns Next request to process or undefined if all queues empty
-   */
-  private getNextRequest(): QueuedRequest | undefined {
-    // Process requests in priority order, with oldest first in each priority level
-  /**
+}
+/**
  * Get the next request from the appropriate priority queue
  * With improved OFF command prioritization
  * @returns Next request to process or undefined if all queues empty
@@ -896,406 +869,400 @@ private getNextRequest(): QueuedRequest | undefined {
       return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
     }
   }
-    // First, try critical priority requests
-    if (this.criticalQueue.length > 0) {
-      const pendingRequests = this.criticalQueue.filter(r => !r.executing);
-      if (pendingRequests.length > 0) {
-        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
-      }
-    }
-    // Then, try high priority requests
-    if (this.highPriorityQueue.length > 0) {
-      const pendingRequests = this.highPriorityQueue.filter(r => !r.executing);
-      if (pendingRequests.length > 0) {
-        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
-      }
-    }
-    
-    // Next, try normal priority requests
-    if (this.normalPriorityQueue.length > 0) {
-      const pendingRequests = this.normalPriorityQueue.filter(r => !r.executing);
-      if (pendingRequests.length > 0) {
-        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
-      }
-    }
-    
-    // Finally, try low priority requests
-    if (this.lowPriorityQueue.length > 0) {
-      const pendingRequests = this.lowPriorityQueue.filter(r => !r.executing);
-      if (pendingRequests.length > 0) {
-        return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
-      }
-    }
-    
-    return undefined;
-  }
-
-  /**
-   * Remove a request from its queue
-   * @param request Request to remove
-   */
-  private removeRequest(request: QueuedRequest): void {
-    let queue: QueuedRequest[];
-    
-    // Select the appropriate queue based on priority
-    switch (request.priority) {
-      case RequestPriority.CRITICAL:
-        queue = this.criticalQueue;
-        break;
-      case RequestPriority.HIGH:
-        queue = this.highPriorityQueue;
-        break;
-      case RequestPriority.NORMAL:
-        queue = this.normalPriorityQueue;
-        break;
-      case RequestPriority.LOW:
-        queue = this.lowPriorityQueue;
-        break;
-      default:
-        queue = this.normalPriorityQueue;
-    }
-    
-    const index = queue.findIndex(r => r.id === request.id);
-    if (index !== -1) {
-      queue.splice(index, 1);
+  
+  // Then, try high priority requests
+  if (this.highPriorityQueue.length > 0) {
+    const pendingRequests = this.highPriorityQueue.filter(r => !r.executing);
+    if (pendingRequests.length > 0) {
+      return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
     }
   }
+  
+  // Next, try normal priority requests
+  if (this.normalPriorityQueue.length > 0) {
+    const pendingRequests = this.normalPriorityQueue.filter(r => !r.executing);
+    if (pendingRequests.length > 0) {
+      return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+    }
+  }
+  
+  // Finally, try low priority requests
+  if (this.lowPriorityQueue.length > 0) {
+    const pendingRequests = this.lowPriorityQueue.filter(r => !r.executing);
+    if (pendingRequests.length > 0) {
+      return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+    }
+  }
+  
+  return undefined;
+}
 
+/**
+ * Remove a request from its queue
+ * @param request Request to remove
+ */
+private removeRequest(request: QueuedRequest): void {
+  let queue: QueuedRequest[];
+  
+  // Select the appropriate queue based on priority
+  switch (request.priority) {
+    case RequestPriority.CRITICAL:
+      queue = this.criticalQueue;
+      break;
+    case RequestPriority.HIGH:
+      queue = this.highPriorityQueue;
+      break;
+    case RequestPriority.NORMAL:
+      queue = this.normalPriorityQueue;
+      break;
+    case RequestPriority.LOW:
+      queue = this.lowPriorityQueue;
+      break;
+    default:
+      queue = this.normalPriorityQueue;
+  }
+  
+  const index = queue.findIndex(r => r.id === request.id);
+  if (index !== -1) {
+    queue.splice(index, 1);
+  }
+}
+
+/**
+ * Requeue a request after a failure, with appropriate priority handling
+ * @param request Request to requeue
+ */
+private requeueRequest(request: QueuedRequest): void {
+  // Create new request with incremented retry count
+  const newRequest: QueuedRequest = {
+    ...request,
+    executing: false,
+    retryCount: request.retryCount + 1,
+    timestamp: Date.now() // Update timestamp for proper sorting
+  };
+  
+  // Add to the appropriate queue based on priority
+  switch (request.priority) {
+    case RequestPriority.CRITICAL:
+      // Critical requests go to the front of the critical queue
+      this.criticalQueue.unshift(newRequest);
+      break;
+    case RequestPriority.HIGH:
+      // High priority goes to the high priority queue
+      this.highPriorityQueue.push(newRequest);
+      break;
+    case RequestPriority.NORMAL:
+      // Normal priority goes to normal queue
+      this.normalPriorityQueue.push(newRequest);
+      break;
+    case RequestPriority.LOW:
+      // Low priority goes to low priority queue
+      this.lowPriorityQueue.push(newRequest);
+      break;
+    default:
+      // Default to normal priority
+      this.normalPriorityQueue.push(newRequest);
+  }
+}
   /**
-   * Requeue a request after a failure, with appropriate priority handling
-   * @param request Request to requeue
-   */
-  private requeueRequest(request: QueuedRequest): void {
-    // Create new request with incremented retry count
-    const newRequest: QueuedRequest = {
-      ...request,
-      executing: false,
-      retryCount: request.retryCount + 1,
-      timestamp: Date.now() // Update timestamp for proper sorting
+ * Cancel pending requests of a specific type for a device
+ * @param deviceId Device ID
+ * @param operationType Optional type of operation to cancel (if not specified, cancels all)
+ */
+private cancelPendingRequests(deviceId: string, operationType?: string): void {
+  // Function to find and cancel requests in a queue
+  const processQueue = (queue: QueuedRequest[]): void => {
+    const requestsToCancel = queue.filter(r => 
+      !r.executing && r.deviceId === deviceId && 
+      (!operationType || r.operationType === operationType)
+    );
+    
+    for (const request of requestsToCancel) {
+      this.logger.verbose(
+        `Canceling pending ${request.operationType} request for device ${deviceId}`
+      );
+      
+      const index = queue.findIndex(r => r.id === request.id);
+      if (index !== -1) {
+        queue.splice(index, 1);
+      }
+      
+      request.resolve(null); // Resolve with null rather than rejecting
+    }
+  };
+  
+  // Process all priority queues
+  processQueue(this.criticalQueue);
+  processQueue(this.highPriorityQueue);
+  processQueue(this.normalPriorityQueue);
+  processQueue(this.lowPriorityQueue);
+}
+
+/**
+ * Make a request to the SleepMe API with improved priority handling
+ * @param options Request options
+ * @returns Promise resolving to response data
+ */
+private async makeRequest<T>(options: {
+  method: string;
+  url: string;
+  data?: unknown;
+  priority?: RequestPriority;
+  deviceId?: string;
+  operationType?: string;
+}): Promise<T> {
+  // Set default priority
+  const priority = options.priority || RequestPriority.NORMAL;
+  
+  // Skip redundant status updates if queue is getting large
+  if (this.criticalQueue.length + this.highPriorityQueue.length > 3 && 
+      options.operationType === 'getDeviceStatus' && 
+      priority !== RequestPriority.CRITICAL && 
+      priority !== RequestPriority.HIGH) {
+    this.logger.debug(`Skipping non-critical status update due to queue backlog`);
+    return Promise.resolve(null as unknown as T);
+  }
+  
+  // Log request at different levels based on operation type to reduce noise
+  if (options.operationType === 'getDeviceStatus') {
+    this.logger.verbose(
+      `API Request ${options.method} ${options.url} [${priority}]` + 
+      (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
+    );
+  } else {
+    this.logger.info(
+      `API Request ${options.method} ${options.url} [${priority}]` + 
+      (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
+    );
+  }
+  
+  // Wait for startup delay to complete for non-critical requests
+  if (priority !== RequestPriority.CRITICAL && !this.startupFinished) {
+    await this.startupComplete;
+  }
+  
+  // Return a new promise
+  return new Promise<T>((resolve, reject) => {
+    // Generate a unique ID for this request
+    const requestId = `req_${++this.requestIdCounter}`;
+    
+    // Create request config
+    const config: AxiosRequestConfig = {
+      method: options.method,
+      url: API_BASE_URL + options.url,
+      validateStatus: (status) => {
+        // Consider 2xx status codes as successful
+        return status >= 200 && status < 300;
+      }
+    };
+    
+    // Add data if provided
+    if (options.data) {
+      config.data = options.data;
+    }
+    
+    // Create new request
+    const request: QueuedRequest = {
+      id: requestId,
+      config,
+      priority,
+      resolve: resolve as (value: unknown) => void,
+      reject,
+      retryCount: 0,
+      timestamp: Date.now(),
+      method: options.method,
+      url: options.url,
+      deviceId: options.deviceId,
+      operationType: options.operationType,
+      data: options.data as Record<string, unknown>  // Store data for filtering in getNextRequest
     };
     
     // Add to the appropriate queue based on priority
-    switch (request.priority) {
+    switch (priority) {
       case RequestPriority.CRITICAL:
-        // Critical requests go to the front of the critical queue
-        this.criticalQueue.unshift(newRequest);
+        this.criticalQueue.push(request);
         break;
       case RequestPriority.HIGH:
-        // High priority goes to the high priority queue
-        this.highPriorityQueue.push(newRequest);
+        this.highPriorityQueue.push(request);
         break;
       case RequestPriority.NORMAL:
-        // Normal priority goes to normal queue
-        this.normalPriorityQueue.push(newRequest);
+        this.normalPriorityQueue.push(request);
         break;
       case RequestPriority.LOW:
-        // Low priority goes to low priority queue
-        this.lowPriorityQueue.push(newRequest);
+        this.lowPriorityQueue.push(request);
         break;
       default:
-        // Default to normal priority
-        this.normalPriorityQueue.push(newRequest);
-    }
-  }
-
-  /**
-   * Cancel pending requests of a specific type for a device
-   * @param deviceId Device ID
-   * @param operationType Optional type of operation to cancel (if not specified, cancels all)
-   */
-  private cancelPendingRequests(deviceId: string, operationType?: string): void {
-    // Function to find and cancel requests in a queue
-    const processQueue = (queue: QueuedRequest[]): void => {
-      const requestsToCancel = queue.filter(r => 
-        !r.executing && r.deviceId === deviceId && 
-        (!operationType || r.operationType === operationType)
-      );
-      
-      for (const request of requestsToCancel) {
-        this.logger.verbose(
-          `Canceling pending ${request.operationType} request for device ${deviceId}`
-        );
-        
-        const index = queue.findIndex(r => r.id === request.id);
-        if (index !== -1) {
-          queue.splice(index, 1);
-        }
-        
-        request.resolve(null); // Resolve with null rather than rejecting
-      }
-    };
-    
-    // Process all priority queues
-    processQueue(this.criticalQueue);
-    processQueue(this.highPriorityQueue);
-    processQueue(this.normalPriorityQueue);
-    processQueue(this.lowPriorityQueue);
-  }
-
-  /**
-   * Make a request to the SleepMe API with improved priority handling
-   * @param options Request options
-   * @returns Promise resolving to response data
-   */
-  private async makeRequest<T>(options: {
-    method: string;
-    url: string;
-    data?: unknown;
-    priority?: RequestPriority;
-    deviceId?: string;
-    operationType?: string;
-  }): Promise<T> {
-    // Set default priority
-    const priority = options.priority || RequestPriority.NORMAL;
-    
-    // Skip redundant status updates if queue is getting large
-    if (this.criticalQueue.length + this.highPriorityQueue.length > 3 && 
-        options.operationType === 'getDeviceStatus' && 
-        priority !== RequestPriority.CRITICAL && 
-        priority !== RequestPriority.HIGH) {
-      this.logger.debug(`Skipping non-critical status update due to queue backlog`);
-      return Promise.resolve(null as unknown as T);
+        this.normalPriorityQueue.push(request);
     }
     
-    // Log request at different levels based on operation type to reduce noise
-    if (options.operationType === 'getDeviceStatus') {
-      this.logger.verbose(
-        `API Request ${options.method} ${options.url} [${priority}]` + 
-        (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
-      );
+    // Start processing the queue if not already running
+    if (!this.processingQueue) {
+      this.processQueue();
+    }
+  });
+}
+  /**
+ * Handle API errors with better logging
+ * @param context Context where the error occurred
+ * @param error The error that occurred
+ */
+private handleApiError(context: string, error: unknown): void {
+  // Cast to Axios error if possible
+  const axiosError = error as AxiosError;
+  
+  // Details for the log
+  let errorMessage = '';
+  let responseStatus = 0;
+  let responseData = null;
+  
+  // Get error details
+  if (axios.isAxiosError(axiosError)) {
+    responseStatus = axiosError.response?.status || 0;
+    responseData = axiosError.response?.data;
+    errorMessage = axiosError.message;
+    
+    this.logger.error(
+      `API error in ${context}: ${errorMessage} (Status: ${responseStatus})`
+    );
+    
+    if (responseData && this.logger.isVerbose()) {
+      this.logger.verbose(`Response error data: ${JSON.stringify(responseData)}`);
+    }
+  } else {
+    // Not an Axios error
+    errorMessage = error instanceof Error ? error.message : String(error);
+    this.logger.error(`Error in ${context}: ${errorMessage}`);
+  }
+}
+
+/**
+ * Update the average response time
+ * @param newResponseTime New response time in milliseconds
+ */
+private updateAverageResponseTime(newResponseTime: number): void {
+  if (this.stats.averageResponseTime === 0) {
+    this.stats.averageResponseTime = newResponseTime;
+  } else {
+    // Simple moving average calculation
+    this.stats.averageResponseTime = 
+      (this.stats.averageResponseTime * 0.9) + (newResponseTime * 0.1);
+  }
+}
+
+/**
+ * Extract a nested property value from an object
+ * @param obj Object to extract from
+ * @param path Dot-notation path to property
+ * @returns Extracted value or undefined if not found
+ */
+public extractNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  const parts = path.split('.');
+  let value: unknown = obj;
+  
+  for (const part of parts) {
+    if (value === null || value === undefined || typeof value !== 'object') {
+      return undefined;
+    }
+    
+    value = (value as Record<string, unknown>)[part];
+  }
+  
+  return value;
+}
+
+/**
+ * Extract a temperature value from nested properties
+ * @param data Object to extract from
+ * @param paths Array of possible property paths
+ * @param defaultValue Default value if not found
+ * @returns Extracted temperature or default value
+ */
+private extractTemperature(data: Record<string, unknown>, paths: string[], defaultValue = 21): number {
+  for (const path of paths) {
+    const value = this.extractNestedValue(data, path);
+    if (typeof value === 'number' && !isNaN(value)) {
+      return value;
+    }
+  }
+  
+  return defaultValue;
+}
+
+/**
+ * Extract thermal status from API response
+ * @param data API response data
+ * @returns Thermal status
+ */
+private extractThermalStatus(data: Record<string, unknown>): ThermalStatus {
+  // Try to get thermal status from control object
+  const rawStatus = this.extractNestedValue(data, 'control.thermal_control_status') ||
+                    this.extractNestedValue(data, 'thermal_control_status');
+  
+  if (rawStatus) {
+    switch (String(rawStatus).toLowerCase()) {
+      case 'active':
+        return ThermalStatus.ACTIVE;
+      case 'heating':
+        return ThermalStatus.HEATING;
+      case 'cooling':
+        return ThermalStatus.COOLING;
+      case 'standby':
+        return ThermalStatus.STANDBY;
+      case 'off':
+        return ThermalStatus.OFF;
+      default:
+        this.logger.warn(`Unknown thermal status: ${rawStatus}`);
+        return ThermalStatus.UNKNOWN;
+    }
+  }
+  
+  return ThermalStatus.UNKNOWN;
+}
+
+/**
+ * Extract power state from API response
+ * @param data API response data
+ * @returns Power state
+ */
+private extractPowerState(data: Record<string, unknown>): PowerState {
+  // Try different paths for power state
+  const thermalStatus = this.extractThermalStatus(data);
+  
+  // If we have a thermal status, infer power state
+  if (thermalStatus !== ThermalStatus.UNKNOWN) {
+    if (thermalStatus === ThermalStatus.OFF || thermalStatus === ThermalStatus.STANDBY) {
+      return PowerState.OFF;
     } else {
-      this.logger.info(
-        `API Request ${options.method} ${options.url} [${priority}]` + 
-        (options.data ? ` with payload: ${JSON.stringify(options.data)}` : '')
-      );
+      return PowerState.ON;
     }
-    
-    // Wait for startup delay to complete for non-critical requests
-    if (priority !== RequestPriority.CRITICAL && !this.startupFinished) {
-      await this.startupComplete;
-    }
-    
-    // Return a new promise
-    return new Promise<T>((resolve, reject) => {
-      // Generate a unique ID for this request
-      const requestId = `req_${++this.requestIdCounter}`;
-      
-      // Create request config
-      const config: AxiosRequestConfig = {
-        method: options.method,
-        url: API_BASE_URL + options.url,
-        validateStatus: (status) => {
-          // Consider 2xx status codes as successful
-          return status >= 200 && status < 300;
-        }
-      };
-      
-      // Add data if provided
-      if (options.data) {
-        config.data = options.data;
-      }
-      
-      // Create new request
-      const request: QueuedRequest = {
-        id: requestId,
-        config,
-        priority,
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        retryCount: 0,
-        timestamp: Date.now(),
-        method: options.method,
-        url: options.url,
-        deviceId: options.deviceId,
-        operationType: options.operationType
-      };
-      
-      // Add to the appropriate queue based on priority
-      switch (priority) {
-        case RequestPriority.CRITICAL:
-          this.criticalQueue.push(request);
-          break;
-        case RequestPriority.HIGH:
-          this.highPriorityQueue.push(request);
-          break;
-        case RequestPriority.NORMAL:
-          this.normalPriorityQueue.push(request);
-          break;
-        case RequestPriority.LOW:
-          this.lowPriorityQueue.push(request);
-          break;
-        default:
-          this.normalPriorityQueue.push(request);
-      }
-      
-      // Start processing the queue if not already running
-      if (!this.processingQueue) {
-        this.processQueue();
-      }
-    });
   }
+  
+  // Try to get from is_connected or other fields
+  const isConnected = this.extractNestedValue(data, 'status.is_connected') ||
+                      this.extractNestedValue(data, 'is_connected');
+  
+  if (typeof isConnected === 'boolean') {
+    return isConnected ? PowerState.ON : PowerState.OFF;
+  }
+  
+  return PowerState.UNKNOWN;
+}
 
-  /**
-   * Handle API errors with better logging
-   * @param context Context where the error occurred
-   * @param error The error that occurred
-   */
-  private handleApiError(context: string, error: unknown): void {
-    // Cast to Axios error if possible
-    const axiosError = error as AxiosError;
-    
-    // Details for the log
-    let errorMessage = '';
-    let responseStatus = 0;
-    let responseData = null;
-    
-    // Get error details
-    if (axios.isAxiosError(axiosError)) {
-      responseStatus = axiosError.response?.status || 0;
-      responseData = axiosError.response?.data;
-      errorMessage = axiosError.message;
-      
-      this.logger.error(
-        `API error in ${context}: ${errorMessage} (Status: ${responseStatus})`
-      );
-      
-      if (responseData && this.logger.isVerbose()) {
-        this.logger.verbose(`Response error data: ${JSON.stringify(responseData)}`);
-      }
-    } else {
-      // Not an Axios error
-      errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error in ${context}: ${errorMessage}`);
-    }
-  }
-  /**
-   * Update the average response time
-   * @param newResponseTime New response time in milliseconds
-   */
-  private updateAverageResponseTime(newResponseTime: number): void {
-    if (this.stats.averageResponseTime === 0) {
-      this.stats.averageResponseTime = newResponseTime;
-    } else {
-      // Simple moving average calculation
-      this.stats.averageResponseTime = 
-        (this.stats.averageResponseTime * 0.9) + (newResponseTime * 0.1);
-    }
-  }
+/**
+ * Convert Celsius to Fahrenheit
+ * @param celsius Temperature in Celsius
+ * @returns Temperature in Fahrenheit
+ */
+private convertCtoF(celsius: number): number {
+  return (celsius * 9/5) + 32;
+}
 
-  /**
-   * Extract a nested property value from an object
-   * @param obj Object to extract from
-   * @param path Dot-notation path to property
-   * @returns Extracted value or undefined if not found
-   */
-  public extractNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    const parts = path.split('.');
-    let value: unknown = obj;
-    
-    for (const part of parts) {
-      if (value === null || value === undefined || typeof value !== 'object') {
-        return undefined;
-      }
-      
-      value = (value as Record<string, unknown>)[part];
-    }
-    
-    return value;
-  }
-
-  /**
-   * Extract a temperature value from nested properties
-   * @param data Object to extract from
-   * @param paths Array of possible property paths
-   * @param defaultValue Default value if not found
-   * @returns Extracted temperature or default value
-   */
-  private extractTemperature(data: Record<string, unknown>, paths: string[], defaultValue = 21): number {
-    for (const path of paths) {
-      const value = this.extractNestedValue(data, path);
-      if (typeof value === 'number' && !isNaN(value)) {
-        return value;
-      }
-    }
-    
-    return defaultValue;
-  }
-
-  /**
-   * Extract thermal status from API response
-   * @param data API response data
-   * @returns Thermal status
-   */
-  private extractThermalStatus(data: Record<string, unknown>): ThermalStatus {
-    // Try to get thermal status from control object
-    const rawStatus = this.extractNestedValue(data, 'control.thermal_control_status') ||
-                      this.extractNestedValue(data, 'thermal_control_status');
-    
-    if (rawStatus) {
-      switch (String(rawStatus).toLowerCase()) {
-        case 'active':
-          return ThermalStatus.ACTIVE;
-        case 'heating':
-          return ThermalStatus.HEATING;
-        case 'cooling':
-          return ThermalStatus.COOLING;
-        case 'standby':
-          return ThermalStatus.STANDBY;
-        case 'off':
-          return ThermalStatus.OFF;
-        default:
-          this.logger.warn(`Unknown thermal status: ${rawStatus}`);
-          return ThermalStatus.UNKNOWN;
-      }
-    }
-    
-    return ThermalStatus.UNKNOWN;
-  }
-
-  /**
-   * Extract power state from API response
-   * @param data API response data
-   * @returns Power state
-   */
-  private extractPowerState(data: Record<string, unknown>): PowerState {
-    // Try different paths for power state
-    const thermalStatus = this.extractThermalStatus(data);
-    
-    // If we have a thermal status, infer power state
-    if (thermalStatus !== ThermalStatus.UNKNOWN) {
-      if (thermalStatus === ThermalStatus.OFF || thermalStatus === ThermalStatus.STANDBY) {
-        return PowerState.OFF;
-      } else {
-        return PowerState.ON;
-      }
-    }
-    
-    // Try to get from is_connected or other fields
-    const isConnected = this.extractNestedValue(data, 'status.is_connected') ||
-                        this.extractNestedValue(data, 'is_connected');
-    
-    if (typeof isConnected === 'boolean') {
-      return isConnected ? PowerState.ON : PowerState.OFF;
-    }
-    
-    return PowerState.UNKNOWN;
-  }
-
-  /**
-   * Convert Celsius to Fahrenheit
-   * @param celsius Temperature in Celsius
-   * @returns Temperature in Fahrenheit
-   */
-  private convertCtoF(celsius: number): number {
-    return (celsius * 9/5) + 32;
-  }
-
-  /**
-   * Convert Fahrenheit to Celsius
-   * @param fahrenheit Temperature in Fahrenheit
-   * @returns Temperature in Celsius
-   */
-  private convertFtoC(fahrenheit: number): number {
-    return (fahrenheit - 32) * 5/9;
-  }
+/**
+ * Convert Fahrenheit to Celsius
+ * @param fahrenheit Temperature in Fahrenheit
+ * @returns Temperature in Celsius
+ */
+private convertFtoC(fahrenheit: number): number {
+  return (fahrenheit - 32) * 5/9;
+}
 }
