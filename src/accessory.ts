@@ -160,12 +160,12 @@ export class SleepMeAccessory {
     
     // Initialize the device state by fetching current status
     // Wait a moment before first status fetch to avoid immediate API call
-    setTimeout(() => {
-      this.refreshDeviceStatus(true)
-        .catch(error => this.platform.log.error(
-          `Error initializing device status: ${error instanceof Error ? error.message : String(error)}`
-        ));
-    }, 1000);
+setTimeout(() => {
+  this.refreshDeviceStatus(true)
+    .catch(error => this.platform.log.error(
+      `Error initializing device status: ${error instanceof Error ? error.message : String(error)}`
+    ));
+}, 15000); // 15 second delay for initial status check
     
     // Set up polling interval
     this.setupStatusPolling();
