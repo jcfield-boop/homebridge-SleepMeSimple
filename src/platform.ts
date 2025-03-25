@@ -11,6 +11,7 @@ import { SleepMeApi } from './api/sleepme-api.js';
 import { SleepMeAccessory } from './accessory.js';
 import { Logger as CustomLogger } from './api/types.js';
 import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
+import { ScheduleManager, TemperatureSchedule } from './schedule.js';
 
 /**
  * SleepMe Simple Platform
@@ -47,8 +48,10 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   private discoveryInProgress = false;
 
   // Flag to track if the plugin is properly configured
-  // eslint-disable-next-line @typescript-eslint/no-inferrable-types
-  private isConfigured: boolean = true;
+  private isConfigured = true;
+
+  // Schedule manager for handling temperature schedules
+  private _scheduleManager?: ScheduleManager;
   
   /**
    * Constructor for the SleepMe platform.
@@ -101,6 +104,59 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         `Initializing ${PLATFORM_NAME} platform with ${this.temperatureUnit === 'C' ? 'Celsius' : 'Fahrenheit'} ` +
         `units and ${this.pollingInterval}s polling interval`
       );
+      
+      // Initialize schedule manager if enabled
+      if (config.enableSchedules && this.api) {
+        const warmHugConfig = {
+          increment: (config.advanced?.warmHugIncrement as number) || 2,
+          duration: (config.advanced?.warmHugDuration as number) || 10
+        };
+        
+        this._scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
+        
+        // Load schedules from config
+        if (Array.isArray(config.schedules)) {
+          // Extract device IDs from accessory cache
+          const deviceIds: string[] = [];
+          
+          // Try to get devices from configuredDevices
+          const configuredDevices = this.config.devices as Array<{id: string, name: string}> || [];
+          if (configuredDevices && configuredDevices.length > 0) {
+            configuredDevices.forEach(device => {
+              if (device.id) {
+                deviceIds.push(device.id);
+              }
+            });
+          } else {
+            // Try to get devices from cached accessories
+            this.accessories.forEach(accessory => {
+              const deviceId = accessory.context.device?.id;
+              if (deviceId) {
+                deviceIds.push(deviceId);
+              }
+            });
+          }
+          
+          // Add schedules to each device
+          if (deviceIds.length > 0) {
+            for (const deviceId of deviceIds) {
+              const schedules: TemperatureSchedule[] = config.schedules.map((scheduleConfig: any) => ({
+                type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
+                day: scheduleConfig.type === 'Specific Day' ? 
+                  ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day) : undefined,
+                time: scheduleConfig.time,
+                temperature: scheduleConfig.temperature
+              }));
+              
+              this._scheduleManager.setSchedules(deviceId, schedules);
+            }
+            
+            this.log.info(`Scheduled temperature control enabled with ${config.schedules.length} schedules`);
+          } else {
+            this.log.warn('Schedules defined but no devices found to apply them to');
+          }
+        }
+      }
     }
     
     // Register for Homebridge events
@@ -111,9 +167,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       if (this.isConfigured) {
         // Delay device discovery to prevent immediate API calls on startup
         setTimeout(() => {
-  this.log.info('Homebridge finished launching, starting device discovery');
-  this.discoverDevices();
-}, 30000); // 30 second delay before starting discovery
+          this.log.info('Homebridge finished launching, starting device discovery');
+          this.discoverDevices();
+        }, 30000); // 30 second delay before starting discovery
         
         // Set up periodic discovery to catch new or changed devices
         // Check once per day is sufficient
@@ -135,11 +191,24 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         clearInterval(this.discoveryTimer);
       }
       
+      // Clean up schedule manager
+      if (this._scheduleManager) {
+        this._scheduleManager.cleanup();
+      }
+      
       // Clean up accessory resources
       this.accessoryInstances.forEach(accessory => {
         accessory.cleanup();
       });
     });
+  }
+
+  /**
+   * Get the schedule manager
+   * @returns Schedule manager instance if available
+   */
+  public get scheduleManager(): ScheduleManager | undefined {
+    return this._scheduleManager;
   }
 
   /**
@@ -245,15 +314,15 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       const activeDeviceIds = new Set<string>();
       
       // Process each device with staggered initialization to prevent API rate limiting
-for (let i = 0; i < devices.length; i++) {
-  const device = devices[i];
-  
-  // Add significant delay between devices (45 seconds)
-  if (i > 0) {
-    this.log.info(`Waiting 45s before initializing next device...`);
-    await new Promise(resolve => setTimeout(resolve, 45000));
-  }
+      for (let i = 0; i < devices.length; i++) {
+        const device = devices[i];
         
+        // Add significant delay between devices (45 seconds)
+        if (i > 0) {
+          this.log.info(`Waiting 45s before initializing next device...`);
+          await new Promise(resolve => setTimeout(resolve, 45000));
+        }
+              
         // Skip devices with missing IDs
         if (!device.id) {
           this.log.warn(`Skipping device with missing ID: ${JSON.stringify(device)}`);
@@ -319,84 +388,84 @@ for (let i = 0; i < devices.length; i++) {
         `Error discovering devices: ${error instanceof Error ? error.message : String(error)}`
       );
     } finally {
-      // Always clear the in-progress flag when done
-      this.discoveryInProgress = false;
-    }
-  }
-  
-  /**
-   * Initialize an accessory with its handler
-   * @param accessory - The platform accessory to initialize
-   * @param deviceId - The device ID for this accessory
-   */
-  private initializeAccessory(accessory: PlatformAccessory, deviceId: string): void {
-    // Skip initialization if the plugin is not properly configured
-    if (!this.isConfigured || !this.api) {
-      this.log.warn(`Skipping accessory initialization because the plugin is not properly configured`);
-      return;
-    }
+// Always clear the in-progress flag when done
+this.discoveryInProgress = false;
+}
+}
 
-    this.log.info(`Initializing accessory for device ID: ${deviceId}`);
-    
-    // First, remove any existing handler for this accessory
-    const existingHandler = this.accessoryInstances.get(deviceId);
-    if (existingHandler) {
-      existingHandler.cleanup();
-      this.accessoryInstances.delete(deviceId);
-    }
-    
-    // Create new accessory handler
-    const handler = new SleepMeAccessory(this, accessory, this.api);
-    
-    // Store the handler for later cleanup
-    this.accessoryInstances.set(deviceId, handler);
-    
-    this.log.debug(`Accessory handler created for device ${deviceId}`);
-  }
+/**
+* Initialize an accessory with its handler
+* @param accessory - The platform accessory to initialize
+* @param deviceId - The device ID for this accessory
+*/
+private initializeAccessory(accessory: PlatformAccessory, deviceId: string): void {
+// Skip initialization if the plugin is not properly configured
+if (!this.isConfigured || !this.api) {
+  this.log.warn(`Skipping accessory initialization because the plugin is not properly configured`);
+  return;
+}
+
+this.log.info(`Initializing accessory for device ID: ${deviceId}`);
+
+// First, remove any existing handler for this accessory
+const existingHandler = this.accessoryInstances.get(deviceId);
+if (existingHandler) {
+  existingHandler.cleanup();
+  this.accessoryInstances.delete(deviceId);
+}
+
+// Create new accessory handler
+const handler = new SleepMeAccessory(this, accessory, this.api);
+
+// Store the handler for later cleanup
+this.accessoryInstances.set(deviceId, handler);
+
+this.log.debug(`Accessory handler created for device ${deviceId}`);
+}
+
+/**
+* Clean up accessories that are no longer active
+* Removes accessories from Homebridge that don't match active device IDs
+* 
+* @param activeDeviceIds - Set of active device IDs
+*/
+private cleanupInactiveAccessories(activeDeviceIds: Set<string>): void {
+// Find accessories to remove - those not in the active devices list
+const accessoriesToRemove = this.accessories.filter(accessory => {
+  const deviceId = accessory.context.device?.id;
+  return deviceId && !activeDeviceIds.has(deviceId);
+});
+
+if (accessoriesToRemove.length > 0) {
+  this.log.info(`Removing ${accessoriesToRemove.length} inactive accessories`);
   
-  /**
-   * Clean up accessories that are no longer active
-   * Removes accessories from Homebridge that don't match active device IDs
-   * 
-   * @param activeDeviceIds - Set of active device IDs
-   */
-  private cleanupInactiveAccessories(activeDeviceIds: Set<string>): void {
-    // Find accessories to remove - those not in the active devices list
-    const accessoriesToRemove = this.accessories.filter(accessory => {
-      const deviceId = accessory.context.device?.id;
-      return deviceId && !activeDeviceIds.has(deviceId);
-    });
-    
-    if (accessoriesToRemove.length > 0) {
-      this.log.info(`Removing ${accessoriesToRemove.length} inactive accessories`);
-      
-      // Clean up each accessory
-      for (const accessory of accessoriesToRemove) {
-        const deviceId = accessory.context.device?.id;
-        if (deviceId) {
-          // Clean up handler if it exists
-          const handler = this.accessoryInstances.get(deviceId);
-          if (handler) {
-            handler.cleanup();
-            this.accessoryInstances.delete(deviceId);
-          }
-          
-          // Remove from accessories array
-          const index = this.accessories.indexOf(accessory);
-          if (index !== -1) {
-            this.accessories.splice(index, 1);
-          }
-        }
-        
-        this.log.info(`Removing inactive accessory: ${accessory.displayName}`);
+  // Clean up each accessory
+  for (const accessory of accessoriesToRemove) {
+    const deviceId = accessory.context.device?.id;
+    if (deviceId) {
+      // Clean up handler if it exists
+      const handler = this.accessoryInstances.get(deviceId);
+      if (handler) {
+        handler.cleanup();
+        this.accessoryInstances.delete(deviceId);
       }
       
-      // Unregister from Homebridge
-      this.homebridgeApi.unregisterPlatformAccessories(
-        PLUGIN_NAME,
-        PLATFORM_NAME,
-        accessoriesToRemove
-      );
+      // Remove from accessories array
+      const index = this.accessories.indexOf(accessory);
+      if (index !== -1) {
+        this.accessories.splice(index, 1);
+      }
     }
+    
+    this.log.info(`Removing inactive accessory: ${accessory.displayName}`);
   }
+  
+  // Unregister from Homebridge
+  this.homebridgeApi.unregisterPlatformAccessories(
+    PLUGIN_NAME,
+    PLATFORM_NAME,
+    accessoriesToRemove
+  );
+}
+}
 }

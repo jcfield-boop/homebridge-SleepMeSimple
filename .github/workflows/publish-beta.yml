@@ -1,0 +1,108 @@
+name: Publish Beta Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease_type:
+        description: 'Prerelease identifier'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - dev
+          - alpha
+      base_version:
+        description: 'Base version to use (leave empty to use current)'
+        required: false
+        type: string
+
+jobs:
+  publish-prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: Dev  # Correctly capitalized
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://registry.npmjs.org/'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint
+        run: npm run lint
+      
+      - name: Update prerelease version
+        id: version
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Determine base version (remove any prerelease suffix)
+          if [[ -n "${{ github.event.inputs.base_version }}" ]]; then
+            BASE_VERSION="${{ github.event.inputs.base_version }}"
+          else
+            BASE_VERSION=$(echo $CURRENT_VERSION | sed -E 's/(-[a-zA-Z]+\.[0-9]+)$//')
+          fi
+          
+          PRERELEASE_TYPE="${{ github.event.inputs.prerelease_type }}"
+          
+          # Check if current version has same prerelease type
+          if [[ $CURRENT_VERSION =~ ${PRERELEASE_TYPE}\.[0-9]+$ ]]; then
+            # Increment the prerelease number
+            PREFIX=$(echo $CURRENT_VERSION | sed -E "s/(${PRERELEASE_TYPE}\.[0-9]+)$//")
+            PRERELEASE_NUM=$(echo $CURRENT_VERSION | sed -E "s/.*${PRERELEASE_TYPE}\.([0-9]+)$/\1/")
+            NEW_PRERELEASE_NUM=$((PRERELEASE_NUM + 1))
+            NEW_VERSION="${PREFIX}${PRERELEASE_TYPE}.${NEW_PRERELEASE_NUM}"
+          else
+            # Start a new prerelease sequence
+            NEW_VERSION="${BASE_VERSION}-${PRERELEASE_TYPE}.1"
+          fi
+          
+          # Update package.json
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing prerelease version: $NEW_VERSION with tag: $PRERELEASE_TYPE"
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Create Git Tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json
+          git commit -m "Bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag -a "v${{ steps.version.outputs.new_version }}" -m "Version ${{ steps.version.outputs.new_version }}"
+          git push --follow-tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Publish to npm with prerelease tag
+        run: npm publish --tag ${{ github.event.inputs.prerelease_type }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      - name: Update README with installation instructions
+        run: |
+          echo "## Prerelease version ${{ steps.version.outputs.new_version }}" > PRERELEASE.md
+          echo "" >> PRERELEASE.md
+          echo "This is a prerelease version. To install it manually in Homebridge:" >> PRERELEASE.md
+          echo "" >> PRERELEASE.md
+          echo "1. Go to the Plugins tab in Homebridge" >> PRERELEASE.md
+          echo "2. Search for 'SleepMe Simple'" >> PRERELEASE.md
+          echo "3. Click Install" >> PRERELEASE.md
+          echo "4. On the version dropdown, select v${{ steps.version.outputs.new_version }}" >> PRERELEASE.md
+          echo "" >> PRERELEASE.md
+          echo "Or install via npm:" >> PRERELEASE.md
+          echo "```" >> PRERELEASE.md
+          echo "npm install -g homebridge-sleepme-simple@${{ github.event.inputs.prerelease_type }}" >> PRERELEASE.md
+          echo "```" >> PRERELEASE.md
