@@ -304,12 +304,12 @@ export class ScheduleManager {
         this.warmHugActiveDevices.delete(deviceId);
       });
   }
- /**
-   * Calculate the next execution time for a schedule
-   * @param schedule Schedule to calculate next execution for
-   * @returns Timestamp when schedule should next execute
-   */
- private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
+/**
+ * Calculate the next execution time for a schedule
+ * @param schedule Schedule to calculate next execution for
+ * @returns Timestamp when schedule should next execute
+ */
+private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
   const now = new Date();
   
   // Parse the schedule time (HH:MM)
@@ -335,7 +335,7 @@ export class ScheduleManager {
       // Already set for the next day
       break;
       
-    case ScheduleType.WEEKDAYS: {
+    case ScheduleType.WEEKDAYS:
       // Skip to Monday if it's Friday and already passed today's time
       if (scheduleDate.getDay() === 6) { // Saturday
         scheduleDate.setDate(scheduleDate.getDate() + 2);
@@ -343,44 +343,49 @@ export class ScheduleManager {
         scheduleDate.setDate(scheduleDate.getDate() + 1);
       }
       break;
-    }
       
-    case ScheduleType.WEEKEND: {
+    case ScheduleType.WEEKEND:
       // Skip to Saturday if it's Sunday and already passed today's time
       if (scheduleDate.getDay() >= 1 && scheduleDate.getDay() <= 5) {
         // Current day is Mon-Fri, move to Saturday
         scheduleDate.setDate(scheduleDate.getDate() + (6 - scheduleDate.getDay()));
       }
       break;
-    }
       
-    case ScheduleType.SPECIFIC_DAY: {
-      // Added block scope with curly braces
-      const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-      
-      // If today is the target day but time has passed, add 7 days
-      if (daysUntilTargetDay === 0) {
-        scheduleDate.setDate(scheduleDate.getDate() + 7);
-      } else {
-        scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
-      }
-      break;
-    }
-      
-    case ScheduleType.WARM_HUG: {
-      // Handle like regular schedules but start earlier (already adjusted above)
-      // Apply the same day-of-week logic as above types
-      if (schedule.day !== undefined) {
-        // Specific day warm hug
-        const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-        if (daysUntilTargetDay === 0) {
-          scheduleDate.setDate(scheduleDate.getDate() + 7);
-        } else {
-          scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+      case ScheduleType.SPECIFIC_DAY:
+        if (schedule.day === undefined) {
+          this.logger.error('Specific day schedule missing day property');
+          return 0;
         }
-      }
-      break;
-    }
+        
+        // Wrap the declaration in a block to satisfy ESLint
+        {
+          const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
+          
+          // If today is the target day but time has passed, add 7 days
+          if (daysUntilTargetDay === 0) {
+            scheduleDate.setDate(scheduleDate.getDate() + 7);
+          } else {
+            scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+          }
+        }
+        break;
+      
+        case ScheduleType.WARM_HUG:
+          // Handle like regular schedules but start earlier (already adjusted above)
+          // Apply the same day-of-week logic as above types
+          if (schedule.day !== undefined) {
+            // Wrap in a block
+            {
+              const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
+              if (daysUntilTargetDay === 0) {
+                scheduleDate.setDate(scheduleDate.getDate() + 7);
+              } else {
+                scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+              }
+            }
+          }
+          break;
       
     default:
       this.logger.error(`Unknown schedule type: ${schedule.type}`);
