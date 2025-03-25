@@ -30,7 +30,7 @@
       "pollingInterval": {
         "title": "Polling Interval",
         "type": "integer",
-        "format": "number",
+        "format": "int",
         "default": 90,
         "description": "How frequently to check device status (in seconds) don't go less than 30"
       },
@@ -118,7 +118,7 @@
         "type": "object",
         "expandable": true,
         "expanded": false,
-        "description": "Configure the behavior of Warm Hug temperature ramping (gradually increases temperature to create a warming sensation)",
+        "description": "Configure the behavior of Warm Hug temperature ramping (gradually increases temperature to wake you with warmth)",
         "properties": {
           "warmHugIncrement": {
             "title": "Temperature Increment per Minute",
@@ -152,11 +152,11 @@
           },
           "warmHugDuration": {
             "title": "Warm Hug Duration",
-            "type": "integer",
-            "default": 10,
-            "minimum": 5,
-            "maximum": 30,
-            "description": "Duration of Warm Hug temperature ramp (minutes)"
+            "type": "string",
+            "default": "10",
+            "pattern": "^([5-9]|[1-2][0-9]|30)$",
+            "description": "Duration of Warm Hug temperature ramp (5-30 minutes)",
+            "required": true
           }
         }
       },
