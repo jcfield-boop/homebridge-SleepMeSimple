@@ -74,10 +74,29 @@
             "temperature": {
               "title": "Target Temperature",
               "type": "number",
-              "default": 21,
-              "minimum": 13,
-              "maximum": 46,
-              "description": "Target temperature in your selected unit"
+              "description": "Target temperature in your selected unit",
+              "oneOf": [
+                {
+                  "title": "Celsius",
+                  "type": "number",
+                  "default": 21,
+                  "minimum": 13,
+                  "maximum": 46,
+                  "condition": {
+                    "functionBody": "return model.unit === 'C';"
+                  }
+                },
+                {
+                  "title": "Fahrenheit",
+                  "type": "number",
+                  "default": 70,
+                  "minimum": 55,
+                  "maximum": 115,
+                  "condition": {
+                    "functionBody": "return model.unit === 'F';"
+                  }
+                }
+              ]
             }
           },
           "required": ["type", "time", "temperature"]
@@ -102,12 +121,33 @@
         "properties": {
           "warmHugIncrement": {
             "title": "Warm Hug Temperature Increment",
-            "type": "number",
-            "default": 2,
-            "minimum": 0.5,
-            "maximum": 5,
-            "multipleOf": 0.5,
-            "description": "Temperature increase per minute during Warm Hug (°C)"
+            "description": "Temperature increase per minute during Warm Hug",
+            "oneOf": [
+              {
+                "title": "Celsius",
+                "type": "number",
+                "default": 2,
+                "minimum": 0.5,
+                "maximum": 5,
+                "multipleOf": 0.5,
+                "description": "Temperature increase per minute (°C)",
+                "condition": {
+                  "functionBody": "return model.unit === 'C';"
+                }
+              },
+              {
+                "title": "Fahrenheit",
+                "type": "number",
+                "default": 3.6,
+                "minimum": 1,
+                "maximum": 9,
+                "multipleOf": 1,
+                "description": "Temperature increase per minute (°F)",
+                "condition": {
+                  "functionBody": "return model.unit === 'F';"
+                }
+              }
+            ]
           },
           "warmHugDuration": {
             "title": "Warm Hug Duration",
