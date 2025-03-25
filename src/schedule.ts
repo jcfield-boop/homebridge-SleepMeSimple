@@ -293,7 +293,6 @@ export class ScheduleManager {
         this.warmHugActiveDevices.delete(deviceId);
       });
   }
-  
   /**
    * Calculate the next execution time for a schedule
    * @param schedule Schedule to calculate next execution for
@@ -447,95 +446,4 @@ export class ScheduleManager {
       default: return ScheduleType.EVERYDAY; // Default to everyday if unknown
     }
   }
-}
-Now, let's modify platform.ts to initialize and use the schedule manager. Here's the key section to add (I'll just show the additions rather than the entire file):
-typescriptCopy// In the imports section at the top of platform.ts
-import { ScheduleManager, TemperatureSchedule, ScheduleType } from './schedule.js';
-
-// Add a new property to the SleepMeSimplePlatform class
-private scheduleManager?: ScheduleManager;
-
-// Add these to your platform constructor, right after initializing the API client
-// Inside the constructor after creating the API client
-if (this.isConfigured && this.api) {
-  // Initialize schedule manager if enabled
-  if (config.enableSchedules) {
-    const warmHugConfig = {
-      increment: (config.advanced?.warmHugIncrement as number) || 2,
-      duration: (config.advanced?.warmHugDuration as number) || 10
-    };
-    
-    this.scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
-    
-    // Load schedules from config
-    if (Array.isArray(config.schedules)) {
-      const deviceSchedules: Map<string, TemperatureSchedule[]> = new Map();
-      
-      // Extract device IDs from configuredDevices or from accessory cache
-      const deviceIds: string[] = [];
-      
-      if (Array.isArray(config.devices)) {
-        config.devices.forEach(device => {
-          if (device.id) {
-            deviceIds.push(device.id);
-          }
-        });
-      } else {
-        // Try to get devices from cached accessories
-        this.accessories.forEach(accessory => {
-          const deviceId = accessory.context.device?.id;
-          if (deviceId) {
-            deviceIds.push(deviceId);
-          }
-        });
-      }
-      
-      // Add schedules to each device
-      if (deviceIds.length > 0) {
-        for (const deviceId of deviceIds) {
-          const schedules: TemperatureSchedule[] = config.schedules.map((scheduleConfig: any) => {
-            return {
-              type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
-              day: scheduleConfig.type === 'Specific Day' ? 
-                ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day) : undefined,
-              time: scheduleConfig.time,
-              temperature: scheduleConfig.temperature
-            };
-          });
-          
-          this.scheduleManager.setSchedules(deviceId, schedules);
-        }
-      } else {
-        this.log.warn('Schedules defined but no devices found to apply them to');
-      }
-    }
-    
-    this.log.info(`Scheduled temperature control enabled with ${config.schedules?.length || 0} schedules`);
-  }
-}
-
-// Add to the shutdown handler in platform.ts
-// Inside the shutdown event handler
-if (this.scheduleManager) {
-  this.scheduleManager.cleanup();
-}
-Finally, let's modify accessory.ts to work with the schedule manager. Add these methods to the SleepMeAccessory class:
-typescriptCopy/**
- * Update the schedule manager with current temperature
- * @param temperature Current temperature
- */
-private updateScheduleManager(temperature: number): void {
-  // Skip if schedule manager not available or temperature is invalid
-  if (!this.platform.scheduleManager || isNaN(temperature)) {
-    return;
-  }
-  
-  // Update the schedule manager with the current temperature
-  this.platform.scheduleManager.updateDeviceTemperature(this.deviceId, temperature);
-}
-
-// Then modify the refreshDeviceStatus method to call this
-// Inside the refreshDeviceStatus method, after updating currentTemperature
-if (!isNaN(this.currentTemperature)) {
-  this.updateScheduleManager(this.currentTemperature);
 }

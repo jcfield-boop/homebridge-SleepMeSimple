@@ -339,7 +339,19 @@ private async verifyDeviceState(): Promise<void> {
       this.Characteristic.TargetHeatingCoolingState.AUTO : 
       this.Characteristic.TargetHeatingCoolingState.OFF;
   }
-
+/**
+ * Update the schedule manager with current temperature
+ * @param temperature Current temperature
+ */
+private updateScheduleManager(temperature: number): void {
+  // Skip if schedule manager not available or temperature is invalid
+  if (!this.platform.scheduleManager || isNaN(temperature)) {
+    return;
+  }
+  
+  // Update the schedule manager with the current temperature
+  this.platform.scheduleManager.updateDeviceTemperature(this.deviceId, temperature);
+}
   /**
    * Update the current heating/cooling state in HomeKit
    */
@@ -871,9 +883,10 @@ private async verifyPowerState(): Promise<void> {
         );
         
         this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
-        // Update schedule manager with current temperature
-this.updateScheduleManager(this.currentTemperature);
-      }
+ // Inside refreshDeviceStatus method, after updating currentTemperature
+if (!isNaN(this.currentTemperature)) {
+  this.updateScheduleManager(this.currentTemperature);
+}
       
       // Update target temperature
       if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
