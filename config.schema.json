@@ -34,6 +34,58 @@
         "default": 90,
         "description": "How frequently to check device status (in seconds) don't go less than 30"
       },
+      "enableSchedules": {
+        "title": "Enable Schedules",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable temperature scheduling features"
+      },
+      "schedules": {
+        "type": "array",
+        "title": "Temperature Schedules",
+        "description": "Configure scheduled temperature changes",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "title": "Schedule Type",
+              "type": "string",
+              "default": "Everyday",
+              "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"],
+              "description": "When this schedule should be active"
+            },
+            "day": {
+              "title": "Day",
+              "type": "string",
+              "default": "Monday",
+              "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+              "description": "Day of the week (for Specific Day schedules)",
+              "condition": {
+                "functionBody": "return model.schedules[arrayIndices[0]].type === 'Specific Day';"
+              }
+            },
+            "time": {
+              "title": "Time",
+              "type": "string",
+              "format": "time",
+              "default": "07:00",
+              "description": "Time for this scheduled event (HH:MM 24-hour format)"
+            },
+            "temperature": {
+              "title": "Target Temperature",
+              "type": "number",
+              "default": 21,
+              "minimum": 13,
+              "maximum": 46,
+              "description": "Target temperature in your selected unit"
+            }
+          },
+          "required": ["type", "time", "temperature"]
+        },
+        "condition": {
+          "functionBody": "return model.enableSchedules === true;"
+        }
+      },
       "logLevel": {
         "title": "Logging Level",
         "type": "string",
@@ -41,6 +93,28 @@
         "enum": ["normal", "debug", "verbose"],
         "enumNames": ["Normal", "Debug", "Verbose"],
         "description": "Controls the detail level of plugin logs"
+      },
+      "advanced": {
+        "title": "Advanced Settings",
+        "type": "object",
+        "properties": {
+          "warmHugIncrement": {
+            "title": "Warm Hug Temperature Increment",
+            "type": "number",
+            "default": 2,
+            "minimum": 0.5,
+            "maximum": 5,
+            "description": "Temperature increase per minute during Warm Hug (°C)"
+          },
+          "warmHugDuration": {
+            "title": "Warm Hug Duration",
+            "type": "integer",
+            "default": 10,
+            "minimum": 5,
+            "maximum": 30,
+            "description": "Duration of Warm Hug temperature ramp (minutes)"
+          }
+        }
       }
     },
     "required": ["apiToken", "unit"]
