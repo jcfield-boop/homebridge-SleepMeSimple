@@ -871,6 +871,8 @@ private async verifyPowerState(): Promise<void> {
         );
         
         this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
+        // Update schedule manager with current temperature
+this.updateScheduleManager(this.currentTemperature);
       }
       
       // Update target temperature
