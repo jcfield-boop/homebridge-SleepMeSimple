@@ -245,20 +245,19 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       const activeDeviceIds = new Set<string>();
       
       // Process each device with staggered initialization to prevent API rate limiting
-      for (let i = 0; i < devices.length; i++) {
-        const device = devices[i];
+for (let i = 0; i < devices.length; i++) {
+  const device = devices[i];
+  
+  // Add significant delay between devices (45 seconds)
+  if (i > 0) {
+    this.log.info(`Waiting 45s before initializing next device...`);
+    await new Promise(resolve => setTimeout(resolve, 45000));
+  }
         
         // Skip devices with missing IDs
         if (!device.id) {
           this.log.warn(`Skipping device with missing ID: ${JSON.stringify(device)}`);
           continue;
-        }
-        
-        // Use a more significant stagger to prevent rate limiting
-        if (i > 0) {
-          const staggerDelay = 20000; // 20 seconds delay (increased from 10s)
-          this.log.info(`Waiting ${Math.round(staggerDelay/1000)}s before initializing next device...`);
-          await new Promise(resolve => setTimeout(resolve, staggerDelay));
         }
         
         // Mark this device ID as active
