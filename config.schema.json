@@ -40,88 +40,89 @@
         "default": false,
         "description": "Enable temperature scheduling features"
       },
-      "schedules": {
-        "type": "array",
+      "schedulesSection": {
         "title": "Temperature Schedules",
-        "description": "Configure scheduled temperature changes",
-        "items": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "title": "Schedule Type",
-              "type": "string",
-              "default": "Everyday",
-              "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"],
-              "description": "When this schedule should be active"
-            },
-            "day": {
-              "title": "Day",
-              "type": "string",
-              "default": "Monday",
-              "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-              "description": "Day of the week (for Specific Day schedules)",
-              "condition": {
-                "functionBody": "return model.schedules[arrayIndices[0]].type === 'Specific Day';"
-              }
-            },
-            "time": {
-              "title": "Time",
-              "type": "string",
-              "format": "time",
-              "default": "21:30",
-              "description": "Time for this scheduled event (HH:MM 24-hour format)"
-            },
-            "temperature": {
-              "title": "Target Temperature",
-              "type": "number",
-              "description": "Target temperature in your selected unit",
-              "oneOf": [
-                {
-                  "title": "Celsius",
-                  "type": "number",
-                  "default": 21,
-                  "minimum": 13,
-                  "maximum": 46,
-                  "condition": {
-                    "functionBody": "return model.unit === 'C';"
-                  }
-                },
-                {
-                  "title": "Fahrenheit",
-                  "type": "number",
-                  "default": 70,
-                  "minimum": 55,
-                  "maximum": 115,
-                  "condition": {
-                    "functionBody": "return model.unit === 'F';"
-                  }
-                }
-              ]
-            }
-          },
-          "required": ["type", "time", "temperature"]
-        },
-        "condition": {
-          "functionBody": "return model.enableSchedules === true;"
-        }
-      },
-      "logLevel": {
-        "title": "Logging Level",
-        "type": "string",
-        "default": "normal",
-        "enum": ["normal", "debug", "verbose"],
-        "enumNames": ["Normal", "Debug", "Verbose"],
-        "description": "Controls the detail level of plugin logs"
-      },
-      "advanced": {
-        "title": "Advanced Settings",
         "type": "object",
         "expandable": true,
         "expanded": false,
+        "condition": {
+          "functionBody": "return model.enableSchedules === true;"
+        },
+        "properties": {
+          "schedules": {
+            "type": "array",
+            "title": "Schedule List",
+            "description": "Configure scheduled temperature changes",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "title": "Schedule Type",
+                  "type": "string",
+                  "default": "Everyday",
+                  "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"],
+                  "description": "When this schedule should be active"
+                },
+                "day": {
+                  "title": "Day",
+                  "type": "string",
+                  "default": "Monday",
+                  "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                  "description": "Day of the week (for Specific Day schedules)",
+                  "condition": {
+                    "functionBody": "return model.schedulesSection.schedules[arrayIndices[0]].type === 'Specific Day';"
+                  }
+                },
+                "time": {
+                  "title": "Time",
+                  "type": "string",
+                  "format": "time",
+                  "default": "21:30",
+                  "description": "Time for this scheduled event (HH:MM 24-hour format)"
+                },
+                "temperature": {
+                  "title": "Target Temperature",
+                  "type": "number",
+                  "description": "Target temperature in your selected unit",
+                  "oneOf": [
+                    {
+                      "title": "Celsius",
+                      "type": "number",
+                      "default": 21,
+                      "minimum": 13,
+                      "maximum": 46,
+                      "condition": {
+                        "functionBody": "return model.unit === 'C';"
+                      }
+                    },
+                    {
+                      "title": "Fahrenheit",
+                      "type": "number",
+                      "default": 70,
+                      "minimum": 55,
+                      "maximum": 115,
+                      "condition": {
+                        "functionBody": "return model.unit === 'F';"
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": ["type", "time", "temperature"]
+            }
+          }
+        }
+      },
+      "warmHugSettings": {
+        "title": "Warm Hug Settings",
+        "type": "object",
+        "expandable": true,
+        "expanded": false,
+        "description": "Configure the behavior of Warm Hug temperature ramping (gradually increases temperature to create a warming sensation)",
         "properties": {
           "warmHugIncrement": {
-            "title": "Warm Hug Temperature Increment",
-            "description": "Temperature increase per minute during Warm Hug",
+            "title": "Temperature Increment per Minute",
+            "description": "How quickly the temperature increases during Warm Hug mode",
             "oneOf": [
               {
                 "title": "Celsius",
@@ -158,8 +159,15 @@
             "description": "Duration of Warm Hug temperature ramp (minutes)"
           }
         }
-      }
-    },
-    "required": ["apiToken", "unit"]
-  }
-}
+      },
+      "advanced": {
+        "title": "Advanced Settings",
+        "type": "object",
+        "expandable": true,
+        "expanded": false,
+        "properties": {
+          "logLevel": {
+            "title": "Logging Level",
+            "type": "string",
+            "default": "normal",
+            "enum": ["normal", "debug", "verbose"],
