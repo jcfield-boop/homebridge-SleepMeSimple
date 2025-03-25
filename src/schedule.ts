@@ -54,11 +54,22 @@ export interface WarmHugConfig {
  * Handles the scheduling of temperature changes
  */
 export class ScheduleManager {
+  // Map of device IDs to their schedules
   private schedules: Map<string, TemperatureSchedule[]> = new Map();
+  
+  // Timer for the scheduler
   private schedulerTimer?: NodeJS.Timeout;
+  
+  // Keep track of last known temperature for each device
   private lastTemperatureByDevice: Map<string, number> = new Map();
+  
+  // Track devices with active warm hugs
   private warmHugActiveDevices: Set<string> = new Set();
+  
+  // Track warm hug start times by device
   private warmHugStartTimeByDevice: Map<string, number> = new Map();
+  
+  // Track warm hug timers by device
   private warmHugTimersByDevice: Map<string, NodeJS.Timeout> = new Map();
   
   /**
@@ -293,157 +304,156 @@ export class ScheduleManager {
         this.warmHugActiveDevices.delete(deviceId);
       });
   }
-  /**
+ /**
    * Calculate the next execution time for a schedule
    * @param schedule Schedule to calculate next execution for
    * @returns Timestamp when schedule should next execute
    */
-  private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
-    const now = new Date();
-    
-    // Parse the schedule time (HH:MM)
-    const [hours, minutes] = schedule.time.split(':').map(Number);
-    
-    // Create a date for today with the specified time
-    const scheduleDate = new Date();
-    scheduleDate.setHours(hours, minutes, 0, 0);
-    
-    // For Warm Hug, subtract the duration to start earlier
-    if (schedule.type === ScheduleType.WARM_HUG) {
-      scheduleDate.setMinutes(scheduleDate.getMinutes() - this.warmHugConfig.duration);
+ private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
+  const now = new Date();
+  
+  // Parse the schedule time (HH:MM)
+  const [hours, minutes] = schedule.time.split(':').map(Number);
+  
+  // Create a date for today with the specified time
+  const scheduleDate = new Date();
+  scheduleDate.setHours(hours, minutes, 0, 0);
+  
+  // For Warm Hug, subtract the duration to start earlier
+  if (schedule.type === ScheduleType.WARM_HUG) {
+    scheduleDate.setMinutes(scheduleDate.getMinutes() - this.warmHugConfig.duration);
+  }
+  
+  // If the time has already passed today, move to the next applicable day
+  if (scheduleDate <= now) {
+    scheduleDate.setDate(scheduleDate.getDate() + 1);
+  }
+  
+  // Adjust the date based on schedule type
+  switch (schedule.type) {
+    case ScheduleType.EVERYDAY:
+      // Already set for the next day
+      break;
+      
+    case ScheduleType.WEEKDAYS: {
+      // Skip to Monday if it's Friday and already passed today's time
+      if (scheduleDate.getDay() === 6) { // Saturday
+        scheduleDate.setDate(scheduleDate.getDate() + 2);
+      } else if (scheduleDate.getDay() === 0) { // Sunday
+        scheduleDate.setDate(scheduleDate.getDate() + 1);
+      }
+      break;
     }
-    
-    // If the time has already passed today, move to the next applicable day
-    if (scheduleDate <= now) {
-      scheduleDate.setDate(scheduleDate.getDate() + 1);
+      
+    case ScheduleType.WEEKEND: {
+      // Skip to Saturday if it's Sunday and already passed today's time
+      if (scheduleDate.getDay() >= 1 && scheduleDate.getDay() <= 5) {
+        // Current day is Mon-Fri, move to Saturday
+        scheduleDate.setDate(scheduleDate.getDate() + (6 - scheduleDate.getDay()));
+      }
+      break;
     }
-    
-    // Adjust the date based on schedule type
-    switch (schedule.type) {
-      case ScheduleType.EVERYDAY:
-        // Already set for the next day
-        break;
-        
-      case ScheduleType.WEEKDAYS:
-        // Skip to Monday if it's Friday and already passed today's time
-        if (scheduleDate.getDay() === 6) { // Saturday
-          scheduleDate.setDate(scheduleDate.getDate() + 2);
-        } else if (scheduleDate.getDay() === 0) { // Sunday
-          scheduleDate.setDate(scheduleDate.getDate() + 1);
-        }
-        break;
-        
-      case ScheduleType.WEEKEND:
-        // Skip to Saturday if it's Sunday and already passed today's time
-        if (scheduleDate.getDay() >= 1 && scheduleDate.getDay() <= 5) {
-          // Current day is Mon-Fri, move to Saturday
-          scheduleDate.setDate(scheduleDate.getDate() + (6 - scheduleDate.getDay()));
-        }
-        break;
-        
-      case ScheduleType.SPECIFIC_DAY:
-        if (schedule.day === undefined) {
-          this.logger.error('Specific day schedule missing day property');
-          return 0;
-        }
-        
-        // Calculate days until the next occurrence of the specific day
+      
+    case ScheduleType.SPECIFIC_DAY: {
+      // Added block scope with curly braces
+      const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
+      
+      // If today is the target day but time has passed, add 7 days
+      if (daysUntilTargetDay === 0) {
+        scheduleDate.setDate(scheduleDate.getDate() + 7);
+      } else {
+        scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+      }
+      break;
+    }
+      
+    case ScheduleType.WARM_HUG: {
+      // Handle like regular schedules but start earlier (already adjusted above)
+      // Apply the same day-of-week logic as above types
+      if (schedule.day !== undefined) {
+        // Specific day warm hug
         const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-        
-        // If today is the target day but time has passed, add 7 days
         if (daysUntilTargetDay === 0) {
           scheduleDate.setDate(scheduleDate.getDate() + 7);
         } else {
           scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
         }
-        break;
-        
-      case ScheduleType.WARM_HUG:
-        // Handle like regular schedules but start earlier (already adjusted above)
-        // Apply the same day-of-week logic as above types
-        if (schedule.day !== undefined) {
-          // Specific day warm hug
-          const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-          if (daysUntilTargetDay === 0) {
-            scheduleDate.setDate(scheduleDate.getDate() + 7);
-          } else {
-            scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
-          }
-        }
-        break;
-        
-      default:
-        this.logger.error(`Unknown schedule type: ${schedule.type}`);
-        return 0;
+      }
+      break;
     }
-    
-    return scheduleDate.getTime();
+      
+    default:
+      this.logger.error(`Unknown schedule type: ${schedule.type}`);
+      return 0;
   }
   
-  /**
-   * Get the next scheduled temperature for a device
-   * Useful for optimizing operations
-   * @param deviceId Device identifier
-   * @returns Next scheduled temperature or undefined if none
-   */
-  public getNextScheduledTemperature(deviceId: string): { time: number; temperature: number } | undefined {
-    const deviceSchedules = this.schedules.get(deviceId);
-    if (!deviceSchedules || deviceSchedules.length === 0) {
-      return undefined;
-    }
-    
-    // Find the schedule with the earliest next execution time
-    let earliestSchedule: TemperatureSchedule | undefined = undefined;
-    let earliestTime = Number.MAX_SAFE_INTEGER;
-    
-    for (const schedule of deviceSchedules) {
-      if (schedule.nextExecutionTime && schedule.nextExecutionTime < earliestTime) {
-        earliestSchedule = schedule;
-        earliestTime = schedule.nextExecutionTime;
-      }
-    }
-    
-    if (earliestSchedule) {
-      return {
-        time: earliestSchedule.nextExecutionTime!,
-        temperature: earliestSchedule.temperature
-      };
-    }
-    
+  return scheduleDate.getTime();
+}
+
+/**
+ * Get the next scheduled temperature for a device
+ * Useful for optimizing operations
+ * @param deviceId Device identifier
+ * @returns Next scheduled temperature or undefined if none
+ */
+public getNextScheduledTemperature(deviceId: string): { time: number; temperature: number } | undefined {
+  const deviceSchedules = this.schedules.get(deviceId);
+  if (!deviceSchedules || deviceSchedules.length === 0) {
     return undefined;
   }
   
-  /**
-   * Convert day name to day of week enum
-   * @param dayName Name of the day
-   * @returns DayOfWeek enum value
-   */
-  public static dayNameToDayOfWeek(dayName: string): DayOfWeek {
-    switch (dayName.toLowerCase()) {
-      case 'monday': return DayOfWeek.MONDAY;
-      case 'tuesday': return DayOfWeek.TUESDAY;
-      case 'wednesday': return DayOfWeek.WEDNESDAY;
-      case 'thursday': return DayOfWeek.THURSDAY;
-      case 'friday': return DayOfWeek.FRIDAY;
-      case 'saturday': return DayOfWeek.SATURDAY;
-      case 'sunday': return DayOfWeek.SUNDAY;
-      default: return DayOfWeek.MONDAY; // Default to Monday if unknown
+  // Find the schedule with the earliest next execution time
+  let earliestSchedule: TemperatureSchedule | undefined = undefined;
+  let earliestTime = Number.MAX_SAFE_INTEGER;
+  
+  for (const schedule of deviceSchedules) {
+    if (schedule.nextExecutionTime && schedule.nextExecutionTime < earliestTime) {
+      earliestSchedule = schedule;
+      earliestTime = schedule.nextExecutionTime;
     }
   }
   
-  /**
-   * Convert schedule type string to enum
-   * @param typeStr Schedule type string
-   * @returns ScheduleType enum value
-   */
-  public static scheduleTypeFromString(typeStr: string): ScheduleType {
-    switch (typeStr) {
-      case 'Everyday': return ScheduleType.EVERYDAY;
-      case 'Weekdays': return ScheduleType.WEEKDAYS;
-      case 'Weekend': return ScheduleType.WEEKEND;
-      case 'Specific Day': return ScheduleType.SPECIFIC_DAY;
-      case 'Warm Hug': return ScheduleType.WARM_HUG;
-      default: return ScheduleType.EVERYDAY; // Default to everyday if unknown
-    }
+  if (earliestSchedule) {
+    return {
+      time: earliestSchedule.nextExecutionTime!,
+      temperature: earliestSchedule.temperature
+    };
+  }
+  
+  return undefined;
+}
+
+/**
+ * Convert day name to day of week enum
+ * @param dayName Name of the day
+ * @returns DayOfWeek enum value
+ */
+public static dayNameToDayOfWeek(dayName: string): DayOfWeek {
+  switch (dayName.toLowerCase()) {
+    case 'monday': return DayOfWeek.MONDAY;
+    case 'tuesday': return DayOfWeek.TUESDAY;
+    case 'wednesday': return DayOfWeek.WEDNESDAY;
+    case 'thursday': return DayOfWeek.THURSDAY;
+    case 'friday': return DayOfWeek.FRIDAY;
+    case 'saturday': return DayOfWeek.SATURDAY;
+    case 'sunday': return DayOfWeek.SUNDAY;
+    default: return DayOfWeek.MONDAY; // Default to Monday if unknown
   }
 }
+
+/**
+ * Convert schedule type string to enum
+ * @param typeStr Schedule type string
+ * @returns ScheduleType enum value
+ */
+public static scheduleTypeFromString(typeStr: string): ScheduleType {
+  switch (typeStr) {
+    case 'Everyday': return ScheduleType.EVERYDAY;
+    case 'Weekdays': return ScheduleType.WEEKDAYS;
+    case 'Weekend': return ScheduleType.WEEKEND;
+    case 'Specific Day': return ScheduleType.SPECIFIC_DAY;
+    case 'Warm Hug': return ScheduleType.WARM_HUG;
+    default: return ScheduleType.EVERYDAY; // Default to everyday if unknown
+  }
+}
+} 
