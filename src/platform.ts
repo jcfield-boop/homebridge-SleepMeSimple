@@ -11,6 +11,7 @@ import { SleepMeApi } from './api/sleepme-api.js';
 import { SleepMeAccessory } from './accessory.js';
 import { Logger as CustomLogger } from './api/types.js';
 import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
+import { ScheduleManager, TemperatureSchedule, ScheduleType } from './schedule.js';
 
 /**
  * SleepMe Simple Platform
@@ -49,6 +50,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   // Flag to track if the plugin is properly configured
   // eslint-disable-next-line @typescript-eslint/no-inferrable-types
   private isConfigured: boolean = true;
+
+  // Scheduler 
+  private scheduleManager?: ScheduleManager;
   
   /**
    * Constructor for the SleepMe platform.
@@ -101,6 +105,58 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         `Initializing ${PLATFORM_NAME} platform with ${this.temperatureUnit === 'C' ? 'Celsius' : 'Fahrenheit'} ` +
         `units and ${this.pollingInterval}s polling interval`
       );
+      // Initialize schedule manager if enabled
+if (config.enableSchedules && this.api) {
+  const warmHugConfig = {
+    increment: (config.advanced?.warmHugIncrement as number) || 2,
+    duration: (config.advanced?.warmHugDuration as number) || 10
+  };
+  
+  this.scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
+  
+  // Load schedules from config
+  if (Array.isArray(config.schedules)) {
+    // Extract device IDs from accessory cache
+    const deviceIds: string[] = [];
+    
+    // Try to get devices from configuredDevices
+    const configuredDevices = this.config.devices as Array<{id: string, name: string}> || [];
+    if (configuredDevices && configuredDevices.length > 0) {
+      configuredDevices.forEach(device => {
+        if (device.id) {
+          deviceIds.push(device.id);
+        }
+      });
+    } else {
+      // Try to get devices from cached accessories
+      this.accessories.forEach(accessory => {
+        const deviceId = accessory.context.device?.id;
+        if (deviceId) {
+          deviceIds.push(deviceId);
+        }
+      });
+    }
+    
+    // Add schedules to each device
+    if (deviceIds.length > 0) {
+      for (const deviceId of deviceIds) {
+        const schedules: TemperatureSchedule[] = config.schedules.map((scheduleConfig: any) => ({
+          type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
+          day: scheduleConfig.type === 'Specific Day' ? 
+            ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day) : undefined,
+          time: scheduleConfig.time,
+          temperature: scheduleConfig.temperature
+        }));
+        
+        this.scheduleManager.setSchedules(deviceId, schedules);
+      }
+      
+      this.log.info(`Scheduled temperature control enabled with ${config.schedules.length} schedules`);
+    } else {
+      this.log.warn('Schedules defined but no devices found to apply them to');
+    }
+  }
+}
     }
     
     // Register for Homebridge events
@@ -126,20 +182,36 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       }
     });
     
-    // Handle Homebridge shutdown event for proper cleanup
-    this.homebridgeApi.on('shutdown', () => {
-      this.log.info('Shutting down platform');
-      
-      // Clear discovery timer
-      if (this.discoveryTimer) {
-        clearInterval(this.discoveryTimer);
-      }
-      
-      // Clean up accessory resources
-      this.accessoryInstances.forEach(accessory => {
-        accessory.cleanup();
-      });
+   // Handle Homebridge shutdown event for proper cleanup
+this.homebridgeApi.on('shutdown', () => {
+  this.log.info('Shutting down platform');
+  
+  // Clear discovery timer
+  if (this.discoveryTimer) {
+    clearInterval(this.discoveryTimer);
+  }
+  
+  // Clean up schedule manager
+  if (this.scheduleManager) {
+    this.scheduleManager.cleanup();
+  }
+  
+  // Clean up accessory resources
+  this.accessoryInstances.forEach(accessory => {
+    accessory.cleanup();
+  });
+});
+
     });
+
+  /**
+   * Get the schedule manager
+   * @returns Schedule manager instance if available
+   */
+  public get scheduleManager(): ScheduleManager | undefined {
+    return this.scheduleManager;
+  }
+}
   }
 
   /**
