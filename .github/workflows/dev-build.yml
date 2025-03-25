@@ -1,12 +1,11 @@
-name: Dev Branch Build
+name: Main Branch Build
 
 on:
   push:
     branches:
-      - Dev
+      - main
   pull_request:
     branches:
-      - Dev
       - main
   workflow_dispatch:
 
