@@ -62,7 +62,10 @@ jobs:
               npm version prerelease --preid=${PRERELEASE_TYPE} --no-git-tag-version
             else
               # Otherwise, start a new prerelease sequence
-              npm version pre${PRERELEASE_TYPE} --preid=${PRERELEASE_TYPE} --no-git-tag-version
+              # First increment the version according to selected increment type
+              npm version prepatch --no-git-tag-version
+              # Then add the prerelease identifier
+              npm version prerelease --preid=${PRERELEASE_TYPE} --no-git-tag-version
             fi
           else
             # For other types, use npm's built-in version incrementing
