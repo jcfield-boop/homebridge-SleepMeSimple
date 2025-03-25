@@ -171,3 +171,12 @@
             "type": "string",
             "default": "normal",
             "enum": ["normal", "debug", "verbose"],
+            "enumNames": ["Normal", "Debug", "Verbose"],
+            "description": "Controls the detail level of plugin logs"
+          }
+        }
+      }
+    },
+    "required": ["apiToken", "unit"]
+  }
+}
