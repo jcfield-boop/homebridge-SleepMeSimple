@@ -68,7 +68,7 @@
               "title": "Time",
               "type": "string",
               "format": "time",
-              "default": "07:00",
+              "default": "21:30",
               "description": "Time for this scheduled event (HH:MM 24-hour format)"
             },
             "temperature": {
@@ -97,6 +97,8 @@
       "advanced": {
         "title": "Advanced Settings",
         "type": "object",
+        "expandable": true,
+        "expanded": false,
         "properties": {
           "warmHugIncrement": {
             "title": "Warm Hug Temperature Increment",
@@ -104,6 +106,7 @@
             "default": 2,
             "minimum": 0.5,
             "maximum": 5,
+            "multipleOf": 0.5,
             "description": "Temperature increase per minute during Warm Hug (°C)"
           },
           "warmHugDuration": {
