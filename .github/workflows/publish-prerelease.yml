@@ -1,0 +1,94 @@
+name: Publish Prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease_type:
+        description: 'Prerelease identifier'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - dev
+          - alpha
+      increment_type:
+        description: 'Version increment type'
+        required: true
+        default: 'prerelease'
+        type: choice
+        options:
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+
+jobs:
+  publish-prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: main
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://registry.npmjs.org/'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint
+        run: npm run lint
+      
+      - name: Update prerelease version
+        id: version
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Set prerelease identifier
+          PRERELEASE_TYPE="${{ github.event.inputs.prerelease_type }}"
+          
+          # Update version based on increment type and prerelease type
+          if [[ "${{ github.event.inputs.increment_type }}" == "prerelease" ]]; then
+            # For prerelease, we just increment the prerelease number
+            if [[ $CURRENT_VERSION == *"-${PRERELEASE_TYPE}."* ]]; then
+              # If already a prerelease of same type, just increment
+              npm version prerelease --preid=${PRERELEASE_TYPE} --no-git-tag-version
+            else
+              # Otherwise, start a new prerelease sequence
+              npm version pre${PRERELEASE_TYPE} --preid=${PRERELEASE_TYPE} --no-git-tag-version
+            fi
+          else
+            # For other types, use npm's built-in version incrementing
+            npm version ${{ github.event.inputs.increment_type }} --preid=${PRERELEASE_TYPE} --no-git-tag-version
+          fi
+          
+          # Get the new version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $NEW_VERSION with tag: $PRERELEASE_TYPE"
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Create Git Tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json
+          git commit -m "Bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag -a "v${{ steps.version.outputs.new_version }}" -m "Version ${{ steps.version.outputs.new_version }}"
+          git push --follow-tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Publish to npm with prerelease tag
+        run: npm publish --tag ${{ github.event.inputs.prerelease_type }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
