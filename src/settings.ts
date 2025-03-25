@@ -42,13 +42,13 @@ export const TEMPERATURE_STEP = 1;
  * Minimum time between API requests in milliseconds
  * Provides a safer buffer to prevent rate limiting
  */
-export const MIN_REQUEST_INTERVAL = 12000;
+export const MIN_REQUEST_INTERVAL = 6000;
 
 /**
  * Maximum API requests per minute (to respect rate limits)
  * More conservative limit to avoid rate limiting
  */
-export const MAX_REQUESTS_PER_MINUTE = 3;
+export const MAX_REQUESTS_PER_MINUTE = 10;
 
 /**
  * Default cache validity period in milliseconds
