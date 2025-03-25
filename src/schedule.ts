@@ -296,3 +296,246 @@ export class ScheduleManager {
   
   /**
    * Calculate the next execution time for a schedule
+   * @param schedule Schedule to calculate next execution for
+   * @returns Timestamp when schedule should next execute
+   */
+  private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
+    const now = new Date();
+    
+    // Parse the schedule time (HH:MM)
+    const [hours, minutes] = schedule.time.split(':').map(Number);
+    
+    // Create a date for today with the specified time
+    const scheduleDate = new Date();
+    scheduleDate.setHours(hours, minutes, 0, 0);
+    
+    // For Warm Hug, subtract the duration to start earlier
+    if (schedule.type === ScheduleType.WARM_HUG) {
+      scheduleDate.setMinutes(scheduleDate.getMinutes() - this.warmHugConfig.duration);
+    }
+    
+    // If the time has already passed today, move to the next applicable day
+    if (scheduleDate <= now) {
+      scheduleDate.setDate(scheduleDate.getDate() + 1);
+    }
+    
+    // Adjust the date based on schedule type
+    switch (schedule.type) {
+      case ScheduleType.EVERYDAY:
+        // Already set for the next day
+        break;
+        
+      case ScheduleType.WEEKDAYS:
+        // Skip to Monday if it's Friday and already passed today's time
+        if (scheduleDate.getDay() === 6) { // Saturday
+          scheduleDate.setDate(scheduleDate.getDate() + 2);
+        } else if (scheduleDate.getDay() === 0) { // Sunday
+          scheduleDate.setDate(scheduleDate.getDate() + 1);
+        }
+        break;
+        
+      case ScheduleType.WEEKEND:
+        // Skip to Saturday if it's Sunday and already passed today's time
+        if (scheduleDate.getDay() >= 1 && scheduleDate.getDay() <= 5) {
+          // Current day is Mon-Fri, move to Saturday
+          scheduleDate.setDate(scheduleDate.getDate() + (6 - scheduleDate.getDay()));
+        }
+        break;
+        
+      case ScheduleType.SPECIFIC_DAY:
+        if (schedule.day === undefined) {
+          this.logger.error('Specific day schedule missing day property');
+          return 0;
+        }
+        
+        // Calculate days until the next occurrence of the specific day
+        const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
+        
+        // If today is the target day but time has passed, add 7 days
+        if (daysUntilTargetDay === 0) {
+          scheduleDate.setDate(scheduleDate.getDate() + 7);
+        } else {
+          scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+        }
+        break;
+        
+      case ScheduleType.WARM_HUG:
+        // Handle like regular schedules but start earlier (already adjusted above)
+        // Apply the same day-of-week logic as above types
+        if (schedule.day !== undefined) {
+          // Specific day warm hug
+          const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
+          if (daysUntilTargetDay === 0) {
+            scheduleDate.setDate(scheduleDate.getDate() + 7);
+          } else {
+            scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+          }
+        }
+        break;
+        
+      default:
+        this.logger.error(`Unknown schedule type: ${schedule.type}`);
+        return 0;
+    }
+    
+    return scheduleDate.getTime();
+  }
+  
+  /**
+   * Get the next scheduled temperature for a device
+   * Useful for optimizing operations
+   * @param deviceId Device identifier
+   * @returns Next scheduled temperature or undefined if none
+   */
+  public getNextScheduledTemperature(deviceId: string): { time: number; temperature: number } | undefined {
+    const deviceSchedules = this.schedules.get(deviceId);
+    if (!deviceSchedules || deviceSchedules.length === 0) {
+      return undefined;
+    }
+    
+    // Find the schedule with the earliest next execution time
+    let earliestSchedule: TemperatureSchedule | undefined = undefined;
+    let earliestTime = Number.MAX_SAFE_INTEGER;
+    
+    for (const schedule of deviceSchedules) {
+      if (schedule.nextExecutionTime && schedule.nextExecutionTime < earliestTime) {
+        earliestSchedule = schedule;
+        earliestTime = schedule.nextExecutionTime;
+      }
+    }
+    
+    if (earliestSchedule) {
+      return {
+        time: earliestSchedule.nextExecutionTime!,
+        temperature: earliestSchedule.temperature
+      };
+    }
+    
+    return undefined;
+  }
+  
+  /**
+   * Convert day name to day of week enum
+   * @param dayName Name of the day
+   * @returns DayOfWeek enum value
+   */
+  public static dayNameToDayOfWeek(dayName: string): DayOfWeek {
+    switch (dayName.toLowerCase()) {
+      case 'monday': return DayOfWeek.MONDAY;
+      case 'tuesday': return DayOfWeek.TUESDAY;
+      case 'wednesday': return DayOfWeek.WEDNESDAY;
+      case 'thursday': return DayOfWeek.THURSDAY;
+      case 'friday': return DayOfWeek.FRIDAY;
+      case 'saturday': return DayOfWeek.SATURDAY;
+      case 'sunday': return DayOfWeek.SUNDAY;
+      default: return DayOfWeek.MONDAY; // Default to Monday if unknown
+    }
+  }
+  
+  /**
+   * Convert schedule type string to enum
+   * @param typeStr Schedule type string
+   * @returns ScheduleType enum value
+   */
+  public static scheduleTypeFromString(typeStr: string): ScheduleType {
+    switch (typeStr) {
+      case 'Everyday': return ScheduleType.EVERYDAY;
+      case 'Weekdays': return ScheduleType.WEEKDAYS;
+      case 'Weekend': return ScheduleType.WEEKEND;
+      case 'Specific Day': return ScheduleType.SPECIFIC_DAY;
+      case 'Warm Hug': return ScheduleType.WARM_HUG;
+      default: return ScheduleType.EVERYDAY; // Default to everyday if unknown
+    }
+  }
+}
+Now, let's modify platform.ts to initialize and use the schedule manager. Here's the key section to add (I'll just show the additions rather than the entire file):
+typescriptCopy// In the imports section at the top of platform.ts
+import { ScheduleManager, TemperatureSchedule, ScheduleType } from './schedule.js';
+
+// Add a new property to the SleepMeSimplePlatform class
+private scheduleManager?: ScheduleManager;
+
+// Add these to your platform constructor, right after initializing the API client
+// Inside the constructor after creating the API client
+if (this.isConfigured && this.api) {
+  // Initialize schedule manager if enabled
+  if (config.enableSchedules) {
+    const warmHugConfig = {
+      increment: (config.advanced?.warmHugIncrement as number) || 2,
+      duration: (config.advanced?.warmHugDuration as number) || 10
+    };
+    
+    this.scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
+    
+    // Load schedules from config
+    if (Array.isArray(config.schedules)) {
+      const deviceSchedules: Map<string, TemperatureSchedule[]> = new Map();
+      
+      // Extract device IDs from configuredDevices or from accessory cache
+      const deviceIds: string[] = [];
+      
+      if (Array.isArray(config.devices)) {
+        config.devices.forEach(device => {
+          if (device.id) {
+            deviceIds.push(device.id);
+          }
+        });
+      } else {
+        // Try to get devices from cached accessories
+        this.accessories.forEach(accessory => {
+          const deviceId = accessory.context.device?.id;
+          if (deviceId) {
+            deviceIds.push(deviceId);
+          }
+        });
+      }
+      
+      // Add schedules to each device
+      if (deviceIds.length > 0) {
+        for (const deviceId of deviceIds) {
+          const schedules: TemperatureSchedule[] = config.schedules.map((scheduleConfig: any) => {
+            return {
+              type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
+              day: scheduleConfig.type === 'Specific Day' ? 
+                ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day) : undefined,
+              time: scheduleConfig.time,
+              temperature: scheduleConfig.temperature
+            };
+          });
+          
+          this.scheduleManager.setSchedules(deviceId, schedules);
+        }
+      } else {
+        this.log.warn('Schedules defined but no devices found to apply them to');
+      }
+    }
+    
+    this.log.info(`Scheduled temperature control enabled with ${config.schedules?.length || 0} schedules`);
+  }
+}
+
+// Add to the shutdown handler in platform.ts
+// Inside the shutdown event handler
+if (this.scheduleManager) {
+  this.scheduleManager.cleanup();
+}
+Finally, let's modify accessory.ts to work with the schedule manager. Add these methods to the SleepMeAccessory class:
+typescriptCopy/**
+ * Update the schedule manager with current temperature
+ * @param temperature Current temperature
+ */
+private updateScheduleManager(temperature: number): void {
+  // Skip if schedule manager not available or temperature is invalid
+  if (!this.platform.scheduleManager || isNaN(temperature)) {
+    return;
+  }
+  
+  // Update the schedule manager with the current temperature
+  this.platform.scheduleManager.updateDeviceTemperature(this.deviceId, temperature);
+}
+
+// Then modify the refreshDeviceStatus method to call this
+// Inside the refreshDeviceStatus method, after updating currentTemperature
+if (!isNaN(this.currentTemperature)) {
+  this.updateScheduleManager(this.currentTemperature);
+}
