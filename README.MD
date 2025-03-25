@@ -1,35 +1,48 @@
 # SleepMe Simple - Homebridge Plugin
 
-A simplified Homebridge plugin for SleepMe devices (ChiliPad, OOLER, Dock Pro), designed for reliable HomeKit control.
-This is an evolution of me plaing with AI to create a plugin with (almost) no coding experience - building off two other plugins homebridge-SleepMePro and homebridge-SleepMeBasic that I had fun trying to re-create the functionality of the native app. (your mileage may vary...) 
+A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad) that provides reliable and responsive HomeKit integration with advanced API management.
 
 ## Key Features
 
-- **Simple Controls**: Basic temperature adjustment and power switching
-- **Stable API Communication**: Designed to minimize API errors and rate limiting issues
-- **Automatic Device Discovery**: Finds all your SleepMe devices
-- **Water Level Monitoring**: Shows you when to refill your device
-- **Intuitive Interface**: Uses separate controls for better HomeKit integration
+- **Intelligent Temperature Control**: Clean and responsive interface for temperature adjustments and power control
+- **Trust-based Caching**: Optimized API usage that prioritizes responsiveness while respecting rate limits
+- **Advanced Queue Management**: Prioritizes critical commands like power changes while managing background updates
+- **Rate Limit Protection**: Smart handling of API rate limits with clock-synchronized request timing
+- **Water Level Monitoring**: Check your device's water level through HomeKit
+- **Automatic Device Detection**: Auto-discovers your SleepMe devices
+- **Comprehensive Model Support**: Compatible with Dock Pro, OOLER, and ChiliPad devices
 
-## The Problem This Solves
+## Why Use This Plugin?
 
-The official SleepMe integration and other third-party plugins use HomeKit's standard thermostat service, which often creates usability issues:
+The official SleepMe integration and other third-party plugins use HomeKit's thermostat service, which creates several issues:
 
-1. Having to switch to "Auto" mode before changing temperature
-2. API overload from rapid state transitions
-3. Inconsistent behavior with HomeKit automations
+1. Requiring mode switching to "Auto" before temperature adjustments can be made
+2. Excessive API calls during state transitions that trigger rate limiting
+3. Confusing or inconsistent behavior with HomeKit automations
 
-This plugin solves these issues by providing a simpler, more direct interface using separate controls that map more intuitively to how SleepMe devices actually work.
+SleepMe Simple addresses these problems through:
 
-## How It Works
+- Simplified, intuitive controls that match the mental model of how SleepMe devices actually work
+- Request prioritization that ensures user-initiated commands always take precedence
+- Smart caching that reduces API calls while maintaining responsive feedback
+- Adaptive request scheduling that works with API rate limits instead of fighting against them
 
-The plugin creates three controls for each SleepMe device:
+## HomeKit Integration
 
-1. **Temperature Sensor**: Shows the current bed temperature
-2. **Power Switch**: Simply turns the device on/off
-3. **Temperature Control**: Slider to set the target temperature
+The plugin presents each SleepMe device in HomeKit with:
 
-This approach avoids the state management complexities of HomeKit's thermostat service while providing a more reliable experience.
+1. **Temperature Control**: Simple slider for direct temperature adjustment
+2. **Power Control**: Easy on/off switching with quick feedback
+3. **Temperature Sensor**: Shows the current bed temperature
+4. **Water Level Indicator**: Uses the Battery service to show water level status
+
+## Advanced Technical Features
+
+- **Discrete Minute Synchronization**: Aligns with API server-side rate limiting windows
+- **Prioritized Command Queue**: Ensures critical operations complete first
+- **Optimistic Updates**: Updates UI immediately while command executes for responsive feedback
+- **Exponential Backoff**: Intelligently handles API limitations or connectivity issues
+- **Smart Polling**: Adjusts status check frequency based on device activity and user interaction
 
 ## Installation
 
@@ -37,3 +50,52 @@ You can install this plugin through the Homebridge UI or manually:
 
 ```bash
 npm install -g homebridge-sleepme-simple
+```
+
+## Configuration
+
+Configure through the Homebridge UI or manually in your `config.json`:
+
+```json
+{
+  "platforms": [
+    {
+      "platform": "SleepMeSimple",
+      "name": "SleepMe Simple",
+      "apiToken": "YOUR_SLEEPME_API_TOKEN",
+      "unit": "C",
+      "pollingInterval": 90,
+      "logLevel": "normal"
+    }
+  ]
+}
+```
+
+### Configuration Options
+
+- **apiToken**: Your SleepMe API token (required, obtain from your account at sleep.me)
+- **unit**: Temperature unit, "C" for Celsius or "F" for Fahrenheit (default: "C")
+- **pollingInterval**: How frequently to check device status in seconds (default: 90, minimum: 60)
+- **logLevel**: Log detail level - "normal", "debug", or "verbose"
+
+## Troubleshooting
+
+### Rate Limiting
+
+If you see rate limit warnings in your logs:
+- Increase the `pollingInterval` value (90-120 seconds recommended)
+- For logs with "Rate limit exceeded" errors, the plugin will automatically back off and retry
+
+### Unresponsive Controls
+
+If controls appear unresponsive:
+- Check your logs for API errors
+- Verify your API token is valid
+- Restart Homebridge to re-establish connection
+
+## Support & Contributions
+
+This is a community-developed plugin with ongoing improvements. For support:
+- Open issues on GitHub
+- Contribute improvements via pull requests
+- Check the log files for detailed diagnostics with `logLevel: "verbose"`
