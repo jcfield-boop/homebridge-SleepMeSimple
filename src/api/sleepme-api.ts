@@ -741,26 +741,26 @@ private async processQueue(): Promise<void> {
         this.stats.lastError = axiosError;
         
         // Handle rate limiting (HTTP 429)
-        if (axiosError.response?.status === 429) {
-          // Implement more effective backoff with jitter
-          this.consecutiveErrors++;
-          
-          // Calculate backoff with jitter to prevent all clients retrying at once
-          const jitter = Math.random() * 8000; // 0-8 seconds of random jitter
-          const backoffTime = Math.min(
-            MAX_BACKOFF_MS, 
-            (INITIAL_BACKOFF_MS * Math.pow(2, this.consecutiveErrors)) + jitter
-          );
-          
-          this.rateLimitBackoffUntil = Date.now() + backoffTime;
-          
-          this.logger.warn(
-            `Rate limit exceeded (429). Implementing backoff strategy for ${Math.ceil(backoffTime/1000)}s.`
-          );
-          
-          // Requeue the request based on priority and retry count
-          this.requeueRequest(request);
-        } else {
+// In the error handling part of processQueue method
+if (axiosError.response?.status === 429) {
+  // For rate limit errors, wait until the next minute boundary
+  const now = Date.now();
+  const currentMinute = Math.floor(now / 60000) * 60000;
+  const nextMinute = currentMinute + 60000;
+  
+  // Add a small buffer (2 seconds) to ensure we're safely in the next minute
+  const waitTime = (nextMinute - now) + 2000;
+  
+  this.rateLimitBackoffUntil = now + waitTime;
+  
+  this.logger.warn(
+    `Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime/1000)}s`
+  );
+  
+  // Requeue the request
+  this.requeueRequest(request);
+}
+        else {
           // For other errors, check retry logic by priority
           this.consecutiveErrors++;
           
@@ -807,25 +807,22 @@ private hasQueuedRequests(): boolean {
          this.normalPriorityQueue.length > 0 || 
          this.lowPriorityQueue.length > 0;
 }
-
 /**
- * Check and reset rate limit counter if needed
+ * Check and reset rate limit counter using discrete minute windows
  */
 private checkRateLimit(): void {
   const now = Date.now();
   
-  // Reset rate limit counter if a minute has passed
-  if (now - this.minuteStartTime >= 60000) {
+  // Get current discrete minute (aligned to clock minutes)
+  const currentMinute = Math.floor(now / 60000) * 60000;
+  
+  // If we've moved to a new discrete minute, reset counter
+  if (currentMinute > this.minuteStartTime) {
     this.requestsThisMinute = 0;
-    this.minuteStartTime = now;
-    this.rateExceededLogged = false; // Reset logging flag
+    this.minuteStartTime = currentMinute;
+    this.rateExceededLogged = false;
     
-    // If we've passed the backoff period, clear the rate limit flag
-    if (now > this.rateLimitBackoffUntil) {
-      this.rateLimitBackoffUntil = 0;
-    }
-    
-    this.logger.debug('Resetting rate limit counter (1 minute has passed)');
+    this.logger.debug(`Resetting rate limit counter (new discrete minute: ${new Date(currentMinute).toISOString()})`);
   }
 }
 /**
