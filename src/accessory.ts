@@ -435,10 +435,14 @@ private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
         break;
     }
   }
-// Add a verification method for power state
 private async verifyPowerState(): Promise<void> {
-  // Only verify if we're showing different states
-  if (this.isPowered !== this.getTargetHeatingCoolingState()) {
+  // Changed comparison to correctly compare the power state with the heating/cooling state
+  const currentTargetState = this.getTargetHeatingCoolingState();
+  const expectedState = this.isPowered ? 
+    this.Characteristic.TargetHeatingCoolingState.AUTO : 
+    this.Characteristic.TargetHeatingCoolingState.OFF;
+    
+  if (currentTargetState !== expectedState) {
     this.platform.log.debug('Verifying power state consistency...');
     
     // Force UI to match our internal state
