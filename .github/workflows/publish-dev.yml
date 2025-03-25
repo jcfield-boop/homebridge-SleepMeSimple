@@ -24,8 +24,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          ref: Dev
-      
+          ref: Dev  # Correctly capitalized
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -83,6 +83,8 @@ jobs:
           git commit -m "Bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
           git tag -a "v${{ steps.version.outputs.new_version }}" -m "Version ${{ steps.version.outputs.new_version }}"
           git push --follow-tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Publish to npm with prerelease tag
         run: npm publish --tag ${{ github.event.inputs.prerelease_type }}
