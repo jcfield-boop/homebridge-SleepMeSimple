@@ -53,23 +53,26 @@ jobs:
           
           # Set prerelease identifier
           PRERELEASE_TYPE="${{ github.event.inputs.prerelease_type }}"
+          INCREMENT_TYPE="${{ github.event.inputs.increment_type }}"
           
-          # Update version based on increment type and prerelease type
-          if [[ "${{ github.event.inputs.increment_type }}" == "prerelease" ]]; then
-            # For prerelease, we just increment the prerelease number
-            if [[ $CURRENT_VERSION == *"-${PRERELEASE_TYPE}."* ]]; then
-              # If already a prerelease of same type, just increment
-              npm version prerelease --preid=${PRERELEASE_TYPE} --no-git-tag-version
+          # Update version - simplify the logic to use standard npm commands
+          if [[ "$INCREMENT_TYPE" == "prerelease" ]]; then
+            # Check if current version already has this prerelease type
+            if [[ "$CURRENT_VERSION" == *"-$PRERELEASE_TYPE."* ]]; then
+              # Increment the prerelease number
+              npm version prerelease --preid="$PRERELEASE_TYPE" --no-git-tag-version
             else
-              # Otherwise, start a new prerelease sequence
-              # First increment the version according to selected increment type
-              npm version prepatch --no-git-tag-version
-              # Then add the prerelease identifier
-              npm version prerelease --preid=${PRERELEASE_TYPE} --no-git-tag-version
+              # Create a new prerelease by first bumping the patch version
+              # then setting the prerelease identifier
+              npm version patch --no-git-tag-version
+              npm version prerelease --preid="$PRERELEASE_TYPE" --no-git-tag-version
             fi
-          else
-            # For other types, use npm's built-in version incrementing
-            npm version ${{ github.event.inputs.increment_type }} --preid=${PRERELEASE_TYPE} --no-git-tag-version
+          elif [[ "$INCREMENT_TYPE" == "prepatch" ]]; then
+            npm version prepatch --preid="$PRERELEASE_TYPE" --no-git-tag-version
+          elif [[ "$INCREMENT_TYPE" == "preminor" ]]; then
+            npm version preminor --preid="$PRERELEASE_TYPE" --no-git-tag-version
+          elif [[ "$INCREMENT_TYPE" == "premajor" ]]; then
+            npm version premajor --preid="$PRERELEASE_TYPE" --no-git-tag-version
           fi
           
           # Get the new version
