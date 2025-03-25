@@ -111,9 +111,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       if (this.isConfigured) {
         // Delay device discovery to prevent immediate API calls on startup
         setTimeout(() => {
-          this.log.info('Homebridge finished launching, starting device discovery');
-          this.discoverDevices();
-        }, 10000); // 10 second delay before starting discovery (increased from 5s)
+  this.log.info('Homebridge finished launching, starting device discovery');
+  this.discoverDevices();
+}, 30000); // 30 second delay before starting discovery
         
         // Set up periodic discovery to catch new or changed devices
         // Check once per day is sufficient
