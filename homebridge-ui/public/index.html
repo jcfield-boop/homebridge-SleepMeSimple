@@ -1,786 +1,235 @@
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-<style>
-  .container {
-    padding: 20px;
-  }
-  .card {
-    margin-bottom: 20px;
-  }
-  .template-card {
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid #ddd;
-    height: 100%;
-  }
-  .template-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-  }
-  .template-card.selected {
-    border: 2px solid #007bff;
-  }
-  .schedule-item {
-    padding: 10px;
-    margin-bottom: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .timeline {
-    height: 60px;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    position: relative;
-    margin: 20px 0;
-    border: 1px solid #ddd;
-  }
-  .timeline-marker {
-    position: absolute;
-    height: 100%;
-    top: 0;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  .timeline-marker::before {
-    content: '';
-    width: 2px;
-    height: 60%;
-    background-color: #007bff;
-  }
-  .timeline-marker span {
-    font-size: 12px;
-    margin-top: 3px;
-  }
-  .timeline-point {
-    position: absolute;
-    transform: translateX(-50%);
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    bottom: 5px;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    font-size: 12px;
-    font-weight: bold;
-  }
-  .hidden {
-    display: none;
-  }
-</style>
-
-<div class="container">
-  <div class="row">
-    <div class="col-12">
-      <div class="card">
-        <div class="card-header">
-          <h5 class="mb-0">SleepMe Simple Configuration</h5>
-        </div>
-        <div class="card-body">
-          <!-- Status message -->
-          <div id="statusMessage" class="alert alert-info" role="alert">
-            Loading configuration...
-          </div>
-          
-          <!-- Main configuration -->
-          <form id="configForm">
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SleepMe Simple Configuration</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 800px; 
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="checkbox"] {
+            width: auto;
+        }
+        button {
+            background-color: #0070c9;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #00559b;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        .status.error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SleepMe Simple Configuration</h1>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <form id="configForm">
             <div class="form-group">
-              <label for="apiToken">API Token</label>
-              <input type="password" class="form-control" id="apiToken" placeholder="Enter your SleepMe API token">
+                <label for="apiToken">API Token:</label>
+                <input type="password" id="apiToken" name="apiToken" required>
             </div>
             
-            <div class="form-row">
-              <div class="form-group col-md-6">
-                <label for="tempUnit">Temperature Unit</label>
-                <select class="form-control" id="tempUnit">
-                  <option value="C">Celsius (°C)</option>
-                  <option value="F">Fahrenheit (°F)</option>
+            <div class="form-group">
+                <label for="unit">Temperature Unit:</label>
+                <select id="unit" name="unit">
+                    <option value="C">Celsius</option>
+                    <option value="F">Fahrenheit</option>
                 </select>
-              </div>
-              
-              <div class="form-group col-md-6">
-                <label for="pollingInterval">Polling Interval (seconds)</label>
-                <input type="number" class="form-control" id="pollingInterval" min="60" max="300" value="90">
-              </div>
-            </div>
-            
-            <div class="form-group form-check">
-              <input type="checkbox" class="form-check-input" id="enableSchedules">
-              <label class="form-check-label" for="enableSchedules">Enable Temperature Scheduling</label>
-            </div>
-            
-            <button type="submit" class="btn btn-primary">Save Configuration</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Schedule templates section -->
-  <div id="schedulesSection" class="hidden">
-    <div class="row">
-      <div class="col-12">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Schedule Templates</h5>
-          </div>
-          <div class="card-body">
-            <p>Select predefined templates based on sleep science to get started quickly.</p>
-            
-            <div class="row mb-4">
-              <div class="col-md-6">
-                <h6>Weekday Templates</h6>
-                <div id="weekdayTemplates" class="row">
-                  <!-- Templates will be added here by JavaScript -->
-                  <div class="col-12">Loading templates...</div>
-                </div>
-              </div>
-              
-              <div class="col-md-6">
-                <h6>Weekend Templates</h6>
-                <div id="weekendTemplates" class="row">
-                  <!-- Templates will be added here by JavaScript -->
-                  <div class="col-12">Loading templates...</div>
-                </div>
-              </div>
-            </div>
-            
-            <button id="applyTemplatesBtn" class="btn btn-success">Apply Selected Templates</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Schedule management section -->
-    <div class="row mt-4">
-      <div class="col-12">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Manage Schedules</h5>
-            <button id="addScheduleBtn" class="btn btn-sm btn-primary">Add Schedule</button>
-          </div>
-          <div class="card-body">
-            <!-- Timeline visualization -->
-            <div class="timeline" id="timeline">
-              <div class="timeline-marker" style="left: 0%"><span>6 PM</span></div>
-              <div class="timeline-marker" style="left: 25%"><span>9 PM</span></div>
-              <div class="timeline-marker" style="left: 50%"><span>12 AM</span></div>
-              <div class="timeline-marker" style="left: 75%"><span>3 AM</span></div>
-              <div class="timeline-marker" style="left: 100%"><span>6 AM</span></div>
-              <!-- Schedule points will be added here by JavaScript -->
-            </div>
-            
-            <div id="schedulesList">
-              <!-- Schedules will be added here by JavaScript -->
-              <div class="text-center">Loading schedules...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Schedule modal (hidden by default) -->
-  <div class="modal fade" id="scheduleModal" tabindex="-1" role="dialog" aria-labelledby="scheduleModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="scheduleModalLabel">Add Schedule</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          <form id="scheduleForm">
-            <input type="hidden" id="scheduleIndex" value="">
-            
-            <div class="form-group">
-              <label for="scheduleType">Schedule Type</label>
-              <select class="form-control" id="scheduleType" required>
-                <option value="Everyday">Everyday</option>
-                <option value="Weekdays">Weekdays</option>
-                <option value="Weekend">Weekend</option>
-                <option value="Specific Day">Specific Day</option>
-              </select>
-            </div>
-            
-            <div class="form-group" id="specificDayGroup" style="display: none;">
-              <label for="specificDay">Day</label>
-              <select class="form-control" id="specificDay">
-                <option value="Monday">Monday</option>
-                <option value="Tuesday">Tuesday</option>
-                <option value="Wednesday">Wednesday</option>
-                <option value="Thursday">Thursday</option>
-                <option value="Friday">Friday</option>
-                <option value="Saturday">Saturday</option>
-                <option value="Sunday">Sunday</option>
-              </select>
             </div>
             
             <div class="form-group">
-              <label for="scheduleTime">Time</label>
-              <input type="time" class="form-control" id="scheduleTime" required>
+                <label for="pollingInterval">Polling Interval (seconds):</label>
+                <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
             </div>
             
             <div class="form-group">
-              <label for="scheduleTemp">Temperature (°C)</label>
-              <input type="number" class="form-control" id="scheduleTemp" min="13" max="46" step="0.5" required>
+                <label for="logLevel">Log Level:</label>
+                <select id="logLevel" name="logLevel">
+                    <option value="normal">Normal</option>
+                    <option value="debug">Debug</option>
+                    <option value="verbose">Verbose</option>
+                </select>
             </div>
             
             <div class="form-group">
-              <label for="scheduleDescription">Description (optional)</label>
-              <input type="text" class="form-control" id="scheduleDescription" placeholder="e.g., Cool Down, Deep Sleep">
+                <label>
+                    <input type="checkbox" id="enableSchedules" name="enableSchedules">
+                    Enable Schedules
+                </label>
             </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary" id="saveScheduleBtn">Save</button>
-        </div>
-      </div>
+            
+            <button type="submit">Save Configuration</button>
+            <button type="button" id="testConnection">Test Connection</button>
+        </form>
     </div>
-  </div>
-</div>
 
-<!-- Bootstrap JS and dependencies -->
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
-<script>
-  // Main variables
-  let config = {};
-  let selectedWeekdayTemplate = null;
-  let selectedWeekendTemplate = null;
-  
-  // DOM Elements
-  const statusMessage = document.getElementById('statusMessage');
-  const configForm = document.getElementById('configForm');
-  const apiTokenInput = document.getElementById('apiToken');
-  const tempUnitSelect = document.getElementById('tempUnit');
-  const pollingIntervalInput = document.getElementById('pollingInterval');
-  const enableSchedulesCheckbox = document.getElementById('enableSchedules');
-  const schedulesSection = document.getElementById('schedulesSection');
-  
-  // Schedule elements
-  const weekdayTemplatesContainer = document.getElementById('weekdayTemplates');
-  const weekendTemplatesContainer = document.getElementById('weekendTemplates');
-  const applyTemplatesBtn = document.getElementById('applyTemplatesBtn');
-  const schedulesList = document.getElementById('schedulesList');
-  const timeline = document.getElementById('timeline');
-  const addScheduleBtn = document.getElementById('addScheduleBtn');
-  
-  // Modal elements
-  const scheduleModal = $('#scheduleModal');
-  const scheduleModalLabel = document.getElementById('scheduleModalLabel');
-  const scheduleForm = document.getElementById('scheduleForm');
-  const scheduleIndex = document.getElementById('scheduleIndex');
-  const scheduleType = document.getElementById('scheduleType');
-  const specificDayGroup = document.getElementById('specificDayGroup');
-  const specificDay = document.getElementById('specificDay');
-  const scheduleTime = document.getElementById('scheduleTime');
-  const scheduleTemp = document.getElementById('scheduleTemp');
-  const scheduleDescription = document.getElementById('scheduleDescription');
-  const saveScheduleBtn = document.getElementById('saveScheduleBtn');
-  
-  // Initialize
-  document.addEventListener('DOMContentLoaded', async () => {
-    try {
-      // Load config
-      await loadConfig();
-      
-      // Load templates
-      await loadTemplates();
-      
-      // Set up event listeners
-      setupEventListeners();
-    } catch (error) {
-      showStatus('Error initializing: ' + error.message, 'danger');
-    }
-  });
-  
-  // Load configuration
-  async function loadConfig() {
-    try {
-      const response = await homebridge.request('/config');
-      
-      if (response.success) {
-        config = response.config;
-        
-        // Populate form with config values
-        apiTokenInput.value = config.apiToken || '';
-        tempUnitSelect.value = config.unit || 'C';
-        pollingIntervalInput.value = config.pollingInterval || 90;
-        enableSchedulesCheckbox.checked = config.enableSchedules || false;
-        
-        // Show/hide schedules section
-        toggleSchedulesSection();
-        
-        // Load schedules if enabled
-        if (config.enableSchedules) {
-          await loadSchedules();
-        }
-        
-        showStatus('Configuration loaded successfully', 'success');
-      } else {
-        showStatus('Failed to load configuration: ' + response.error, 'danger');
-      }
-    } catch (error) {
-      showStatus('Error loading configuration: ' + error.message, 'danger');
-      throw error;
-    }
-  }
-  
-  // Load templates
-  async function loadTemplates() {
-    try {
-      const response = await homebridge.request('/templates/get');
-      
-      if (response.success) {
-        // Render weekday templates
-        renderTemplates(weekdayTemplatesContainer, response.templates.weekday, 'weekday');
-        
-        // Render weekend templates
-        renderTemplates(weekendTemplatesContainer, response.templates.weekend, 'weekend');
-      } else {
-        showStatus('Failed to load templates: ' + response.error, 'warning');
-      }
-    } catch (error) {
-      showStatus('Error loading templates: ' + error.message, 'warning');
-    }
-  }
-  
-  // Load schedules
-  async function loadSchedules() {
-    try {
-      const response = await homebridge.request('/schedules/get');
-      
-      if (response.success) {
-        const schedules = response.schedules || [];
-        
-        // Render schedules
-        renderSchedules(schedules);
-        
-        // Render timeline
-        renderTimeline(schedules);
-      } else {
-        showStatus('Failed to load schedules: ' + response.error, 'warning');
-      }
-    } catch (error) {
-      showStatus('Error loading schedules: ' + error.message, 'warning');
-    }
-  }
-  
-  // Render templates
-  function renderTemplates(container, templates, type) {
-    // Clear container
-    container.innerHTML = '';
-    
-    if (!templates || templates.length === 0) {
-      container.innerHTML = '<div class="col-12">No templates available</div>';
-      return;
-    }
-    
-    // Add templates
-    templates.forEach(template => {
-      const col = document.createElement('div');
-      col.className = 'col-12 mb-3';
-      
-      const card = document.createElement('div');
-      card.className = 'card template-card';
-      card.dataset.id = template.id;
-      card.dataset.type = type;
-      
-      card.innerHTML = `
-        <div class="card-body">
-          <h6 class="card-title">${template.name}</h6>
-          <p class="card-text small">${template.description}</p>
-          <div class="small text-muted">
-            ${template.schedules.map(s => `${s.time} - ${s.temperature}°C (${s.description})`).join('<br>')}
-          </div>
-        </div>
-      `;
-      
-      card.addEventListener('click', () => selectTemplate(card, type, template));
-      
-      col.appendChild(card);
-      container.appendChild(col);
-    });
-  }
-  
-  // Select template
-  function selectTemplate(card, type, template) {
-    // Get all cards in container
-    const container = card.closest('.row');
-    const cards = container.querySelectorAll('.template-card');
-    
-    // Remove selected class from all cards
-    cards.forEach(c => c.classList.remove('selected'));
-    
-    // Add selected class to clicked card
-    card.classList.add('selected');
-    
-    // Store selected template
-    if (type === 'weekday') {
-      selectedWeekdayTemplate = template.id;
-    } else {
-      selectedWeekendTemplate = template.id;
-    }
-  }
-  
-  // Render schedules
-  function renderSchedules(schedules) {
-    // Clear container
-    schedulesList.innerHTML = '';
-    
-    if (!schedules || schedules.length === 0) {
-      schedulesList.innerHTML = '<div class="alert alert-info">No schedules configured. Add one to get started.</div>';
-      return;
-    }
-    
-    // Create list
-    const list = document.createElement('div');
-    list.className = 'list-group';
-    
-    // Add schedule items
-    schedules.forEach((schedule, index) => {
-      const item = document.createElement('div');
-      item.className = 'schedule-item';
-      
-      let typeText = schedule.type;
-      if (schedule.type === 'Specific Day' && schedule.day) {
-        typeText += ` (${schedule.day})`;
-      }
-      
-      item.innerHTML = `
-        <div>
-          <strong>${schedule.time} - ${schedule.temperature}°C</strong>
-          <div class="text-muted">${typeText}${schedule.description ? ` - ${schedule.description}` : ''}</div>
-        </div>
-        <div>
-          <button class="btn btn-sm btn-outline-primary edit-btn" data-index="${index}">Edit</button>
-          <button class="btn btn-sm btn-outline-danger delete-btn" data-index="${index}">Delete</button>
-        </div>
-      `;
-      
-      list.appendChild(item);
-    });
-    
-    schedulesList.appendChild(list);
-    
-    // Add event listeners
-    const editButtons = schedulesList.querySelectorAll('.edit-btn');
-    editButtons.forEach(btn => {
-      btn.addEventListener('click', () => editSchedule(parseInt(btn.dataset.index)));
-    });
-    
-    const deleteButtons = schedulesList.querySelectorAll('.delete-btn');
-    deleteButtons.forEach(btn => {
-      btn.addEventListener('click', () => deleteSchedule(parseInt(btn.dataset.index)));
-    });
-  }
-  
-  // Render timeline
-  function renderTimeline(schedules) {
-    // Remove existing points
-    const existingPoints = timeline.querySelectorAll('.timeline-point');
-    existingPoints.forEach(point => point.remove());
-    
-    if (!schedules || schedules.length === 0) {
-      return;
-    }
-    
-    // Add points for each schedule
-    schedules.forEach((schedule, index) => {
-      const [hours, minutes] = schedule.time.split(':').map(Number);
-      
-      // Calculate position (12-hour timeline from 6pm to 6am)
-      let position;
-      if (hours >= 18) {
-        // 6pm to midnight
-        position = ((hours - 18) * 60 + minutes) / (12 * 60) * 100;
-      } else {
-        // midnight to 6am
-        position = ((hours + 6) * 60 + minutes) / (12 * 60) * 100;
-      }
-      
-      // Create point
-      const point = document.createElement('div');
-      point.className = 'timeline-point';
-      point.style.left = `${position}%`;
-      
-      // Set color based on temperature (blue for cool, red for warm)
-      const tempRatio = (schedule.temperature - 13) / (46 - 13);
-      const hue = 240 - (tempRatio * 240);
-      point.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
-      
-      // Set content
-      point.textContent = (index + 1).toString();
-      point.title = `${schedule.time} - ${schedule.temperature}°C${schedule.description ? ` (${schedule.description})` : ''}`;
-      
-      // Add event listener
-      point.addEventListener('click', () => editSchedule(index));
-      
-      // Add to timeline
-      timeline.appendChild(point);
-    });
-  }
-  
-  // Toggle schedules section
-  function toggleSchedulesSection() {
-    if (enableSchedulesCheckbox.checked) {
-      schedulesSection.classList.remove('hidden');
-    } else {
-      schedulesSection.classList.add('hidden');
-    }
-  }
-  
-  // Edit schedule
-  function editSchedule(index) {
-    const schedule = config.schedules[index];
-    
-    // Set modal title
-    scheduleModalLabel.textContent = 'Edit Schedule';
-    
-    // Set form values
-    scheduleIndex.value = index;
-    scheduleType.value = schedule.type;
-    scheduleTime.value = schedule.time;
-    scheduleTemp.value = schedule.temperature;
-    scheduleDescription.value = schedule.description || '';
-    
-    // Handle specific day
-    toggleSpecificDay();
-    if (schedule.type === 'Specific Day' && schedule.day) {
-      specificDay.value = schedule.day;
-    }
-    
-    // Show modal
-    scheduleModal.modal('show');
-  }
-  
-  // Delete schedule
-  async function deleteSchedule(index) {
-    if (!confirm('Are you sure you want to delete this schedule?')) {
-      return;
-    }
-    
-    try {
-      // Remove schedule
-      config.schedules.splice(index, 1);
-      
-      // Save schedules
-      await saveSchedules();
-      
-      // Reload schedules
-      renderSchedules(config.schedules);
-      renderTimeline(config.schedules);
-      
-      showStatus('Schedule deleted successfully', 'success');
-    } catch (error) {
-      showStatus('Error deleting schedule: ' + error.message, 'danger');
-    }
-  }
-  
-  // Save schedules
-  async function saveSchedules() {
-    try {
-      const response = await homebridge.request('/schedules/save', {
-        schedules: config.schedules
-      });
-      
-      if (!response.success) {
-        throw new Error(response.error);
-      }
-    } catch (error) {
-      showStatus('Error saving schedules: ' + error.message, 'danger');
-      throw error;
-    }
-  }
-  
-  // Toggle specific day field
-  function toggleSpecificDay() {
-    if (scheduleType.value === 'Specific Day') {
-      specificDayGroup.style.display = 'block';
-    } else {
-      specificDayGroup.style.display = 'none';
-    }
-  }
-  
-  // Setup event listeners
-  function setupEventListeners() {
-    // Config form submission
-    configForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      try {
-        // Update config
-        config.apiToken = apiTokenInput.value;
-        config.unit = tempUnitSelect.value;
-        config.pollingInterval = parseInt(pollingIntervalInput.value);
-        config.enableSchedules = enableSchedulesCheckbox.checked;
-        
-        // Save config
-        const response = await homebridge.request('/save-config', { config });
-        
-        if (response.success) {
-          showStatus('Configuration saved successfully', 'success');
-          
-          // Toggle schedules section
-          toggleSchedulesSection();
-          
-          // Load schedules if enabled
-          if (config.enableSchedules && (!config.schedules || config.schedules.length === 0)) {
-            await loadSchedules();
-          }
-        } else {
-          showStatus('Failed to save configuration: ' + response.error, 'danger');
-        }
-      } catch (error) {
-        showStatus('Error saving configuration: ' + error.message, 'danger');
-      }
-    });
-    
-    // Enable schedules checkbox
-    enableSchedulesCheckbox.addEventListener('change', toggleSchedulesSection);
-    
-    // Apply templates button
-    applyTemplatesBtn.addEventListener('click', async () => {
-      try {
-        // Check if any template is selected
-        if (!selectedWeekdayTemplate && !selectedWeekendTemplate) {
-          showStatus('Please select at least one template', 'warning');
-          return;
-        }
-        
-        // Apply weekday template if selected
-        if (selectedWeekdayTemplate) {
-          const response = await homebridge.request('/templates/apply', {
-            templateId: selectedWeekdayTemplate,
-            type: 'weekday'
-          });
-          
-          if (response.success) {
-            config.schedules = response.schedules;
-          } else {
-            throw new Error(response.error);
-          }
-        }
-        
-        // Apply weekend template if selected
-        if (selectedWeekendTemplate) {
-          const response = await homebridge.request('/templates/apply', {
-            templateId: selectedWeekendTemplate,
-            type: 'weekend'
-          });
-          
-          if (response.success) {
-            config.schedules = response.schedules;
-          } else {
-            throw new Error(response.error);
-          }
-        }
-        
-        // Update UI
-        renderSchedules(config.schedules);
-        renderTimeline(config.schedules);
-        
-        showStatus('Templates applied successfully', 'success');
-      } catch (error) {
-        showStatus('Error applying templates: ' + error.message, 'danger');
-      }
-    });
-    
-    // Add schedule button
-    addScheduleBtn.addEventListener('click', () => {
-      // Reset form
-      scheduleModalLabel.textContent = 'Add Schedule';
-      scheduleForm.reset();
-      scheduleIndex.value = '';
-      toggleSpecificDay();
-      
-      // Show modal
-      scheduleModal.modal('show');
-    });
-    
-    // Schedule type change
-    scheduleType.addEventListener('change', toggleSpecificDay);
-    
-    // Save schedule button
-    saveScheduleBtn.addEventListener('click', async () => {
-      try {
-        // Validate form
-        if (!scheduleTime.value || !scheduleTemp.value) {
-          showStatus('Please fill in all required fields', 'warning');
-          return;
-        }
-        
-        // Create schedule object
-        const schedule = {
-          type: scheduleType.value,
-          time: scheduleTime.value,
-          temperature: parseFloat(scheduleTemp.value)
-        };
-        
-        // Add specific day if needed
-        if (schedule.type === 'Specific Day') {
-          schedule.day = specificDay.value;
-        }
-        
-        // Add description if provided
-        if (scheduleDescription.value) {
-          schedule.description = scheduleDescription.value;
-        }
-        
-        // Initialize schedules array if needed
-        if (!config.schedules) {
-          config.schedules = [];
-        }
-        
-        // Add or update schedule
-        const index = scheduleIndex.value;
-        if (index !== '') {
-          // Update existing schedule
-          config.schedules[index] = schedule;
-        } else {
-          // Add new schedule
-          config.schedules.push(schedule);
-        }
-        
-        // Save schedules
-        await saveSchedules();
-        
-        // Update UI
-        renderSchedules(config.schedules);
-        renderTimeline(config.schedules);
-        
-        // Hide modal
-        scheduleModal.modal('hide');
-        
-        showStatus(`Schedule ${index !== '' ? 'updated' : 'added'} successfully`, 'success');
-      } catch (error) {
-        showStatus('Error saving schedule: ' + error.message, 'danger');
-      }
-    });
-  }
-  
-  // Show status message
-  function showStatus(message, type = 'info') {
-    statusMessage.className = `alert alert-${type}`;
-    statusMessage.textContent = message;
-    
-    // Hide after 3 seconds if success
-    if (type === 'success') {
-      setTimeout(() => {
-        statusMessage.className = 'alert alert-info';
-        statusMessage.textContent = 'Ready';
-      }, 3000);
-    }
-  }
-</script>
+    <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('SleepMe UI initialized');
+            
+            // Get references to form elements
+            const configForm = document.getElementById('configForm');
+            const statusElement = document.getElementById('status');
+            const testConnectionBtn = document.getElementById('testConnection');
+            
+            // Function to show status messages
+            function showStatus(message, isError = false) {
+                statusElement.textContent = message;
+                statusElement.className = isError ? 'status error' : 'status success';
+                statusElement.classList.remove('hidden');
+                
+                // Hide the message after 5 seconds
+                setTimeout(() => {
+                    statusElement.classList.add('hidden');
+                }, 5000);
+            }
+            
+            // Load current configuration
+            async function loadConfig() {
+                try {
+                    const response = await homebridge.request('/config');
+                    
+                    if (response.success && response.config) {
+                        const config = response.config;
+                        
+                        // Fill form with current values
+                        document.getElementById('apiToken').value = config.apiToken || '';
+                        document.getElementById('unit').value = config.unit || 'C';
+                        document.getElementById('pollingInterval').value = config.pollingInterval || 90;
+                        document.getElementById('logLevel').value = config.logLevel || 'normal';
+                        document.getElementById('enableSchedules').checked = config.enableSchedules || false;
+                        
+                        console.log('Config loaded successfully');
+                    } else {
+                        console.error('Failed to load config:', response.error);
+                        showStatus('Failed to load configuration: ' + (response.error || 'Unknown error'), true);
+                    }
+                } catch (error) {
+                    console.error('Error loading config:', error);
+                    showStatus('Error loading configuration: ' + error.message, true);
+                }
+            }
+            
+            // Save configuration
+            async function saveConfig(formData) {
+                try {
+                    // Create config object from form data
+                    const config = {
+                        name: 'SleepMe Simple',
+                        apiToken: formData.get('apiToken'),
+                        unit: formData.get('unit'),
+                        pollingInterval: parseInt(formData.get('pollingInterval'), 10),
+                        logLevel: formData.get('logLevel'),
+                        enableSchedules: formData.get('enableSchedules') === 'on'
+                    };
+                    
+                    // Send to server
+                    const response = await homebridge.request('/save-config', { config });
+                    
+                    if (response.success) {
+                        showStatus('Configuration saved successfully!');
+                    } else {
+                        showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
+                    }
+                } catch (error) {
+                    showStatus('Error saving configuration: ' + error.message, true);
+                }
+            }
+            
+            // Test connection to SleepMe API
+            async function testApiConnection() {
+                try {
+                    const apiToken = document.getElementById('apiToken').value;
+                    
+                    if (!apiToken) {
+                        showStatus('API token is required to test connection', true);
+                        return;
+                    }
+                    
+                    showStatus('Testing connection...');
+                    
+                    const response = await homebridge.request('/device/test', { 
+                        apiToken 
+                    });
+                    
+                    if (response.success) {
+                        showStatus('Connection successful: ' + response.message);
+                    } else {
+                        showStatus('Connection failed: ' + (response.error || 'Unknown error'), true);
+                    }
+                } catch (error) {
+                    showStatus('Error testing connection: ' + error.message, true);
+                }
+            }
+            
+            // Handle form submission
+            configForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const formData = new FormData(configForm);
+                await saveConfig(formData);
+            });
+            
+            // Handle test connection button
+            testConnectionBtn.addEventListener('click', testApiConnection);
+            
+            // Load initial configuration
+            await loadConfig();
+        });
+    </script>
+</body>
+</html>
