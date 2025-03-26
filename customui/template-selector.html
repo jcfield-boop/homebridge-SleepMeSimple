@@ -225,3 +225,292 @@
                     </div>
                     <div class="schedule-item">
                         <span class="time">1:00 AM
+<div class="schedule-item">
+                        <span class="time">1:00 AM</span>
+                        <span class="temp">20°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">4:00 AM</span>
+                        <span class="temp">24°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">9:00 AM</span>
+                        <span class="temp">Warm Hug</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hidden-inputs">
+            <!-- These hidden inputs will store the selected template data -->
+            <input type="hidden" id="weekday-template" value="optimal">
+            <input type="hidden" id="weekend-template" value="weekend-optimal">
+        </div>
+    </div>
+    
+    <div id="debug-info">Template UI Ready</div>
+    
+    <script>
+        // Debug logging to show the template is loading
+        console.log('SleepMe Template UI loaded at ' + new Date().toISOString());
+        document.getElementById('debug-info').textContent = 'Template loaded: ' + new Date().toLocaleTimeString();
+        
+        // Store template definitions
+        const templates = {
+            // Weekday templates
+            "optimal": {
+                name: "Optimal Sleep Cycle",
+                schedules: [
+                    { type: "Weekdays", time: "22:00", temperature: 21, name: "Cool Down" },
+                    { type: "Weekdays", time: "23:00", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekdays", time: "02:00", temperature: 23, name: "REM Support" },
+                    { type: "Weekdays", time: "06:00", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            "nightowl": {
+                name: "Night Owl",
+                schedules: [
+                    { type: "Weekdays", time: "23:30", temperature: 21, name: "Cool Down" },
+                    { type: "Weekdays", time: "00:30", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekdays", time: "03:30", temperature: 23, name: "REM Support" },
+                    { type: "Weekdays", time: "07:30", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            "earlybird": {
+                name: "Early Bird",
+                schedules: [
+                    { type: "Weekdays", time: "21:00", temperature: 21, name: "Cool Down" },
+                    { type: "Weekdays", time: "22:00", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekdays", time: "01:00", temperature: 23, name: "REM Support" },
+                    { type: "Weekdays", time: "05:00", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            
+            // Weekend templates
+            "weekend-optimal": {
+                name: "Weekend Recovery",
+                schedules: [
+                    { type: "Weekend", time: "23:00", temperature: 21, name: "Cool Down" },
+                    { type: "Weekend", time: "00:00", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekend", time: "03:00", temperature: 23, name: "REM Support" },
+                    { type: "Weekend", time: "08:00", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            "weekend-relax": {
+                name: "Relaxed Weekend",
+                schedules: [
+                    { type: "Weekend", time: "23:30", temperature: 22, name: "Cool Down" },
+                    { type: "Weekend", time: "01:00", temperature: 20, name: "Deep Sleep" },
+                    { type: "Weekend", time: "04:00", temperature: 24, name: "REM Support" },
+                    { type: "Weekend", time: "09:00", temperature: 26, name: "Warm Hug" }
+                ]
+            }
+        };
+        
+        // Handles selection of a template card
+        function selectTemplate(templateCard, templateType) {
+            // Update debug info
+            document.getElementById('debug-info').textContent = 'Selection changed: ' + templateType;
+            
+            // Remove selection from all cards in this category
+            document.querySelectorAll(`.${templateType}-templates .template-card`).forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Add selection to clicked card
+            templateCard.classList.add('selected');
+            
+            // Store the selected template ID
+            const templateId = templateCard.getAttribute('data-template-id');
+            document.getElementById(`${templateType}-template`).value = templateId;
+            
+            // Save to parent window if in iframe
+            saveTemplateSelections();
+        }
+        
+        // Toggle between weekday and weekend views
+        function toggleTemplateView(viewType) {
+            const weekdayBtn = document.querySelector('.weekday-btn');
+            const weekendBtn = document.querySelector('.weekend-btn');
+            const weekdayTemplates = document.querySelector('.weekday-templates');
+            const weekendTemplates = document.querySelector('.weekend-templates');
+            
+            if (viewType === 'weekday') {
+                weekdayBtn.classList.add('active');
+                weekendBtn.classList.remove('active');
+                weekdayTemplates.classList.remove('hidden');
+                weekendTemplates.classList.add('hidden');
+            } else {
+                weekdayBtn.classList.remove('active');
+                weekendBtn.classList.add('active');
+                weekdayTemplates.classList.add('hidden');
+                weekendTemplates.classList.remove('hidden');
+            }
+            
+            // Update debug info
+            document.getElementById('debug-info').textContent = 'View changed: ' + viewType;
+        }
+        
+        // Save template selections to Homebridge config
+        function saveTemplateSelections() {
+            const weekdayTemplate = document.getElementById('weekday-template').value;
+            const weekendTemplate = document.getElementById('weekend-template').value;
+            
+            // Create schedule array from selected templates
+            const schedules = [
+                ...templates[weekdayTemplate].schedules,
+                ...templates[weekendTemplate].schedules
+            ];
+            
+            // If running in Homebridge iframe, send data to parent
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        action: 'save-template',
+                        schedules: schedules
+                    }, '*');
+                    
+                    document.getElementById('debug-info').textContent = 'Data sent to parent: ' + new Date().toLocaleTimeString();
+                }
+            } catch (e) {
+                document.getElementById('debug-info').textContent = 'Error: ' + e.message;
+                console.error('Error sending data to parent:', e);
+            }
+        }
+        
+        // Setup event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Debug that DOM is ready
+            document.getElementById('debug-info').textContent = 'DOM ready: ' + new Date().toLocaleTimeString();
+            
+            // Set up template card click handlers
+            document.querySelectorAll('.template-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const templateType = this.closest('.weekend-templates') ? 'weekend' : 'weekday';
+                    selectTemplate(this, templateType);
+                });
+            });
+            
+            // Set up weekday/weekend toggle
+            document.querySelector('.weekday-btn').addEventListener('click', function() {
+                toggleTemplateView('weekday');
+            });
+            
+            document.querySelector('.weekend-btn').addEventListener('click', function() {
+                toggleTemplateView('weekend');
+            });
+            
+            // Signal readiness to parent
+            try {
+                window.parent.postMessage({
+                    action: 'request-init-data'
+                }, '*');
+                document.getElementById('debug-info').textContent = 'Init data requested';
+            } catch (e) {
+                document.getElementById('debug-info').textContent = 'Error requesting init data: ' + e.message;
+                console.error('Error requesting init data:', e);
+            }
+        });
+        
+        // Listen for messages from parent window
+        window.addEventListener('message', function(event) {
+            try {
+                console.log('Template received message:', event.data);
+                document.getElementById('debug-info').textContent = 'Message received: ' + JSON.stringify(event.data?.action);
+                
+                if (event.data && event.data.action === 'init-template') {
+                    processExistingSchedules(event.data.schedules || []);
+                }
+            } catch (e) {
+                document.getElementById('debug-info').textContent = 'Error processing message: ' + e.message;
+                console.error('Error processing message:', e);
+            }
+        });
+        
+        // Process existing schedules to select the right template
+        function processExistingSchedules(schedules) {
+            try {
+                document.getElementById('debug-info').textContent = 'Processing schedules: ' + schedules.length;
+                
+                if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+                    return; // No schedules to process
+                }
+                
+                // Separate weekday and weekend schedules
+                const weekdaySchedules = schedules.filter(s => s.type === 'Weekdays');
+                const weekendSchedules = schedules.filter(s => s.type === 'Weekend');
+                
+                // Find matching templates
+                let weekdayTemplateId = findMatchingTemplate(weekdaySchedules, 'weekday');
+                let weekendTemplateId = findMatchingTemplate(weekendSchedules, 'weekend');
+                
+                document.getElementById('debug-info').textContent = `Templates: ${weekdayTemplateId}, ${weekendTemplateId}`;
+                
+                // Select the appropriate templates in UI
+                if (weekdayTemplateId) {
+                    const weekdayCard = document.querySelector(`.weekday-templates [data-template-id="${weekdayTemplateId}"]`);
+                    if (weekdayCard) {
+                        selectTemplate(weekdayCard, 'weekday');
+                    }
+                }
+                
+                if (weekendTemplateId) {
+                    const weekendCard = document.querySelector(`.weekend-templates [data-template-id="${weekendTemplateId}"]`);
+                    if (weekendCard) {
+                        selectTemplate(weekendCard, 'weekend');
+                    }
+                }
+            } catch (e) {
+                document.getElementById('debug-info').textContent = 'Error in processExistingSchedules: ' + e.message;
+                console.error('Error in processExistingSchedules:', e);
+            }
+        }
+        
+        // Find a template that matches given schedules
+        function findMatchingTemplate(schedules, templateType) {
+            if (!schedules || schedules.length === 0) {
+                return templateType === 'weekday' ? 'optimal' : 'weekend-optimal'; // Default templates
+            }
+            
+            // Get templates of this type
+            const templateKeys = Object.keys(templates).filter(key => {
+                return templateType === 'weekday' ? 
+                    !key.startsWith('weekend-') : 
+                    key.startsWith('weekend-');
+            });
+            
+            // Check each template for a match
+            for (const key of templateKeys) {
+                const template = templates[key];
+                
+                // Simple matching - just check if times roughly match
+                if (schedules.length === template.schedules.length) {
+                    // Count matching times
+                    const matchCount = schedules.filter(userSchedule => {
+                        return template.schedules.some(templateSchedule => 
+                            Math.abs(timeToMinutes(userSchedule.time) - timeToMinutes(templateSchedule.time)) < 30
+                        );
+                    }).length;
+                    
+                    // If most times match, consider it a match
+                    if (matchCount >= Math.ceil(template.schedules.length * 0.75)) {
+                        return key;
+                    }
+                }
+            }
+            
+            // No match found, return default
+            return templateType === 'weekday' ? 'optimal' : 'weekend-optimal';
+        }
+        
+        // Convert time string (HH:MM) to minutes
+        function timeToMinutes(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        // Send diagnostic info immediately
+        document.getElementById('debug-info').textContent = 'Script finished loading';
+    </script>
+</body>
+</html>
