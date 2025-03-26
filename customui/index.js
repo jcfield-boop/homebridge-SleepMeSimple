@@ -2,6 +2,12 @@
 // Homebridge will automatically load this file when the plugin is loaded
 
 // Load our template-selector handler
-import './template-selector-handler.js';
-
-console.log('SleepMe Simple Custom UI loaded');
+// Changed from import to require for compatibility
+(function() {
+    // Load handler script directly
+    const script = document.createElement('script');
+    script.src = '/assets/custom-plugins/homebridge-sleepme-simple/template-selector-handler.js';
+    document.head.appendChild(script);
+    
+    console.log('SleepMe Simple Custom UI loaded');
+})();
