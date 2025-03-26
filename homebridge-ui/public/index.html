@@ -241,7 +241,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="https://raw.githubusercontent.com/jcfield-boop/homebridge-sleepmebasic/icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
+            <img src="../icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
             <h1>SleepMe Simple Configuration</h1>
         </div>
         
@@ -975,10 +975,8 @@ function renderScheduleList() {
                 renderScheduleList();
             });
          
-// Save configuration
-async function saveConfig(formData) {
+            async function saveConfig(formData) {
     try {
-        // Create config object from form data
         const config = {
             platform: "SleepMeSimple",
             name: 'SleepMe Simple',
@@ -989,14 +987,12 @@ async function saveConfig(formData) {
             enableSchedules: formData.get('enableSchedules') === 'on'
         };
         
-        // Only include schedules if enabled
         if (config.enableSchedules && schedules.length > 0) {
             config.schedules = schedules;
         }
         
-        console.log('Saving config:', JSON.stringify(config));
+        console.log('Saving config...');
         
-        // Send to server using our custom endpoint
         try {
             const response = await homebridge.request('/saveConfig', { 
                 body: {
@@ -1016,33 +1012,6 @@ async function saveConfig(formData) {
         showStatus('Error saving configuration: ' + error.message, true);
     }
 }
-            // Test connection to SleepMe API
-            async function testApiConnection() {
-                try {
-                    const apiToken = document.getElementById('apiToken').value;
-                    
-                    if (!apiToken) {
-                        showStatus('API token is required to test connection', true);
-                        return;
-                    }
-                    
-                    showStatus('Testing connection...');
-                    
-                    const response = await homebridge.request('/device/test', { 
-                        body: {
-                            apiToken
-                        }
-                    });
-                    
-                    if (response.success) {
-                        showStatus('Connection successful: ' + response.message);
-                    } else {
-                        showStatus('Connection failed: ' + (response.error || 'Unknown error'), true);
-                    }
-                } catch (error) {
-                    showStatus('Error testing connection: ' + error.message, true);
-                }
-            }
             
             // Handle form submission
             configForm.addEventListener('submit', async (event) => {
