@@ -2,8 +2,8 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "singular": true,
+  "customUi": true,
   "customUiPath": "./customui",
-  "footerDisplay": "<script src='customui/test.js'></script><iframe src='customui/test.html' style='width:100%;height:200px;border:1px solid #ddd;border-radius:4px;margin-top:10px;'></iframe> For more information, see the <a href=\"https://github.com/jcfield-boop/homebridge-sleepme-simple#readme\" target=\"_blank\">README</a>.",
   "schema": {
     "type": "object",
     "properties": {
@@ -31,9 +31,10 @@
       },
       "pollingInterval": {
         "title": "Polling Interval",
-        "type": "string",
-        "default": "90",
-        "pattern": "^([6-9][0-9]|[1-9][0-9]{2}|300)$",
+        "type": "integer",
+        "minimum": 60,
+        "maximum": 300,
+        "default": 90,
         "description": "How frequently to check device status (in seconds, 60-300)"
       },
       "logLevel": {
@@ -144,28 +145,6 @@
             "maximum": 30,
             "description": "Duration of warm hug (minutes)"
           }
-        }
-      },
-      "devices": {
-        "title": "Manual Device Configuration",
-        "type": "array",
-        "expandable": true,
-        "expanded": false,
-        "items": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "title": "Device ID",
-              "type": "string",
-              "description": "SleepMe device ID"
-            },
-            "name": {
-              "title": "Device Name",
-              "type": "string",
-              "description": "Custom name for this device"
-            }
-          },
-          "required": ["id"]
         }
       }
     }
