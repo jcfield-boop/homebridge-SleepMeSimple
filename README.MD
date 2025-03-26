@@ -1,6 +1,12 @@
 # SleepMe Simple - Homebridge Plugin
 
-<img src="https://github.com/homebridge/branding/raw/latest/logos/homebridge-wordmark-logo-vertical.png" width="150">
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jcfield-boop/homebridge-sleepmebasic/icons/sleepmebasic.png" width="100" height="100">
+</p>
+
+<p align="center">
+  <img src="https://github.com/homebridge/branding/raw/latest/logos/homebridge-wordmark-logo-vertical.png" width="150">
+</p>
 
 A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad) that provides reliable and responsive HomeKit integration with advanced API management.
 
@@ -14,6 +20,7 @@ A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad
 - **Automatic Device Detection**: Auto-discovers your SleepMe devices
 - **Comprehensive Model Support**: Compatible with Dock Pro, OOLER, and ChiliPad devices
 - **Sleep Schedule Templates**: Pre-defined temperature profiles based on sleep science
+- **Schedule Editing**: Create, edit, and manage temperature schedules directly from the UI
 
 ## Why Use This Plugin?
 
@@ -68,7 +75,8 @@ Configure through the Homebridge UI or manually in your `config.json`:
       "apiToken": "YOUR_SLEEPME_API_TOKEN",
       "unit": "C",
       "pollingInterval": 90,
-      "logLevel": "normal"
+      "logLevel": "normal",
+      "enableSchedules": true
     }
   ]
 }
@@ -82,6 +90,31 @@ Configure through the Homebridge UI or manually in your `config.json`:
 - **logLevel**: Log detail level - "normal", "debug", or "verbose"
 - **enableSchedules**: Enable temperature scheduling features (default: false)
 
+## Using the UI Configuration
+
+The plugin comes with a comprehensive configuration UI that allows you to:
+
+1. **Enter API credentials**: Test and validate your SleepMe API token
+2. **Configure basic settings**: Set temperature units, polling interval, and log level
+3. **Manage schedules**: Enable, create, edit, and remove temperature schedules
+
+### Managing Temperature Schedules
+
+When the schedules feature is enabled, you can:
+
+1. **Create schedules**: Set up temperature changes at specific times and days
+2. **Edit schedules**: Modify existing schedules by clicking the "Edit" button
+3. **Remove schedules**: Delete unwanted schedules with the "Remove" button
+4. **Apply templates**: Use pre-defined schedule templates based on sleep science
+
+### Schedule Types
+
+- **Everyday**: Applies the same schedule every day
+- **Weekdays**: Applies only on Monday through Friday
+- **Weekend**: Applies only on Saturday and Sunday
+- **Specific Day**: Applies on a specific day of the week
+- **Warm Hug**: Gradually increases temperature for a gentle wake-up experience
+
 ## Sleep Schedule Templates
 
 The SleepMe Simple plugin includes pre-defined sleep schedule templates designed to optimize your sleep experience. These templates are based on sleep science principles and provide temperature adjustments that work with your body's natural sleep cycles.
@@ -91,7 +124,7 @@ The SleepMe Simple plugin includes pre-defined sleep schedule templates designed
 1. Enable the "Enable Schedules" option in the plugin settings
 2. The Schedule Templates interface will appear above the schedule list
 3. Select a template for weekdays and weekends (you can choose different patterns for each)
-4. Click "Save" to apply the templates to your configuration
+4. Click "Apply Templates" to apply the templates to your configuration
 
 ### Available Templates
 
@@ -159,6 +192,14 @@ If controls appear unresponsive:
 - Check your logs for API errors
 - Verify your API token is valid
 - Restart Homebridge to re-establish connection
+
+### Schedule Issues
+
+If schedules aren't working properly:
+- Ensure that "Enable Schedules" is turned on in your configuration
+- Check that your schedules are properly being saved in config.json
+- Try creating a new schedule to verify the functionality
+- Make sure your device has the latest firmware
 
 ## Support & Contributions
 

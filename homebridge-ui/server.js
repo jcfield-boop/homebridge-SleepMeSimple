@@ -11,6 +11,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Route handling for UI
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config', this.getConfig.bind(this));
+    this.onRequest('/saveConfig', this.saveConfig.bind(this));
     
     // Log initialization
     this.log('SleepMe UI Server initialized');
@@ -88,31 +89,36 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Get current plugin configuration
+   * This method doesn't use getPluginConfig() to avoid compatibility issues
    * @returns {Object} Current configuration or empty object if not found
    */
   async getConfig() {
     try {
       this.log('Get config request received');
       
-      // Use the plugin-ui-utils built-in method to get configuration
-      // This avoids the use of the deprecated this.getPluginConfig() method
-      let config = [{}];
+      // Get the initial cached config from the Homebridge UI
+      // This is safer than getPluginConfig() which may not be available
+      let config = {};
+      
       try {
-        config = await this.getPluginConfig();
+        // Use the built-in homebridge-api for getting config
+        // This should be more reliable than getPluginConfig
+        const cachedConfig = await this.homebridgeApi.getPluginConfig();
         
-        if (!Array.isArray(config) || config.length === 0) {
-          config = [{}];
+        if (cachedConfig && cachedConfig[0]) {
+          config = cachedConfig[0];
+          this.log('Config retrieved from Homebridge API successfully');
+        } else {
+          this.log('No config found in Homebridge API');
         }
-        
-        this.log(`Config retrieved successfully: ${JSON.stringify(config[0])}`);
       } catch (err) {
-        this.log(`Error getting plugin config: ${err.message}`, true);
-        // Fall back to empty config
+        this.log(`Error getting config: ${err.message}`, true);
+        // Use empty config
       }
       
       return {
         success: true,
-        config: config[0] || {}
+        config: config
       };
     } catch (error) {
       this.log(`Get config failed: ${error.message}`, true);
@@ -124,35 +130,76 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Hook for handling config updates
-   * This is a special method that gets called by the UI framework
-   * when updatePluginConfig is called from the frontend
+   * Save configuration to Homebridge
+   * Uses the safer updatePluginConfig method to avoid API compatibility issues
+   * @param {Object} payload Configuration to save
+   * @returns {Object} Success or failure response
    */
-  async onRequest(path, body, headers) {
-    if (path === '/updatePluginConfig' && body.pluginConfig) {
-      const config = body.pluginConfig;
+  async saveConfig(payload) {
+    try {
+      this.log('Save config request received');
       
-      // Log the incoming config for debugging
-      this.log(`Received updated config: ${JSON.stringify(config)}`);
-      
-      // Ensure schedules are properly formatted (if they exist)
-      if (Array.isArray(config) && config.length > 0) {
-        config.forEach(configItem => {
-          if (configItem.enableSchedules && configItem.schedules) {
-            // Make sure schedules is an array
-            if (!Array.isArray(configItem.schedules)) {
-              configItem.schedules = [];
-            }
-            
-            // Log schedule count
-            this.log(`Config contains ${configItem.schedules.length} schedules`);
-          }
-        });
+      if (!payload?.body?.config) {
+        this.log('Missing config in request body', true);
+        return {
+          success: false,
+          error: 'No configuration provided'
+        };
       }
+      
+      const config = payload.body.config;
+      
+      // Make sure it's properly formatted
+      if (!config.platform) {
+        config.platform = "SleepMeSimple";
+      }
+      
+      if (!config.name) {
+        config.name = "SleepMe Simple";
+      }
+      
+      // Handle schedules properly
+      if (config.enableSchedules && Array.isArray(config.schedules)) {
+        this.log(`Configuration contains ${config.schedules.length} schedules`);
+      } else if (config.enableSchedules) {
+        this.log('Schedules enabled but no schedules array found, creating empty array');
+        config.schedules = [];
+      }
+      
+      // Save to Homebridge config
+      try {
+        this.log('Saving configuration to Homebridge...');
+        
+        // Call the parent savePluginConfig method which is more robust
+        await this.homebridgeApi.updatePluginConfig([config]);
+        
+        this.log('Configuration saved successfully');
+        return {
+          success: true,
+          message: 'Configuration saved successfully'
+        };
+      } catch (error) {
+        this.log(`Error saving configuration: ${error.message}`, true);
+        return {
+          success: false,
+          error: `Error saving configuration: ${error.message}`
+        };
+      }
+    } catch (error) {
+      this.log(`Save config failed: ${error.message}`, true);
+      return {
+        success: false,
+        error: error.message
+      };
     }
-    
-    // Let the parent class handle the rest
-    return super.onRequest(path, body, headers);
+  }
+  
+  /**
+   * Hook for handling plugin config updates
+   * This simply makes sure we're printing useful logs when configs are updated
+   */
+  pluginConfigChanged() {
+    this.log('Plugin config was changed externally');
   }
 }
 

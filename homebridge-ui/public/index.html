@@ -241,7 +241,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="../icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
+            <img src="https://raw.githubusercontent.com/jcfield-boop/homebridge-sleepmebasic/icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
             <h1>SleepMe Simple Configuration</h1>
         </div>
         
@@ -456,17 +456,17 @@
                         { type: "Weekdays", time: "23:30", temperature: 21, description: "Cool Down" },
                         { type: "Weekdays", time: "00:30", temperature: 19, description: "Deep Sleep" },
                         { type: "Weekdays", time: "03:30", temperature: 23, description: "REM Support" },
-                        { type: "Weekdays", time: "07:30", temperature: 25, description: "Warm Hug Wake-up" }
+                        { type: "Weekdays", time: "07:30", temperature: 35, description: "Warm Hug Wake-up" }
                     ]
                 },
                 earlyBird: {
                     name: "Early Bird",
                     description: "Earlier bedtime and wake-up schedule",
                     schedules: [
-                        { type: "Weekdays", time: "21:00", temperature: 21, description: "Cool Down" },
+                        { type: "Weekdays", time: "21:30", temperature: 21, description: "Cool Down" },
                         { type: "Weekdays", time: "22:00", temperature: 19, description: "Deep Sleep" },
                         { type: "Weekdays", time: "01:00", temperature: 23, description: "REM Support" },
-                        { type: "Weekdays", time: "05:00", temperature: 25, description: "Warm Hug Wake-up" }
+                        { type: "Weekdays", time: "06:00", temperature: 35, description: "Warm Hug Wake-up" }
                     ]
                 },
                 recovery: {
@@ -476,7 +476,7 @@
                         { type: "Weekend", time: "23:00", temperature: 21, description: "Cool Down" },
                         { type: "Weekend", time: "00:00", temperature: 19, description: "Deep Sleep" },
                         { type: "Weekend", time: "03:00", temperature: 23, description: "REM Support" },
-                        { type: "Weekend", time: "08:00", temperature: 25, description: "Warm Hug Wake-up" }
+                        { type: "Weekend", time: "08:00", temperature: 35, description: "Warm Hug Wake-up" }
                     ]
                 },
                 relaxed: {
@@ -486,7 +486,7 @@
                         { type: "Weekend", time: "23:30", temperature: 22, description: "Cool Down" },
                         { type: "Weekend", time: "01:00", temperature: 20, description: "Deep Sleep" },
                         { type: "Weekend", time: "04:00", temperature: 24, description: "REM Support" },
-                        { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up" }
+                        { type: "Weekend", time: "09:00", temperature: 36, description: "Warm Hug Wake-up" }
                     ]
                 }
             };
@@ -803,101 +803,129 @@
                     // Don't show loading errors to user, just use defaults
                 }
             }
+            // Render the schedule list with logical ordering
+function renderScheduleList() {
+    scheduleList.innerHTML = '';
+    
+    if (schedules.length === 0) {
+        scheduleList.innerHTML = '<p>No schedules configured.</p>';
+        return;
+    }
+    
+    // Group schedules by type for better organization
+    const groupedSchedules = {};
+    
+    schedules.forEach(schedule => {
+        if (!groupedSchedules[schedule.type]) {
+            groupedSchedules[schedule.type] = [];
+        }
+        groupedSchedules[schedule.type].push(schedule);
+    });
+    
+    // Helper function to determine schedule order (bedtime first, wake-up last)
+    function getScheduleOrderWeight(schedule) {
+        // Check for wake-up schedules by description
+        if (schedule.description && 
+            (schedule.description.toLowerCase().includes('wake') || 
+             schedule.description.toLowerCase().includes('wake-up') ||
+             schedule.description.toLowerCase().includes('warm hug'))) {
+            return 3; // Wake-up schedules last
+        }
+        
+        // Check if it's a morning time (5-10 AM)
+        const hourMatch = schedule.time.match(/^(\d{1,2}):/);
+        if (hourMatch) {
+            const hour = parseInt(hourMatch[1], 10);
+            if (hour >= 5 && hour < 10) {
+                return 2; // Morning schedules second
+            }
+        }
+        
+        return 1; // Bedtime/evening schedules first
+    }
+    
+    // Render each group
+    Object.keys(groupedSchedules).forEach(type => {
+        const groupHeader = document.createElement('h4');
+        groupHeader.textContent = type;
+        groupHeader.style.marginTop = '15px';
+        groupHeader.style.marginBottom = '5px';
+        scheduleList.appendChild(groupHeader);
+        
+        // Sort schedules by logical order (bedtime first, wake-up last)
+        const sortedSchedules = groupedSchedules[type].sort((a, b) => {
+            const orderA = getScheduleOrderWeight(a);
+            const orderB = getScheduleOrderWeight(b);
             
-            // Render the schedule list
-            function renderScheduleList() {
-                scheduleList.innerHTML = '';
-                
-                if (schedules.length === 0) {
-                    scheduleList.innerHTML = '<p>No schedules configured.</p>';
-                    return;
-                }
-                
-                // Group schedules by type for better organization
-                const groupedSchedules = {};
-                
-                schedules.forEach(schedule => {
-                    if (!groupedSchedules[schedule.type]) {
-                        groupedSchedules[schedule.type] = [];
-                    }
-                    groupedSchedules[schedule.type].push(schedule);
-                });
-                
-                // Render each group
-                Object.keys(groupedSchedules).forEach(type => {
-                    const groupHeader = document.createElement('h4');
-                    groupHeader.textContent = type;
-                    groupHeader.style.marginTop = '15px';
-                    groupHeader.style.marginBottom = '5px';
-                    scheduleList.appendChild(groupHeader);
-                    
-                    // Sort schedules by time
-                    const sortedSchedules = groupedSchedules[type].sort((a, b) => {
-                        return a.time.localeCompare(b.time);
-                    });
-                    
-                    sortedSchedules.forEach((schedule) => {
-                        const scheduleItem = document.createElement('div');
-                        scheduleItem.className = 'schedule-item';
-                        
-                        // Format display info
-                        let displayInfo = '';
-                        
-                        if (schedule.type === 'Specific Day') {
-                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                            displayInfo += `${days[schedule.day]} `;
-                        }
-                        
-                        // Format temperature based on current selected unit
-                        let displayTemp = schedule.temperature;
-                        const currentUnit = unitSelect.value;
-                        
-                        // If temperature is stored in Celsius but we're displaying Fahrenheit
-                        if (schedule.unit === 'C' && currentUnit === 'F') {
-                            displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
-                        } 
-                        // If temperature is stored in Fahrenheit but we're displaying Celsius
-                        else if (schedule.unit === 'F' && currentUnit === 'C') {
-                            displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
-                        }
-                        
-                        displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
-                        
-                        // Add description if available
-                        if (schedule.description) {
-                            displayInfo += ` (${schedule.description})`;
-                        }
-                        
-                        // Store the global index for this schedule
-                        const globalIndex = schedules.indexOf(schedule);
-                        
-                        // Create schedule item content with Edit and Remove buttons
-                        scheduleItem.innerHTML = `
-                            <div class="schedule-item-info">${displayInfo}</div>
-                            <div class="schedule-item-actions">
-                                <button type="button" class="edit" data-index="${globalIndex}">Edit</button>
-                                <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
-                            </div>
-                        `;
-                        
-                        // Add event listener for edit button
-                        scheduleItem.querySelector('button.edit').addEventListener('click', (event) => {
-                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                            editSchedule(idx);
-                        });
-                        
-                        // Add event listener for remove button
-                        scheduleItem.querySelector('button.danger').addEventListener('click', (event) => {
-                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                            schedules.splice(idx, 1);
-                            renderScheduleList();
-                        });
-                        
-                        scheduleList.appendChild(scheduleItem);
-                    });
-                });
+            // If they're the same category, sort by time
+            if (orderA === orderB) {
+                return a.time.localeCompare(b.time);
             }
             
+            return orderA - orderB;
+        });
+        
+        sortedSchedules.forEach((schedule) => {
+            const scheduleItem = document.createElement('div');
+            scheduleItem.className = 'schedule-item';
+            
+            // Format display info
+            let displayInfo = '';
+            
+            if (schedule.type === 'Specific Day') {
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                displayInfo += `${days[schedule.day]} `;
+            }
+            
+            // Format temperature based on current selected unit
+            let displayTemp = schedule.temperature;
+            const currentUnit = unitSelect.value;
+            
+            // If temperature is stored in Celsius but we're displaying Fahrenheit
+            if (schedule.unit === 'C' && currentUnit === 'F') {
+                displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
+            } 
+            // If temperature is stored in Fahrenheit but we're displaying Celsius
+            else if (schedule.unit === 'F' && currentUnit === 'C') {
+                displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
+            }
+            
+            displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
+            
+            // Add description if available
+            if (schedule.description) {
+                displayInfo += ` (${schedule.description})`;
+            }
+            
+            // Store the global index for this schedule
+            const globalIndex = schedules.indexOf(schedule);
+            
+            // Create schedule item content with Edit and Remove buttons
+            scheduleItem.innerHTML = `
+                <div class="schedule-item-info">${displayInfo}</div>
+                <div class="schedule-item-actions">
+                    <button type="button" class="edit" data-index="${globalIndex}">Edit</button>
+                    <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
+                </div>
+            `;
+            
+            // Add event listener for edit button
+            scheduleItem.querySelector('button.edit').addEventListener('click', (event) => {
+                const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                editSchedule(idx);
+            });
+            
+            // Add event listener for remove button
+            scheduleItem.querySelector('button.danger').addEventListener('click', (event) => {
+                const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                schedules.splice(idx, 1);
+                renderScheduleList();
+            });
+            
+            scheduleList.appendChild(scheduleItem);
+        });
+    });
+}
             // Add/Update schedule
             addScheduleBtn.addEventListener('click', () => {
                 // Validate inputs first
@@ -946,40 +974,48 @@
                 // Update UI
                 renderScheduleList();
             });
-            
-            // Save configuration
-            async function saveConfig(formData) {
-                try {
-                    // Create config object from form data
-                    const config = {
-                        platform: "SleepMeSimple",
-                        name: 'SleepMe Simple',
-                        apiToken: formData.get('apiToken'),
-                        unit: formData.get('unit'),
-                        pollingInterval: parseInt(formData.get('pollingInterval'), 10),
-                        logLevel: formData.get('logLevel'),
-                        enableSchedules: formData.get('enableSchedules') === 'on'
-                    };
-                    
-                    // Only include schedules if enabled
-                    if (config.enableSchedules && schedules.length > 0) {
-                        config.schedules = schedules;
-                    }
-                    
-                    console.log('Saving config:', JSON.stringify(config));
-                    
-                    // Send to server - using direct plugin API method
-                    try {
-                        await homebridge.updatePluginConfig([config]);
-                        showStatus('Configuration saved successfully!');
-                    } catch (error) {
-                        showStatus('Failed to save configuration: ' + error.message, true);
-                    }
-                } catch (error) {
-                    showStatus('Error saving configuration: ' + error.message, true);
+         
+// Save configuration
+async function saveConfig(formData) {
+    try {
+        // Create config object from form data
+        const config = {
+            platform: "SleepMeSimple",
+            name: 'SleepMe Simple',
+            apiToken: formData.get('apiToken'),
+            unit: formData.get('unit'),
+            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
+            logLevel: formData.get('logLevel'),
+            enableSchedules: formData.get('enableSchedules') === 'on'
+        };
+        
+        // Only include schedules if enabled
+        if (config.enableSchedules && schedules.length > 0) {
+            config.schedules = schedules;
+        }
+        
+        console.log('Saving config:', JSON.stringify(config));
+        
+        // Send to server using our custom endpoint
+        try {
+            const response = await homebridge.request('/saveConfig', { 
+                body: {
+                    config: config
                 }
-            }
+            });
             
+            if (response && response.success) {
+                showStatus('Configuration saved successfully!');
+            } else {
+                showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
+            }
+        } catch (error) {
+            showStatus('Failed to save configuration: ' + error.message, true);
+        }
+    } catch (error) {
+        showStatus('Error saving configuration: ' + error.message, true);
+    }
+}
             // Test connection to SleepMe API
             async function testApiConnection() {
                 try {
