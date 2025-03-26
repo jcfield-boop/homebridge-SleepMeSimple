@@ -398,19 +398,19 @@
             <div id="scheduleList"></div>
         </div>
     </div>
-
     <script>
         // Wait for DOM to be fully loaded
         document.addEventListener('DOMContentLoaded', async () => {
-        // Listen for server events
-homebridge.on('save-config', (data) => {
-    if (data && data.config) {
-        // Use the client-side method to update the config
-        homebridge.updatePluginConfig(data.config);
-        console.log('Configuration saved via event');
-        showStatus('Configuration saved successfully!');
-    }
-});    
+            // Listen for server events
+            homebridge.on('save-config', (data) => {
+                if (data && data.config) {
+                    // Use the client-side method to update the config
+                    homebridge.updatePluginConfig(data.config);
+                    console.log('Configuration saved via event');
+                    showStatus('Configuration saved successfully!');
+                }
+            });
+            
             console.log('SleepMe UI initialized');
             
             // Get references to form elements
@@ -499,17 +499,18 @@ homebridge.on('save-config', (data) => {
                     ]
                 }
             };
-            
-            // Function to show status messages
-            function showStatus(message, isError = false) {
+        // Enhanced showStatus with auto-hide option
+        function showStatus(message, isError = false, autoHide = true) {
                 statusElement.textContent = message;
                 statusElement.className = isError ? 'status error' : 'status success';
                 statusElement.classList.remove('hidden');
                 
-                // Hide the message after 5 seconds
-                setTimeout(() => {
-                    statusElement.classList.add('hidden');
-                }, 5000);
+                // Auto-hide after delay if enabled
+                if (autoHide) {
+                    setTimeout(() => {
+                        statusElement.classList.add('hidden');
+                    }, 5000);
+                }
             }
             
             // Tab functionality
@@ -567,7 +568,173 @@ homebridge.on('save-config', (data) => {
                 }
             });
             
-            // Apply templates
+            // Load current configuration
+            async function loadConfig() {
+                try {
+                    console.log('Attempting to load configuration...');
+                    
+                    // Show loading indicator or message if needed
+                    statusElement.textContent = 'Loading configuration...';
+                    statusElement.className = 'status';
+                    statusElement.classList.remove('hidden');
+                    
+                    // Get configuration from Homebridge
+                    let config = {};
+                    
+                    try {
+                        // Make request to server to get config
+                        const response = await homebridge.request('/config');
+                        console.log('Config response:', response);
+                        
+                        if (response && response.success && response.config) {
+                            config = response.config;
+                            console.log('Loaded config:', config);
+                            
+                            // Hide loading message
+                            statusElement.classList.add('hidden');
+                        } else {
+                            console.warn('Could not load config from server:', response);
+                            statusElement.textContent = 'Using default configuration (could not load saved values)';
+                            statusElement.className = 'status error';
+                        }
+                    } catch (loadError) {
+                        console.error('Error loading config:', loadError);
+                        statusElement.textContent = 'Error loading configuration, using defaults';
+                        statusElement.className = 'status error';
+                    }
+                    
+                    // Fill form with current values or defaults
+                    document.getElementById('apiToken').value = config.apiToken || '';
+                    document.getElementById('unit').value = config.unit || 'C';
+                    document.getElementById('pollingInterval').value = config.pollingInterval || 90;
+                    document.getElementById('logLevel').value = config.logLevel || 'normal';
+                    
+                    // Handle schedules
+                    const enableSchedules = !!config.enableSchedules;
+                    document.getElementById('enableSchedules').checked = enableSchedules;
+                    schedulesContainer.classList.toggle('hidden', !enableSchedules);
+                    
+                    // Load schedules
+                    schedules = Array.isArray(config.schedules) ? [...config.schedules] : [];
+                    renderScheduleList();
+                    
+                    // Update temperature validation based on unit
+                    updateTemperatureValidation();
+                    
+                    // Hide status message after a delay
+                    setTimeout(() => {
+                        statusElement.classList.add('hidden');
+                    }, 3000);
+                    
+                } catch (error) {
+                    console.error('Error in loadConfig:', error);
+                    statusElement.textContent = 'Error loading configuration';
+                    statusElement.className = 'status error';
+                }
+            }
+            
+            // Save configuration to the server
+            async function saveConfig(formData) {
+                try {
+                    // Show saving indicator
+                    showStatus('Saving configuration...', false, false);
+                    
+                    // Build configuration object
+                    const config = {
+                        platform: "SleepMeSimple",
+                        name: 'SleepMe Simple',
+                        apiToken: formData.get('apiToken'),
+                        unit: formData.get('unit'),
+                        pollingInterval: parseInt(formData.get('pollingInterval'), 10),
+                        logLevel: formData.get('logLevel'),
+                        enableSchedules: formData.get('enableSchedules') === 'on'
+                    };
+                    
+                    // Add schedules if enabled
+                    if (config.enableSchedules && schedules.length > 0) {
+                        config.schedules = schedules;
+                    }
+                    
+                    console.log('Saving config:', config);
+                    
+                    // Send to server
+                    const response = await homebridge.request('/saveConfig', { 
+                        method: 'POST',
+                        body: { config }
+                    });
+                    
+                    console.log('Save config response:', response);
+                    
+                    if (response && response.success) {
+                        showStatus('Configuration saved successfully!');
+                    } else {
+                        showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
+                    }
+                } catch (error) {
+                    console.error('Save config error:', error);
+                    showStatus('Error saving configuration: ' + error.message, true);
+                }
+            }
+            
+            // Handle form submission
+            configForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                
+                // Disable form elements during save
+                const formElements = configForm.elements;
+                for (let i = 0; i < formElements.length; i++) {
+                    formElements[i].disabled = true;
+                }
+                
+                try {
+                    const formData = new FormData(configForm);
+                    await saveConfig(formData);
+                } finally {
+                    // Re-enable form elements
+                    for (let i = 0; i < formElements.length; i++) {
+                        formElements[i].disabled = false;
+                    }
+                }
+            });
+            
+            // Handle test connection button
+            testConnectionBtn.addEventListener('click', async () => {
+                const apiToken = document.getElementById('apiToken').value.trim();
+                
+                if (!apiToken) {
+                    showStatus('API token is required', true);
+                    return;
+                }
+                
+                // Update button state and show status
+                testConnectionBtn.disabled = true;
+                testConnectionBtn.textContent = 'Testing...';
+                showStatus('Testing connection...', false, false);
+                
+                try {
+                    console.log('Sending test connection request...');
+                    const response = await homebridge.request('/device/test', {
+                        method: 'POST',
+                        body: { apiToken }
+                    });
+                    
+                    console.log('Test connection response:', response);
+                    
+                    if (response && response.success) {
+                        showStatus(response.message || 'Connection successful');
+                    } else {
+                        showStatus(response.error || 'Connection failed', true);
+                    }
+                } catch (error) {
+                    console.error('Test connection error:', error);
+                    showStatus(`Connection test failed: ${error.message}`, true);
+                } finally {
+                    // Restore button state
+                    testConnectionBtn.disabled = false;
+                    testConnectionBtn.textContent = 'Test Connection';
+                }
+            });
+                // Apply templates
             applyTemplatesBtn.addEventListener('click', () => {
                 const weekdayKey = weekdayTemplateSelect.value;
                 const weekendKey = weekendTemplateSelect.value;
@@ -768,235 +935,130 @@ homebridge.on('save-config', (data) => {
             
             // Cancel edit button handler
             cancelEditBtn.addEventListener('click', exitEditMode);
-            
-          // Load current configuration from the server
-async function loadConfig() {
-    try {
-        // Get configuration from Homebridge
-        let config = {};
-        
-        try {
-            // Request configuration from the server
-            const response = await homebridge.request('/config');
-            
-            if (response && response.success && response.config) {
-                config = response.config;
-                console.log('Config loaded successfully', config);
-            } else {
-                console.warn('Could not load config from server, using defaults');
-            }
-        } catch (loadError) {
-            console.warn('Error loading config, using defaults:', loadError);
-            // Don't show error to user, just use defaults
-        }
-        
-        // Fill form with current values or defaults
-        // Use more specific property access to handle potentially nested config
-        const apiTokenElem = document.getElementById('apiToken');
-        const unitElem = document.getElementById('unit');
-        const pollingIntervalElem = document.getElementById('pollingInterval');
-        const logLevelElem = document.getElementById('logLevel');
-        const enableSchedulesElem = document.getElementById('enableSchedules');
-        
-        // More robust property access with explicit defaults
-        if (apiTokenElem) apiTokenElem.value = config.apiToken || '';
-        if (unitElem) unitElem.value = config.unit || 'C';
-        if (pollingIntervalElem) pollingIntervalElem.value = config.pollingInterval || 90;
-        if (logLevelElem) logLevelElem.value = config.logLevel || 'normal';
-        
-        // Handle schedules
-        const enableSchedules = Boolean(config.enableSchedules);
-        if (enableSchedulesElem) enableSchedulesElem.checked = enableSchedules;
-        schedulesContainer.classList.toggle('hidden', !enableSchedules);
-        
-        // Load schedules with proper validation
-        schedules = Array.isArray(config.schedules) ? [...config.schedules] : [];
-        
-        // Ensure all schedules have required properties
-        schedules = schedules.filter(schedule => {
-            return schedule && 
-                   typeof schedule.type === 'string' && 
-                   typeof schedule.time === 'string' &&
-                   !isNaN(parseFloat(schedule.temperature));
-        });
-        
-        renderScheduleList();
-        
-        // Update temperature validation based on unit
-        updateTemperatureValidation();
-        
-    } catch (error) {
-        console.error('Error in loadConfig:', error);
-        // Don't show loading errors to user, just use defaults
-    }
-}
-
-// Save configuration to the server
-async function saveConfig(formData) {
-    try {
-        // Construct config object from form data
-        const config = {
-            platform: "SleepMeSimple",
-            name: 'SleepMe Simple',
-            apiToken: formData.get('apiToken'),
-            unit: formData.get('unit'),
-            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
-            logLevel: formData.get('logLevel'),
-            enableSchedules: formData.get('enableSchedules') === 'on'
-        };
-        
-        // Add schedules if enabled
-        if (config.enableSchedules && schedules.length > 0) {
-            config.schedules = schedules;
-        }
-        
-        console.log('Saving config...', config);
-        
-        try {
-            // Try direct client-side save first
-            await homebridge.updatePluginConfig(config);
-            showStatus('Configuration saved successfully!');
-        } catch (directError) {
-            console.error('Direct save failed, trying via server:', directError);
-            
-            // Fall back to server-side save if direct save fails
-            const response = await homebridge.request('/saveConfig', { 
-                body: { config: config }
-            });
-            
-            if (response && response.success) {
-                showStatus('Configuration saved successfully!');
-            } else {
-                showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
-            }
-        }
-    } catch (error) {
-        showStatus('Error saving configuration: ' + error.message, true);
-    }
-} 
             // Render the schedule list with logical ordering
-function renderScheduleList() {
-    scheduleList.innerHTML = '';
-    
-    if (schedules.length === 0) {
-        scheduleList.innerHTML = '<p>No schedules configured.</p>';
-        return;
-    }
-    
-    // Group schedules by type for better organization
-    const groupedSchedules = {};
-    
-    schedules.forEach(schedule => {
-        if (!groupedSchedules[schedule.type]) {
-            groupedSchedules[schedule.type] = [];
-        }
-        groupedSchedules[schedule.type].push(schedule);
-    });
-    
-    // Helper function to determine schedule order (bedtime first, wake-up last)
-    function getScheduleOrderWeight(schedule) {
-        // Check for wake-up schedules by description
-        if (schedule.description && 
-            (schedule.description.toLowerCase().includes('wake') || 
-             schedule.description.toLowerCase().includes('wake-up') ||
-             schedule.description.toLowerCase().includes('warm hug'))) {
-            return 3; // Wake-up schedules last
-        }
-        
-        // Check if it's a morning time (5-10 AM)
-        const hourMatch = schedule.time.match(/^(\d{1,2}):/);
-        if (hourMatch) {
-            const hour = parseInt(hourMatch[1], 10);
-            if (hour >= 5 && hour < 10) {
-                return 2; // Morning schedules second
+            function renderScheduleList() {
+                scheduleList.innerHTML = '';
+                
+                if (schedules.length === 0) {
+                    scheduleList.innerHTML = '<p>No schedules configured.</p>';
+                    return;
+                }
+                
+                // Group schedules by type for better organization
+                const groupedSchedules = {};
+                
+                schedules.forEach(schedule => {
+                    if (!groupedSchedules[schedule.type]) {
+                        groupedSchedules[schedule.type] = [];
+                    }
+                    groupedSchedules[schedule.type].push(schedule);
+                });
+                
+                // Helper function to determine schedule order (bedtime first, wake-up last)
+                function getScheduleOrderWeight(schedule) {
+                    // Check for wake-up schedules by description
+                    if (schedule.description && 
+                        (schedule.description.toLowerCase().includes('wake') || 
+                        schedule.description.toLowerCase().includes('wake-up') ||
+                        schedule.description.toLowerCase().includes('warm hug'))) {
+                        return 3; // Wake-up schedules last
+                    }
+                    
+                    // Check if it's a morning time (5-10 AM)
+                    const hourMatch = schedule.time.match(/^(\d{1,2}):/);
+                    if (hourMatch) {
+                        const hour = parseInt(hourMatch[1], 10);
+                        if (hour >= 5 && hour < 10) {
+                            return 2; // Morning schedules second
+                        }
+                    }
+                    
+                    return 1; // Bedtime/evening schedules first
+                }
+                
+                // Render each group
+                Object.keys(groupedSchedules).forEach(type => {
+                    const groupHeader = document.createElement('h4');
+                    groupHeader.textContent = type;
+                    groupHeader.style.marginTop = '15px';
+                    groupHeader.style.marginBottom = '5px';
+                    scheduleList.appendChild(groupHeader);
+                    
+                    // Sort schedules by logical order (bedtime first, wake-up last)
+                    const sortedSchedules = groupedSchedules[type].sort((a, b) => {
+                        const orderA = getScheduleOrderWeight(a);
+                        const orderB = getScheduleOrderWeight(b);
+                        
+                        // If they're the same category, sort by time
+                        if (orderA === orderB) {
+                            return a.time.localeCompare(b.time);
+                        }
+                        
+                        return orderA - orderB;
+                    });
+                    
+                    sortedSchedules.forEach((schedule) => {
+                        const scheduleItem = document.createElement('div');
+                        scheduleItem.className = 'schedule-item';
+                        
+                        // Format display info
+                        let displayInfo = '';
+                        
+                        if (schedule.type === 'Specific Day') {
+                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            displayInfo += `${days[schedule.day]} `;
+                        }
+                        
+                        // Format temperature based on current selected unit
+                        let displayTemp = schedule.temperature;
+                        const currentUnit = unitSelect.value;
+                        
+                        // If temperature is stored in Celsius but we're displaying Fahrenheit
+                        if (schedule.unit === 'C' && currentUnit === 'F') {
+                            displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
+                        } 
+                        // If temperature is stored in Fahrenheit but we're displaying Celsius
+                        else if (schedule.unit === 'F' && currentUnit === 'C') {
+                            displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
+                        }
+                        
+                        displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
+                        
+                        // Add description if available
+                        if (schedule.description) {
+                            displayInfo += ` (${schedule.description})`;
+                        }
+                        
+                        // Store the global index for this schedule
+                        const globalIndex = schedules.indexOf(schedule);
+                        
+                        // Create schedule item content with Edit and Remove buttons
+                        scheduleItem.innerHTML = `
+                            <div class="schedule-item-info">${displayInfo}</div>
+                            <div class="schedule-item-actions">
+                                <button type="button" class="edit" data-index="${globalIndex}">Edit</button>
+                                <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
+                            </div>
+                        `;
+                        
+                        // Add event listener for edit button
+                        scheduleItem.querySelector('button.edit').addEventListener('click', (event) => {
+                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                            editSchedule(idx);
+                        });
+                        
+                        // Add event listener for remove button
+                        scheduleItem.querySelector('button.danger').addEventListener('click', (event) => {
+                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                            schedules.splice(idx, 1);
+                            renderScheduleList();
+                        });
+                        
+                        scheduleList.appendChild(scheduleItem);
+                    });
+                });
             }
-        }
-        
-        return 1; // Bedtime/evening schedules first
-    }
-    
-    // Render each group
-    Object.keys(groupedSchedules).forEach(type => {
-        const groupHeader = document.createElement('h4');
-        groupHeader.textContent = type;
-        groupHeader.style.marginTop = '15px';
-        groupHeader.style.marginBottom = '5px';
-        scheduleList.appendChild(groupHeader);
-        
-        // Sort schedules by logical order (bedtime first, wake-up last)
-        const sortedSchedules = groupedSchedules[type].sort((a, b) => {
-            const orderA = getScheduleOrderWeight(a);
-            const orderB = getScheduleOrderWeight(b);
             
-            // If they're the same category, sort by time
-            if (orderA === orderB) {
-                return a.time.localeCompare(b.time);
-            }
-            
-            return orderA - orderB;
-        });
-        
-        sortedSchedules.forEach((schedule) => {
-            const scheduleItem = document.createElement('div');
-            scheduleItem.className = 'schedule-item';
-            
-            // Format display info
-            let displayInfo = '';
-            
-            if (schedule.type === 'Specific Day') {
-                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                displayInfo += `${days[schedule.day]} `;
-            }
-            
-            // Format temperature based on current selected unit
-            let displayTemp = schedule.temperature;
-            const currentUnit = unitSelect.value;
-            
-            // If temperature is stored in Celsius but we're displaying Fahrenheit
-            if (schedule.unit === 'C' && currentUnit === 'F') {
-                displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
-            } 
-            // If temperature is stored in Fahrenheit but we're displaying Celsius
-            else if (schedule.unit === 'F' && currentUnit === 'C') {
-                displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
-            }
-            
-            displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
-            
-            // Add description if available
-            if (schedule.description) {
-                displayInfo += ` (${schedule.description})`;
-            }
-            
-            // Store the global index for this schedule
-            const globalIndex = schedules.indexOf(schedule);
-            
-            // Create schedule item content with Edit and Remove buttons
-            scheduleItem.innerHTML = `
-                <div class="schedule-item-info">${displayInfo}</div>
-                <div class="schedule-item-actions">
-                    <button type="button" class="edit" data-index="${globalIndex}">Edit</button>
-                    <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
-                </div>
-            `;
-            
-            // Add event listener for edit button
-            scheduleItem.querySelector('button.edit').addEventListener('click', (event) => {
-                const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                editSchedule(idx);
-            });
-            
-            // Add event listener for remove button
-            scheduleItem.querySelector('button.danger').addEventListener('click', (event) => {
-                const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                schedules.splice(idx, 1);
-                renderScheduleList();
-            });
-            
-            scheduleList.appendChild(scheduleItem);
-        });
-    });
-}
             // Add/Update schedule
             addScheduleBtn.addEventListener('click', () => {
                 // Validate inputs first
@@ -1045,88 +1107,6 @@ function renderScheduleList() {
                 // Update UI
                 renderScheduleList();
             });
-         
-            async function saveConfig(formData) {
-    try {
-        const config = {
-            platform: "SleepMeSimple",
-            name: 'SleepMe Simple',
-            apiToken: formData.get('apiToken'),
-            unit: formData.get('unit'),
-            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
-            logLevel: formData.get('logLevel'),
-            enableSchedules: formData.get('enableSchedules') === 'on'
-        };
-        
-        if (config.enableSchedules && schedules.length > 0) {
-            config.schedules = schedules;
-        }
-        
-        console.log('Saving config...');
-        
-        try {
-            // First try client-side direct saving
-            await homebridge.updatePluginConfig(config);
-            showStatus('Configuration saved successfully!');
-        } catch (directError) {
-            console.error('Direct save failed, trying via server:', directError);
-            
-            // Fall back to server method if direct save fails
-            const response = await homebridge.request('/saveConfig', { 
-                body: {
-                    config: config
-                }
-            });
-            
-            if (response && response.success) {
-                showStatus('Configuration saved successfully!');
-            } else {
-                showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
-            }
-        }
-    } catch (error) {
-        showStatus('Error saving configuration: ' + error.message, true);
-    }
-}
-            
-            // Handle form submission
-            configForm.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                const formData = new FormData(configForm);
-                await saveConfig(formData);
-            });
-            
-// Handle test connection button
-testConnectionBtn.addEventListener('click', async () => {
-    const apiToken = document.getElementById('apiToken').value.trim();
-    
-    if (!apiToken) {
-        showStatus('API token is required', true);
-        return;
-    }
-    
-    // Disable button during test
-    testConnectionBtn.disabled = true;
-    testConnectionBtn.textContent = 'Testing...';
-    
-    try {
-        const response = await homebridge.request('/device/test', {
-            body: { apiToken }
-        });
-        
-        if (response.success) {
-            showStatus(response.message || 'Connection successful');
-        } else {
-            showStatus(response.error || 'Connection failed', true);
-        }
-    } catch (error) {
-        showStatus(`Connection test failed: ${error.message}`, true);
-    } finally {
-        // Re-enable button
-        testConnectionBtn.disabled = false;
-        testConnectionBtn.textContent = 'Test Connection';
-    }
-});
             
             // Load initial configuration
             await loadConfig();

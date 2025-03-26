@@ -9,107 +9,100 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
 
-    // Register request handlers for UI endpoints
+    // Register request handlers
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config', this.getConfig.bind(this));
     this.onRequest('/saveConfig', this.saveConfig.bind(this));
     
     this.log('SleepMe UI Server initialized');
-    this.ready(); // Signal that the server is ready
+    this.ready();
   }
 
-  // Helper method for consistent logging
   log(message, isError = false) {
     const logMethod = isError ? console.error : console.log;
     logMethod(`[SleepMe UI] ${message}`);
   }
 
-  // Test the connection to the SleepMe API with the provided token
   async testDeviceConnection(payload) {
-    try {
-      this.log('Test connection request received');
-      
-      // Validate input
-      if (!payload?.body?.apiToken) {
-        this.log('Missing API token in request', true);
-        return {
-          success: false,
-          error: 'API token is required'
-        };
-      }
-
-      const { apiToken } = payload.body;
-      this.log(`Testing connection with token: ${apiToken.substring(0, 4)}...`);
-      
-      try {
-        // Make request to SleepMe API to verify the token
-        const response = await axios({
-          method: 'GET',
-          url: `${API_BASE_URL}/devices`,
-          headers: {
-            'Authorization': `Bearer ${apiToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000 // 10-second timeout
-        });
-        
-        // Handle different API response formats
-        const devices = Array.isArray(response.data) ? response.data : (response.data.devices || []);
-        
-        this.log(`API connection successful, found ${devices.length} devices`);
-        return {
-          success: true,
-          message: `Connection successful. Found ${devices.length} device(s).`
-        };
-      } catch (apiError) {
-        this.log(`API connection test failed: ${apiError.message}`, true);
-        
-        const statusCode = apiError.response?.status;
-        const errorMessage = apiError.response?.data?.message || apiError.message;
-        
-        return {
-          success: false,
-          error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
-        };
-      }
-    } catch (error) {
-      this.log(`Device connection test failed: ${error.message}`, true);
+    this.log('Test connection request received');
+    
+    if (!payload || !payload.body || !payload.body.apiToken) {
+      this.log('Missing API token in request', true);
       return {
         success: false,
-        error: error.message || 'Unknown error occurred'
+        error: 'API token is required'
+      };
+    }
+
+    const { apiToken } = payload.body;
+    this.log(`Testing connection with token: ${apiToken.substring(0, 4)}...`);
+    
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: `${API_BASE_URL}/devices`,
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      
+      const devices = Array.isArray(response.data) ? response.data : (response.data.devices || []);
+      
+      this.log(`API connection successful, found ${devices.length} devices`);
+      return {
+        success: true,
+        message: `Connection successful. Found ${devices.length} device(s).`
+      };
+    } catch (apiError) {
+      const statusCode = apiError.response?.status;
+      const errorMessage = apiError.response?.data?.message || apiError.message;
+      
+      this.log(`API connection test failed: ${errorMessage}`, true);
+      return {
+        success: false,
+        error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
       };
     }
   }
 
-  // Retrieve the current plugin configuration
   async getConfig() {
     try {
-      this.log('Get config request received');
+      this.log('Getting plugin configuration');
       
-      // Get current configuration using the proper method
-      const pluginConfig = await this.getPluginConfig();
+      // Get all platforms from Homebridge config
+      const homebridgeConfig = await this.homebridge.getPluginConfig();
       
-      this.log('Configuration retrieved successfully');
+      // Find our platform configuration
+      let pluginConfig = {};
+      if (Array.isArray(homebridgeConfig)) {
+        // For multi-instance plugins
+        pluginConfig = homebridgeConfig[0] || {};
+      } else {
+        // For single instance plugins
+        pluginConfig = homebridgeConfig || {};
+      }
+      
+      this.log('Plugin configuration retrieved successfully');
       return {
         success: true,
-        config: pluginConfig || {}
+        config: pluginConfig
       };
     } catch (error) {
-      this.log(`Get config failed: ${error.message}`, true);
+      this.log(`Failed to get plugin configuration: ${error.message}`, true);
       return {
         success: false,
-        error: error.message
+        error: `Failed to get configuration: ${error.message}`
       };
     }
   }
   
-  // Save the updated plugin configuration
   async saveConfig(payload) {
     try {
       this.log('Save config request received');
       
-      // Validate input
-      if (!payload?.body?.config) {
+      if (!payload || !payload.body || !payload.body.config) {
         this.log('Missing config in request body', true);
         return {
           success: false,
@@ -119,7 +112,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       const config = payload.body.config;
       
-      // Ensure required fields are present
+      // Ensure required fields
       if (!config.platform) {
         config.platform = "SleepMeSimple";
       }
@@ -128,43 +121,38 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         config.name = "SleepMe Simple";
       }
       
-      // Handle schedules configuration
-      if (config.enableSchedules && Array.isArray(config.schedules)) {
-        this.log(`Configuration contains ${config.schedules.length} schedules`);
-      } else if (config.enableSchedules) {
+      // Validate schedules
+      if (config.enableSchedules && !Array.isArray(config.schedules)) {
         config.schedules = [];
       }
       
+      this.log(`Saving config: ${JSON.stringify(config, null, 2)}`);
+      
       try {
-        this.log('Saving configuration to Homebridge...');
-        
-        // Update configuration using the proper method
-        await this.updatePluginConfig(config);
-        
-        // Also notify UI clients that config has changed
-        this.pushEvent('save-config', { config: config });
+        // Update the plugin config directly
+        await this.homebridge.updatePluginConfig([config]);
         
         this.log('Configuration saved successfully');
         return {
           success: true,
           message: 'Configuration saved successfully'
         };
-      } catch (error) {
-        this.log(`Error saving configuration: ${error.message}`, true);
+      } catch (saveError) {
+        this.log(`Error saving configuration: ${saveError.message}`, true);
         return {
           success: false,
-          error: `Error saving configuration: ${error.message}`
+          error: `Failed to save configuration: ${saveError.message}`
         };
       }
     } catch (error) {
       this.log(`Save config failed: ${error.message}`, true);
       return {
         success: false,
-        error: error.message
+        error: `Error: ${error.message}`
       };
     }
   }
 }
 
-// Create and export an instance of the server
-export default new SleepMeUiServer();
+// Initialize the server
+export default () => new SleepMeUiServer();
