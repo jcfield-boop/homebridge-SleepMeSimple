@@ -4,6 +4,7 @@
   "singular": true,
   "customUi": true,
   "customUiPath": "./customui",
+  "footerDisplay": "SleepMe Simple v4.0.3-dev.0",
   "schema": {
     "type": "object",
     "properties": {
@@ -50,77 +51,50 @@
         "default": false,
         "description": "Enable temperature scheduling features"
       },
-      "schedulesSection": {
+      "schedules": {
+        "type": "array",
         "title": "Temperature Schedules",
-        "type": "object",
-        "expandable": true,
-        "expanded": true,
+        "description": "Configure scheduled temperature changes",
         "condition": {
           "functionBody": "return model.enableSchedules === true;"
         },
-        "properties": {
-          "schedules": {
-            "type": "array",
-            "title": "Schedule List",
-            "description": "Configure scheduled temperature changes. Select from pre-defined templates or customize your own.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "title": "Schedule Type",
-                  "type": "string",
-                  "default": "Everyday",
-                  "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"],
-                  "description": "When this schedule should be active"
-                },
-                "day": {
-                  "title": "Day",
-                  "type": "string",
-                  "default": "Monday",
-                  "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-                  "description": "Day of the week (for Specific Day schedules)",
-                  "condition": {
-                    "functionBody": "return model.schedulesSection.schedules[arrayIndices[0]].type === 'Specific Day';"
-                  }
-                },
-                "time": {
-                  "title": "Time",
-                  "type": "string",
-                  "format": "time",
-                  "default": "21:30",
-                  "description": "Time for this scheduled event (HH:MM 24-hour format)"
-                },
-                "temperature": {
-                  "title": "Target Temperature",
-                  "type": "number",
-                  "description": "Target temperature in your selected unit",
-                  "oneOf": [
-                    {
-                      "title": "Celsius",
-                      "type": "number",
-                      "default": 21,
-                      "minimum": 13,
-                      "maximum": 46,
-                      "condition": {
-                        "functionBody": "return model.unit === 'C';"
-                      }
-                    },
-                    {
-                      "title": "Fahrenheit",
-                      "type": "number",
-                      "default": 70,
-                      "minimum": 55,
-                      "maximum": 115,
-                      "condition": {
-                        "functionBody": "return model.unit === 'F';"
-                      }
-                    }
-                  ]
-                }
-              },
-              "required": ["type", "time", "temperature"]
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "title": "Schedule Type",
+              "type": "string",
+              "default": "Everyday",
+              "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"],
+              "description": "When this schedule should be active"
+            },
+            "day": {
+              "title": "Day",
+              "type": "string",
+              "default": "Monday",
+              "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+              "description": "Day of the week (for Specific Day schedules)",
+              "condition": {
+                "functionBody": "return model.schedules[arrayIndices[0]].type === 'Specific Day';"
+              }
+            },
+            "time": {
+              "title": "Time",
+              "type": "string",
+              "format": "time",
+              "default": "21:30",
+              "description": "Time for this scheduled event (HH:MM 24-hour format)"
+            },
+            "temperature": {
+              "title": "Target Temperature",
+              "type": "number",
+              "description": "Target temperature in your selected unit",
+              "default": 21,
+              "minimum": 13,
+              "maximum": 46
             }
-          }
+          },
+          "required": ["type", "time", "temperature"]
         }
       },
       "advanced": {
