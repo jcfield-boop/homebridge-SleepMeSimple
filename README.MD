@@ -1,6 +1,6 @@
 # SleepMe Simple - Homebridge Plugin
 
-<img src="icons/sleepme.jpg" width="100" alt="SleepMe Simple Plugin Icon">
+<img src="https://raw.githubusercontent.com/jcfield-boop/homebridge-sleepme-simple/main/icons/sleepme.jpg" width="100" alt="SleepMe Simple Plugin Icon">
 
 A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad) that provides reliable and responsive HomeKit integration with advanced API management.
 
