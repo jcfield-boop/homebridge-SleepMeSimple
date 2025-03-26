@@ -1,70 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SleepMe Simple Custom UI</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            color: #333;
-        }
-        .hello-container {
-            background-color: #f5f5f7;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h2 {
-            color: #007aff;
-            margin-top: 0;
-        }
-        .status-indicator {
-            background-color: #4cd964;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="hello-container">
-        <h2>Hello from SleepMe Simple!</h2>
-        <p>This is a basic custom UI for the SleepMe Simple Homebridge plugin.</p>
-        <p>Your plugin is running and the custom UI is successfully loaded.</p>
-        <div class="status-indicator">UI Status: Active</div>
-    </div>
+<!-- No HTML, head, or body tags -->
+<div class="card">
+  <div class="card-header">
+    <h3>SleepMe Simple UI</h3>
+  </div>
+  <div class="card-body">
+    <p>Hello World! This is a test of the custom UI.</p>
+    <div id="status">Checking connection...</div>
+  </div>
+</div>
 
-    <script>
-        // Simple script to show we're running
-        console.log('SleepMe Simple UI loaded at:', new Date().toISOString());
+<script>
+  // Wait for DOM to be ready
+  document.addEventListener('DOMContentLoaded', async function() {
+    const statusDiv = document.getElementById('status');
+    
+    try {
+      // Check if homebridge API is available
+      if (window.homebridge) {
+        statusDiv.textContent = 'Connected to Homebridge API';
         
-        // Check if homebridge object is available (should be in Homebridge environment)
-        if (typeof window.homebridge !== 'undefined') {
-            console.log('Homebridge API detected');
-            document.querySelector('.status-indicator').textContent = 'UI Status: Connected to Homebridge';
-        } else {
-            console.log('Running outside Homebridge environment');
-        }
+        // Try to get config
+        const config = await window.homebridge.getPluginConfig();
+        console.log('Plugin config loaded:', config);
         
-        // Display basic info
-        const infoDiv = document.createElement('div');
-        infoDiv.innerHTML = `
-            <div class="hello-container">
-                <h2>Environment Info</h2>
-                <p>Date: ${new Date().toLocaleString()}</p>
-                <p>Browser: ${navigator.userAgent}</p>
-                <p>Window size: ${window.innerWidth}x${window.innerHeight}</p>
-            </div>
-        `;
-        document.body.appendChild(infoDiv);
-    </script>
-</body>
-</html>
+        // Add config info
+        const configInfo = document.createElement('div');
+        configInfo.innerHTML = '<p>Configuration loaded successfully!</p>';
+        document.querySelector('.card-body').appendChild(configInfo);
+      } else {
+        statusDiv.textContent = 'Homebridge API not available';
+      }
+    } catch (error) {
+      statusDiv.textContent = 'Error connecting to Homebridge: ' + error.message;
+      console.error('Custom UI error:', error);
+    }
+  });
+</script>
