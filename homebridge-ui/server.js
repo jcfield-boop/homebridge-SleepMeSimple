@@ -1,4 +1,4 @@
-// homebridge-ui/server.js - FIXED VERSION
+// homebridge-ui/server.js - CORRECTED VERSION
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
 
@@ -76,13 +76,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
 
-  // FIXED: Using direct API methods instead of event-based approach
+  // Using the correct method to get plugin config according to docs
   async getConfig() {
     try {
       this.log('Get config request received');
       
-      // Get plugin configuration directly
-      const pluginConfig = await this.getPluginConfig();
+      // Use the standard method to retrieve the current config
+      const pluginConfig = await this.readHomebridge();
       
       this.log('Configuration retrieved successfully');
       return {
@@ -98,7 +98,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // FIXED: More reliable config saving
+  // Correct method for saving config based on documentation
   async saveConfig(payload) {
     try {
       this.log('Save config request received');
@@ -132,10 +132,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       try {
         this.log('Saving configuration to Homebridge...');
         
-        // Use the direct updatePluginConfig method
-        await this.updatePluginConfig(config);
+        // Use the proper method for saving config - pushEvent to UI client
+        // which will use homebridge.updatePluginConfig
+        this.pushEvent('save-config', { config: config });
         
-        this.log('Configuration saved successfully');
+        this.log('Configuration save request sent');
         return {
           success: true,
           message: 'Configuration saved successfully'

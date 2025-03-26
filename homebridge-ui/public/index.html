@@ -241,7 +241,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="../icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
+            <img src="icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
             <h1>SleepMe Simple Configuration</h1>
         </div>
         
@@ -402,6 +402,15 @@
     <script>
         // Wait for DOM to be fully loaded
         document.addEventListener('DOMContentLoaded', async () => {
+        // Listen for server events
+homebridge.on('save-config', (data) => {
+    if (data && data.config) {
+        // Use the client-side method to update the config
+        homebridge.updatePluginConfig(data.config);
+        console.log('Configuration saved via event');
+        showStatus('Configuration saved successfully!');
+    }
+});    
             console.log('SleepMe UI initialized');
             
             // Get references to form elements
@@ -994,6 +1003,13 @@ function renderScheduleList() {
         console.log('Saving config...');
         
         try {
+            // First try client-side direct saving
+            await homebridge.updatePluginConfig(config);
+            showStatus('Configuration saved successfully!');
+        } catch (directError) {
+            console.error('Direct save failed, trying via server:', directError);
+            
+            // Fall back to server method if direct save fails
             const response = await homebridge.request('/saveConfig', { 
                 body: {
                     config: config
@@ -1005,8 +1021,6 @@ function renderScheduleList() {
             } else {
                 showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
             }
-        } catch (error) {
-            showStatus('Failed to save configuration: ' + error.message, true);
         }
     } catch (error) {
         showStatus('Error saving configuration: ' + error.message, true);
