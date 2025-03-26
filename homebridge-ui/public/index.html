@@ -136,6 +136,21 @@
             display: flex;
             justify-content: flex-end;
         }
+        /* Custom style for time input to ensure 24h display */
+        input[type="time"] {
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        .error-text {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        .error-text.visible {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -216,12 +231,14 @@
             
             <div class="form-group">
                 <label for="scheduleTime">Time (24h):</label>
-                <input type="time" id="scheduleTime" value="21:30" required>
+                <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
+                <div id="timeError" class="error-text">Please enter a valid 24-hour time (HH:MM)</div>
             </div>
             
             <div class="form-group">
                 <label for="scheduleTemperature">Temperature:</label>
                 <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
+                <div id="tempError" class="error-text">Temperature must be between 13-46°C (55-115°F)</div>
             </div>
             
             <button type="button" id="addSchedule">Add Schedule</button>
@@ -248,6 +265,11 @@
             const daySelectContainer = document.getElementById('daySelectContainer');
             const addScheduleBtn = document.getElementById('addSchedule');
             const scheduleList = document.getElementById('scheduleList');
+            const scheduleTimeInput = document.getElementById('scheduleTime');
+            const scheduleTemperatureInput = document.getElementById('scheduleTemperature');
+            const timeError = document.getElementById('timeError');
+            const tempError = document.getElementById('tempError');
+            const unitSelect = document.getElementById('unit');
             
             // Schedule storage
             let schedules = [];
@@ -275,6 +297,74 @@
                 schedulesContainer.classList.toggle('hidden', !enableSchedulesCheckbox.checked);
             });
             
+            // Validate time format (24h)
+            scheduleTimeInput.addEventListener('input', validateScheduleTime);
+            scheduleTimeInput.addEventListener('blur', validateScheduleTime);
+            
+            function validateScheduleTime() {
+                const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+                const isValid = timePattern.test(scheduleTimeInput.value);
+                
+                // Show/hide error message
+                timeError.classList.toggle('visible', !isValid);
+                
+                return isValid;
+            }
+            
+            // Validate temperature based on selected unit
+            scheduleTemperatureInput.addEventListener('input', validateTemperature);
+            scheduleTemperatureInput.addEventListener('blur', validateTemperature);
+            unitSelect.addEventListener('change', updateTemperatureValidation);
+            
+            function validateTemperature() {
+                const temp = parseFloat(scheduleTemperatureInput.value);
+                const unit = unitSelect.value;
+                
+                let isValid = true;
+                let errorMsg = '';
+                
+                if (isNaN(temp)) {
+                    isValid = false;
+                    errorMsg = 'Please enter a valid number';
+                } else if (unit === 'C' && (temp < 13 || temp > 46)) {
+                    isValid = false;
+                    errorMsg = 'Temperature must be between 13-46°C';
+                } else if (unit === 'F' && (temp < 55 || temp > 115)) {
+                    isValid = false;
+                    errorMsg = 'Temperature must be between 55-115°F';
+                }
+                
+                // Show/hide error message
+                tempError.textContent = errorMsg;
+                tempError.classList.toggle('visible', !isValid);
+                
+                return isValid;
+            }
+            
+            function updateTemperatureValidation() {
+                const unit = unitSelect.value;
+                // Update min/max attributes based on unit
+                if (unit === 'C') {
+                    scheduleTemperatureInput.setAttribute('min', '13');
+                    scheduleTemperatureInput.setAttribute('max', '46');
+                } else {
+                    scheduleTemperatureInput.setAttribute('min', '55');
+                    scheduleTemperatureInput.setAttribute('max', '115');
+                }
+                
+                // Re-validate with new unit
+                validateTemperature();
+            }
+            
+            // Convert between Celsius and Fahrenheit
+            function convertCtoF(celsius) {
+                return (celsius * 9/5) + 32;
+            }
+            
+            function convertFtoC(fahrenheit) {
+                return (fahrenheit - 32) * 5/9;
+            }
+            
             // Load current configuration
             async function loadConfig() {
                 try {
@@ -284,7 +374,7 @@
                     try {
                         const response = await homebridge.request('/config');
                         
-                        if (response.success && response.config) {
+                        if (response && response.success && response.config) {
                             config = response.config;
                             console.log('Config loaded successfully');
                         } else {
@@ -309,6 +399,9 @@
                     // Load schedules
                     schedules = Array.isArray(config.schedules) ? config.schedules : [];
                     renderScheduleList();
+                    
+                    // Update temperature validation based on unit
+                    updateTemperatureValidation();
                     
                 } catch (error) {
                     console.error('Error in loadConfig:', error);
@@ -335,7 +428,21 @@
                         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                         displayInfo += ` (${days[schedule.day]})`;
                     }
-                    displayInfo += ` at ${schedule.time}: ${schedule.temperature}°${document.getElementById('unit').value}`;
+                    
+                    // Format temperature based on current selected unit
+                    let displayTemp = schedule.temperature;
+                    const currentUnit = unitSelect.value;
+                    
+                    // If temperature is stored in Celsius but we're displaying Fahrenheit
+                    if (schedule.unit === 'C' && currentUnit === 'F') {
+                        displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
+                    } 
+                    // If temperature is stored in Fahrenheit but we're displaying Celsius
+                    else if (schedule.unit === 'F' && currentUnit === 'C') {
+                        displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
+                    }
+                    
+                    displayInfo += ` at ${schedule.time}: ${displayTemp}°${currentUnit}`;
                     
                     // Create schedule item content
                     scheduleItem.innerHTML = `
@@ -356,21 +463,26 @@
             
             // Add new schedule
             addScheduleBtn.addEventListener('click', () => {
-                const type = scheduleTypeSelect.value;
-                const time = document.getElementById('scheduleTime').value;
-                const temperature = parseFloat(document.getElementById('scheduleTemperature').value);
+                // Validate inputs first
+                const isTimeValid = validateScheduleTime();
+                const isTempValid = validateTemperature();
                 
-                // Validate inputs
-                if (!time || isNaN(temperature)) {
-                    showStatus('Please fill in all schedule fields', true);
+                if (!isTimeValid || !isTempValid) {
+                    showStatus('Please correct the errors in the schedule form', true);
                     return;
                 }
+                
+                const type = scheduleTypeSelect.value;
+                const time = scheduleTimeInput.value;
+                const temperature = parseFloat(scheduleTemperatureInput.value);
+                const unit = unitSelect.value;
                 
                 // Create schedule object
                 const schedule = {
                     type,
                     time,
-                    temperature
+                    temperature,
+                    unit
                 };
                 
                 // Add day for specific day schedules
@@ -385,8 +497,8 @@
                 renderScheduleList();
                 
                 // Reset form fields to default values
-                document.getElementById('scheduleTime').value = '21:30';
-                document.getElementById('scheduleTemperature').value = '23';
+                scheduleTimeInput.value = '21:30';
+                scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
                 
                 showStatus('Schedule added');
             });
@@ -396,17 +508,26 @@
                 try {
                     // Create config object from form data
                     const config = {
+                        platform: "SleepMeSimple",
                         name: 'SleepMe Simple',
                         apiToken: formData.get('apiToken'),
                         unit: formData.get('unit'),
                         pollingInterval: parseInt(formData.get('pollingInterval'), 10),
                         logLevel: formData.get('logLevel'),
-                        enableSchedules: formData.get('enableSchedules') === 'on',
-                        schedules: schedules
+                        enableSchedules: formData.get('enableSchedules') === 'on'
                     };
                     
+                    // Only include schedules if enabled
+                    if (config.enableSchedules) {
+                        config.schedules = schedules;
+                    }
+                    
                     // Send to server
-                    const response = await homebridge.request('/save-config', { config });
+                    const response = await homebridge.request('/save-config', { 
+                        body: {
+                            config: config
+                        }
+                    });
                     
                     if (response.success) {
                         showStatus('Configuration saved successfully!');
