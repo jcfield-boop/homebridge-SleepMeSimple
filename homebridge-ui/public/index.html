@@ -35,6 +35,17 @@
             margin-bottom: 10px;
             font-size: 18px;
         }
+        .header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 15px;
+        }
         .form-group {
             margin-bottom: 15px;
             position: relative;
@@ -81,6 +92,12 @@
         }
         button.danger:hover {
             background-color: #c82333;
+        }
+        button.edit {
+            background-color: #28a745;
+        }
+        button.edit:hover {
+            background-color: #218838;
         }
         .status {
             margin-top: 20px;
@@ -223,7 +240,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>SleepMe Simple Configuration</h1>
+        <div class="header">
+            <img src="../icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
+            <h1>SleepMe Simple Configuration</h1>
+        </div>
         
         <div id="status" class="status hidden"></div>
         
@@ -319,6 +339,7 @@
                 </div>
                 
                 <button type="button" id="addSchedule">Add Schedule</button>
+                <button type="button" id="cancelEdit" class="secondary hidden">Cancel</button>
             </div>
             
             <div id="warmHugInfo" class="info-card hidden">
@@ -391,8 +412,10 @@
             const schedulesContainer = document.getElementById('schedulesContainer');
             const scheduleTypeSelect = document.getElementById('scheduleType');
             const daySelectContainer = document.getElementById('daySelectContainer');
+            const daySelect = document.getElementById('scheduleDay');
             const warmHugInfo = document.getElementById('warmHugInfo');
             const addScheduleBtn = document.getElementById('addSchedule');
+            const cancelEditBtn = document.getElementById('cancelEdit');
             const scheduleList = document.getElementById('scheduleList');
             const scheduleTimeInput = document.getElementById('scheduleTime');
             const scheduleTemperatureInput = document.getElementById('scheduleTemperature');
@@ -409,6 +432,10 @@
             
             // Schedule storage
             let schedules = [];
+            
+            // Track editing state
+            let editingScheduleIndex = -1;
+            let isEditing = false;
             
             // Template definitions
             const templates = {
@@ -636,11 +663,15 @@
                 if (unit === 'C') {
                     scheduleTemperatureInput.setAttribute('min', '13');
                     scheduleTemperatureInput.setAttribute('max', '46');
-                    scheduleTemperatureInput.value = '23';
+                    if (!isEditing) {
+                        scheduleTemperatureInput.value = '23';
+                    }
                 } else {
                     scheduleTemperatureInput.setAttribute('min', '55');
                     scheduleTemperatureInput.setAttribute('max', '115');
-                    scheduleTemperatureInput.value = '73';
+                    if (!isEditing) {
+                        scheduleTemperatureInput.value = '73';
+                    }
                 }
                 
                 // Re-validate with new unit
@@ -655,6 +686,79 @@
             function convertFtoC(fahrenheit) {
                 return (fahrenheit - 32) * 5/9;
             }
+            
+            // Function to enter edit mode for a schedule
+            function editSchedule(index) {
+                // Set editing state
+                isEditing = true;
+                editingScheduleIndex = index;
+                
+                // Get the schedule to edit
+                const schedule = schedules[index];
+                
+                // Set form values
+                scheduleTypeSelect.value = schedule.type;
+                
+                // Show day select container if needed
+                if (schedule.type === 'Specific Day') {
+                    daySelectContainer.classList.remove('hidden');
+                    daySelect.value = schedule.day;
+                } else {
+                    daySelectContainer.classList.add('hidden');
+                }
+                
+                // Show warm hug info if needed
+                warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
+                
+                // Set time
+                scheduleTimeInput.value = schedule.time;
+                
+                // Handle temperature based on unit conversion if needed
+                const currentUnit = unitSelect.value;
+                let displayTemp = schedule.temperature;
+                
+                // If temperature is stored in Celsius but we're displaying Fahrenheit
+                if (schedule.unit === 'C' && currentUnit === 'F') {
+                    displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
+                } 
+                // If temperature is stored in Fahrenheit but we're displaying Celsius
+                else if (schedule.unit === 'F' && currentUnit === 'C') {
+                    displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
+                }
+                
+                scheduleTemperatureInput.value = displayTemp;
+                
+                // Change button text
+                addScheduleBtn.textContent = 'Update Schedule';
+                
+                // Show cancel button
+                cancelEditBtn.classList.remove('hidden');
+            }
+            
+            // Function to exit edit mode
+            function exitEditMode() {
+                isEditing = false;
+                editingScheduleIndex = -1;
+                
+                // Reset form
+                scheduleTypeSelect.value = 'Everyday';
+                daySelectContainer.classList.add('hidden');
+                warmHugInfo.classList.add('hidden');
+                scheduleTimeInput.value = '21:30';
+                
+                // Set default temperature based on current unit
+                const unit = unitSelect.value;
+                scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
+                
+                // Reset button text
+                addScheduleBtn.textContent = 'Add Schedule';
+                
+                // Hide cancel button
+                cancelEditBtn.classList.add('hidden');
+            }
+            
+            // Cancel edit button handler
+            cancelEditBtn.addEventListener('click', exitEditMode);
             
             // Load current configuration
             async function loadConfig() {
@@ -732,7 +836,7 @@
                         return a.time.localeCompare(b.time);
                     });
                     
-                    sortedSchedules.forEach((schedule, index) => {
+                    sortedSchedules.forEach((schedule) => {
                         const scheduleItem = document.createElement('div');
                         scheduleItem.className = 'schedule-item';
                         
@@ -767,14 +871,23 @@
                         // Store the global index for this schedule
                         const globalIndex = schedules.indexOf(schedule);
                         
-                        // Create schedule item content
+                        // Create schedule item content with Edit and Remove buttons
                         scheduleItem.innerHTML = `
                             <div class="schedule-item-info">${displayInfo}</div>
-                            <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
+                            <div class="schedule-item-actions">
+                                <button type="button" class="edit" data-index="${globalIndex}">Edit</button>
+                                <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
+                            </div>
                         `;
                         
+                        // Add event listener for edit button
+                        scheduleItem.querySelector('button.edit').addEventListener('click', (event) => {
+                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                            editSchedule(idx);
+                        });
+                        
                         // Add event listener for remove button
-                        scheduleItem.querySelector('button').addEventListener('click', (event) => {
+                        scheduleItem.querySelector('button.danger').addEventListener('click', (event) => {
                             const idx = parseInt(event.target.getAttribute('data-index'), 10);
                             schedules.splice(idx, 1);
                             renderScheduleList();
@@ -785,7 +898,7 @@
                 });
             }
             
-            // Add new schedule
+            // Add/Update schedule
             addScheduleBtn.addEventListener('click', () => {
                 // Validate inputs first
                 const isTimeValid = validateScheduleTime();
@@ -800,6 +913,7 @@
                 const time = scheduleTimeInput.value;
                 const temperature = parseFloat(scheduleTemperatureInput.value);
                 const unit = unitSelect.value;
+                
                 // Create schedule object
                 const schedule = {
                     type,
@@ -813,17 +927,24 @@
                     schedule.day = parseInt(document.getElementById('scheduleDay').value, 10);
                 }
                 
-                // Add to schedules array
-                schedules.push(schedule);
+                if (isEditing) {
+                    // Update existing schedule
+                    schedules[editingScheduleIndex] = schedule;
+                    showStatus('Schedule updated');
+                    exitEditMode();
+                } else {
+                    // Add new schedule
+                    schedules.push(schedule);
+                    
+                    // Reset form fields to default values
+                    scheduleTimeInput.value = '21:30';
+                    scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
+                    
+                    showStatus('Schedule added');
+                }
                 
                 // Update UI
                 renderScheduleList();
-                
-                // Reset form fields to default values
-                scheduleTimeInput.value = '21:30';
-                scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
-                
-                showStatus('Schedule added');
             });
             
             // Save configuration
@@ -841,9 +962,11 @@
                     };
                     
                     // Only include schedules if enabled
-                    if (config.enableSchedules) {
+                    if (config.enableSchedules && schedules.length > 0) {
                         config.schedules = schedules;
                     }
+                    
+                    console.log('Saving config:', JSON.stringify(config));
                     
                     // Send to server - using direct plugin API method
                     try {

@@ -99,15 +99,17 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       let config = [{}];
       try {
         config = await this.getPluginConfig();
+        
         if (!Array.isArray(config) || config.length === 0) {
           config = [{}];
         }
+        
+        this.log(`Config retrieved successfully: ${JSON.stringify(config[0])}`);
       } catch (err) {
         this.log(`Error getting plugin config: ${err.message}`, true);
         // Fall back to empty config
       }
       
-      this.log('Config retrieved successfully');
       return {
         success: true,
         config: config[0] || {}
@@ -119,6 +121,38 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         error: error.message
       };
     }
+  }
+  
+  /**
+   * Hook for handling config updates
+   * This is a special method that gets called by the UI framework
+   * when updatePluginConfig is called from the frontend
+   */
+  async onRequest(path, body, headers) {
+    if (path === '/updatePluginConfig' && body.pluginConfig) {
+      const config = body.pluginConfig;
+      
+      // Log the incoming config for debugging
+      this.log(`Received updated config: ${JSON.stringify(config)}`);
+      
+      // Ensure schedules are properly formatted (if they exist)
+      if (Array.isArray(config) && config.length > 0) {
+        config.forEach(configItem => {
+          if (configItem.enableSchedules && configItem.schedules) {
+            // Make sure schedules is an array
+            if (!Array.isArray(configItem.schedules)) {
+              configItem.schedules = [];
+            }
+            
+            // Log schedule count
+            this.log(`Config contains ${configItem.schedules.length} schedules`);
+          }
+        });
+      }
+    }
+    
+    // Let the parent class handle the rest
+    return super.onRequest(path, body, headers);
   }
 }
 
