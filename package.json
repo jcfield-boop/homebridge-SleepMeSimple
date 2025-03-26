@@ -23,12 +23,13 @@
     "homebridge": "^1.6.0 || ^2.0.0-beta.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-ui",
     "watch": "tsc -w",
     "lint": "eslint ./src --ext .ts",
     "clean": "rimraf ./dist/",
     "prepublishOnly": "npm run clean && npm run build",
-    "check-publish": "node scripts/pre-publish-check.js"
+    "check-publish": "node scripts/pre-publish-check.js",
+    "copy-ui": "mkdir -p ./dist/customui && cp -r ./customui/* ./dist/customui/"
   },
   "dependencies": {
     "axios": "^1.8.3"
@@ -53,6 +54,7 @@
   "homebridge": {
     "pluginAlias": "SleepMeSimple",
     "pluginType": "platform",
+    "customUi": true,
     "schema": "config.schema.json"
   }
 }
