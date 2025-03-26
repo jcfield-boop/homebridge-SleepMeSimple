@@ -1,66 +1,41 @@
-<!-- No html, head, or body tags! -->
 <div class="card">
   <div class="card-header">
     <h3>SleepMe Simple UI</h3>
   </div>
   <div class="card-body">
     <p>Hello World! This is a test of the custom UI.</p>
-    <div id="status">Checking connection...</div>
-    <div id="debug-output" class="mt-3"></div>
+    <div id="status">Loading...</div>
   </div>
 </div>
 
 <script>
-  // Debug logging - this will be visible in browser console
-  console.log('SleepMe UI loading at:', new Date().toISOString());
-  
-  // Function to add debug messages
-  function addDebugMessage(message) {
-    const debugOutput = document.getElementById('debug-output');
-    const msgElem = document.createElement('div');
-    msgElem.className = 'alert alert-info';
-    msgElem.textContent = message;
-    debugOutput.appendChild(msgElem);
-  }
-
   // Wait for DOM to be ready
   document.addEventListener('DOMContentLoaded', async function() {
     const statusDiv = document.getElementById('status');
     
     try {
-      // Log homebridge object status
+      // Check if homebridge API is available
       if (typeof window.homebridge !== 'undefined') {
-        console.log('Homebridge API available');
         statusDiv.textContent = 'Connected to Homebridge API';
-        addDebugMessage('Homebridge API detected');
         
-        // Try getting config
-        try {
-          const config = await window.homebridge.getPluginConfig();
-          console.log('Plugin config:', config);
-          addDebugMessage('Config loaded: ' + JSON.stringify(config).substring(0, 100) + '...');
-          
-          // Success indicator
-          statusDiv.innerHTML = '<span class="text-success">✓ Connected to Homebridge API</span>';
-        } catch (configError) {
-          console.error('Error loading config:', configError);
-          addDebugMessage('Error loading config: ' + configError.message);
-          statusDiv.innerHTML = '<span class="text-warning">⚠ Config loading error</span>';
-        }
+        // Try to get the config
+        const config = await window.homebridge.getPluginConfig();
+        console.log('Plugin config loaded:', config);
+        
+        // Add config display
+        const configDisplay = document.createElement('div');
+        configDisplay.className = 'mt-3';
+        configDisplay.innerHTML = `
+          <h4>Configuration Loaded:</h4>
+          <pre>${JSON.stringify(config, null, 2)}</pre>
+        `;
+        document.querySelector('.card-body').appendChild(configDisplay);
       } else {
-        console.warn('Homebridge API not available');
-        statusDiv.innerHTML = '<span class="text-danger">✗ Homebridge API not available</span>';
-        addDebugMessage('Homebridge API not found in window object');
+        statusDiv.textContent = 'Homebridge API not available';
       }
     } catch (error) {
-      console.error('General error:', error);
-      statusDiv.innerHTML = '<span class="text-danger">✗ Error: ' + error.message + '</span>';
-      addDebugMessage('Unexpected error: ' + error.message);
+      statusDiv.textContent = 'Error: ' + error.message;
+      console.error('Custom UI error:', error);
     }
-    
-    // Add environment info for debugging
-    addDebugMessage('Browser: ' + navigator.userAgent);
-    addDebugMessage('Screen size: ' + window.innerWidth + 'x' + window.innerHeight);
-    addDebugMessage('Time: ' + new Date().toLocaleString());
   });
 </script>
