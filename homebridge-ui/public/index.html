@@ -1,41 +1,78 @@
+<!-- customui/index.html -->
 <div class="card">
-  <div class="card-header">
-    <h3>SleepMe Simple UI</h3>
-  </div>
   <div class="card-body">
-    <p>Hello World! This is a test of the custom UI.</p>
-    <div id="status">Loading...</div>
+    <h3 class="card-title">SleepMe Simple - Custom UI</h3>
+    <div class="alert alert-info">
+      This is a test to verify the custom UI is working correctly.
+    </div>
+    <div class="form-group">
+      <label for="testInput">Test Input:</label>
+      <input type="text" class="form-control" id="testInput" placeholder="Enter anything">
+    </div>
+    <button id="testButton" class="btn btn-primary">Test Connection</button>
+    <div id="responseArea" class="mt-3"></div>
   </div>
 </div>
 
 <script>
-  // Wait for DOM to be ready
-  document.addEventListener('DOMContentLoaded', async function() {
-    const statusDiv = document.getElementById('status');
+(async () => {
+  // Log that the UI is loaded
+  console.log('SleepMe Custom UI loaded at', new Date().toISOString());
+  
+  // Try to load the current plugin configuration
+  try {
+    const pluginConfig = await homebridge.getPluginConfig();
+    console.log('Plugin configuration loaded successfully:', pluginConfig);
+    
+    // Show success in the UI
+    const responseArea = document.getElementById('responseArea');
+    responseArea.innerHTML = `
+      <div class="alert alert-success">
+        <strong>Success!</strong> Custom UI loaded and connected to Homebridge.
+        <div class="mt-2">
+          <small>API Token: ${pluginConfig.apiToken ? '********' : 'Not set'}</small><br>
+          <small>Polling Interval: ${pluginConfig.pollingInterval || 'Default'}</small><br>
+          <small>UI Version: 1.0.0</small>
+        </div>
+      </div>`;
+  } catch (error) {
+    console.error('Error loading plugin configuration:', error);
+    
+    // Show error in the UI
+    const responseArea = document.getElementById('responseArea');
+    responseArea.innerHTML = `
+      <div class="alert alert-danger">
+        <strong>Error!</strong> Could not connect to Homebridge API: ${error.message}
+      </div>`;
+  }
+  
+  // Add event listener for the test button
+  document.getElementById('testButton').addEventListener('click', async () => {
+    const inputValue = document.getElementById('testInput').value;
+    const responseArea = document.getElementById('responseArea');
+    
+    responseArea.innerHTML = `
+      <div class="alert alert-warning">
+        <strong>Testing...</strong> Sending request to server.js
+      </div>`;
     
     try {
-      // Check if homebridge API is available
-      if (typeof window.homebridge !== 'undefined') {
-        statusDiv.textContent = 'Connected to Homebridge API';
-        
-        // Try to get the config
-        const config = await window.homebridge.getPluginConfig();
-        console.log('Plugin config loaded:', config);
-        
-        // Add config display
-        const configDisplay = document.createElement('div');
-        configDisplay.className = 'mt-3';
-        configDisplay.innerHTML = `
-          <h4>Configuration Loaded:</h4>
-          <pre>${JSON.stringify(config, null, 2)}</pre>
-        `;
-        document.querySelector('.card-body').appendChild(configDisplay);
-      } else {
-        statusDiv.textContent = 'Homebridge API not available';
-      }
+      // Make a request to our server.js handler
+      const result = await homebridge.request('/hello', { 
+        message: inputValue || 'Hello from SleepMe UI!' 
+      });
+      
+      // Show the response
+      responseArea.innerHTML = `
+        <div class="alert alert-success">
+          <strong>Success!</strong> Server responded with: ${JSON.stringify(result)}
+        </div>`;
     } catch (error) {
-      statusDiv.textContent = 'Error: ' + error.message;
-      console.error('Custom UI error:', error);
+      responseArea.innerHTML = `
+        <div class="alert alert-danger">
+          <strong>Error!</strong> ${error.message}
+        </div>`;
     }
   });
+})();
 </script>
