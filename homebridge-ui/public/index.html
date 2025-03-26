@@ -1,185 +1,65 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- homebridge-ui/public/index.html
+     Purpose: Provides the user interface for configuring the plugin -->
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>SleepMe Simple Configuration</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
-  <style>
-    body { padding: 20px; }
-    .template-card { cursor: pointer; transition: all 0.3s; }
-    .template-card:hover { transform: scale(1.02); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .template-card.selected { border-color: #007bff; background-color: #f1f7ff; }
-  </style>
+    <title>SleepMe Simple Configuration</title>
+    <style>
+        /* Basic styling to make the UI readable */
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 20px; 
+            max-width: 600px; 
+            margin: 0 auto; 
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h2>SleepMe Simple Configuration</h2>
+    <h1>SleepMe Simple Configuration</h1>
     
-    <div class="card mb-4">
-      <div class="card-header">API Configuration</div>
-      <div class="card-body">
-        <div class="mb-3">
-          <label for="apiToken" class="form-label">SleepMe API Token</label>
-          <input type="password" class="form-control" id="apiToken" placeholder="Enter your API token">
-        </div>
-        <button id="testConnection" class="btn btn-primary">Test Connection</button>
-        <div id="connectionStatus" class="mt-2"></div>
-      </div>
-    </div>
+    <!-- Status display area to show connection results -->
+    <div id="status">Loading...</div>
 
-    <div class="card">
-      <div class="card-header">Sleep Schedule Templates</div>
-      <div class="card-body">
-        <div class="row" id="weekdayTemplates"></div>
-        <div class="row mt-3" id="weekendTemplates"></div>
-        <button id="saveSchedules" class="btn btn-success mt-3">Save Schedules</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // Utility function to show toast-like notifications
-    function showNotification(message, type = 'info') {
-      const toast = document.createElement('div');
-      toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
-    }
-
-    // Render schedule templates
-    async function renderScheduleTemplates() {
-      try {
-        const response = await homebridge.request('/schedules/templates');
+    <script>
+        // Client-side JavaScript to test UI-Server communication
+        console.log('Custom UI JavaScript loading');
         
-        if (!response.success) {
-          throw new Error(response.error || 'Failed to load templates');
+        // Function to test connection with the server
+        async function testConnection() {
+            try {
+                console.log('Attempting homebridge request');
+                
+                // Use homebridge.request to communicate with the server
+                const result = await homebridge.request('/hello');
+                console.log('Request result:', result);
+                
+                // Update status based on server response
+                document.getElementById('status').innerHTML = 
+                    result.success 
+                    ? `✅ Connection Successful: ${result.message}` 
+                    : '❌ Connection Failed';
+            } catch (error) {
+                // Handle any errors in communication
+                console.error('Request failed:', error);
+                document.getElementById('status').innerHTML = 
+                    `❌ Error: ${error.message}`;
+            }
         }
 
-        const weekdayContainer = document.getElementById('weekdayTemplates');
-        const weekendContainer = document.getElementById('weekendTemplates');
-
-        // Render weekday templates
-        response.templates.weekday.forEach(template => {
-          const card = document.createElement('div');
-          card.className = 'col-md-4 mb-3';
-          card.innerHTML = `
-            <div class="card template-card" data-type="weekday">
-              <div class="card-body">
-                <h5 class="card-title">${template.name}</h5>
-                ${template.schedules.map(schedule => 
-                  `<p>${schedule.time}: ${schedule.temperature}°C (${schedule.description})</p>`
-                ).join('')}
-              </div>
-            </div>
-          `;
-          weekdayContainer.appendChild(card);
-        });
-
-        // Render weekend templates
-        response.templates.weekend.forEach(template => {
-          const card = document.createElement('div');
-          card.className = 'col-md-4 mb-3';
-          card.innerHTML = `
-            <div class="card template-card" data-type="weekend">
-              <div class="card-body">
-                <h5 class="card-title">${template.name}</h5>
-                ${template.schedules.map(schedule => 
-                  `<p>${schedule.time}: ${schedule.temperature}°C (${schedule.description})</p>`
-                ).join('')}
-              </div>
-            </div>
-          `;
-          weekendContainer.appendChild(card);
-        });
-
-        // Add click handlers for template selection
-        document.querySelectorAll('.template-card').forEach(card => {
-          card.addEventListener('click', function() {
-            // Deselect other templates in the same type group
-            const group = this.getAttribute('data-type');
-            document.querySelectorAll(`.template-card[data-type="${group}"]`)
-              .forEach(c => c.classList.remove('selected'));
-            
-            // Select this template
-            this.classList.add('selected');
-          });
-        });
-
-      } catch (error) {
-        showNotification(error.message, 'danger');
-      }
-    }
-
-    // Test API connection
-    document.getElementById('testConnection').addEventListener('click', async () => {
-      const apiToken = document.getElementById('apiToken').value;
-      const statusEl = document.getElementById('connectionStatus');
-
-      if (!apiToken) {
-        showNotification('Please enter an API token', 'warning');
-        return;
-      }
-
-      try {
-        const result = await homebridge.request('/device/test', { apiToken });
-        
-        if (result.success) {
-          statusEl.innerHTML = `
-            <div class="alert alert-success">
-              ${result.message}
-            </div>
-          `;
+        // Try to test connection when page loads
+        if (window.homebridge) {
+            testConnection();
         } else {
-          statusEl.innerHTML = `
-            <div class="alert alert-danger">
-              ${result.error || 'Connection test failed'}
-            </div>
-          `;
+            console.error('Homebridge object not available');
+            document.getElementById('status').innerHTML = 
+                '❌ Homebridge API not found';
         }
-      } catch (error) {
-        showNotification(error.message, 'danger');
-      }
-    });
-
-    // Save schedules
-    document.getElementById('saveSchedules').addEventListener('click', async () => {
-      const selectedWeekdayTemplate = document.querySelector('.template-card[data-type="weekday"].selected');
-      const selectedWeekendTemplate = document.querySelector('.template-card[data-type="weekend"].selected');
-
-      if (!selectedWeekdayTemplate || !selectedWeekendTemplate) {
-        showNotification('Please select both weekday and weekend templates', 'warning');
-        return;
-      }
-
-      try {
-        const schedules = [
-          ...Array.from(selectedWeekdayTemplate.querySelectorAll('p')).map(el => ({
-            type: 'Everyday',
-            time: el.textContent.split(':')[0].trim(),
-            temperature: parseFloat(el.textContent.split(':')[1].split('°')[0])
-          })),
-          ...Array.from(selectedWeekendTemplate.querySelectorAll('p')).map(el => ({
-            type: 'Weekend',
-            time: el.textContent.split(':')[0].trim(),
-            temperature: parseFloat(el.textContent.split(':')[1].split('°')[0])
-          }))
-        ];
-
-        const result = await homebridge.request('/schedules/save', { schedules });
-
-        if (result.success) {
-          showNotification('Schedules saved successfully!', 'success');
-        } else {
-          showNotification(result.error || 'Failed to save schedules', 'danger');
-        }
-      } catch (error) {
-        showNotification(error.message, 'danger');
-      }
-    });
-
-    // Initialize on page load
-    renderScheduleTemplates();
-  </script>
+    </script>
 </body>
 </html>
