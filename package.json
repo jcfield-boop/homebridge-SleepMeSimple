@@ -8,7 +8,7 @@
   "files": [
     "dist",
     "config.schema.json",
-    "customui"
+    "homebridge-ui"
   ],
   "keywords": [
     "homebridge-plugin",

@@ -1,78 +1,107 @@
-<!-- customui/index.html -->
-<div class="card">
-  <div class="card-body">
-    <h3 class="card-title">SleepMe Simple - Custom UI</h3>
-    <div class="alert alert-info">
-      This is a test to verify the custom UI is working correctly.
-    </div>
-    <div class="form-group">
-      <label for="testInput">Test Input:</label>
-      <input type="text" class="form-control" id="testInput" placeholder="Enter anything">
-    </div>
-    <button id="testButton" class="btn btn-primary">Test Connection</button>
-    <div id="responseArea" class="mt-3"></div>
-  </div>
-</div>
-
-<script>
-(async () => {
-  // Log that the UI is loaded
-  console.log('SleepMe Custom UI loaded at', new Date().toISOString());
-  
-  // Try to load the current plugin configuration
-  try {
-    const pluginConfig = await homebridge.getPluginConfig();
-    console.log('Plugin configuration loaded successfully:', pluginConfig);
-    
-    // Show success in the UI
-    const responseArea = document.getElementById('responseArea');
-    responseArea.innerHTML = `
-      <div class="alert alert-success">
-        <strong>Success!</strong> Custom UI loaded and connected to Homebridge.
-        <div class="mt-2">
-          <small>API Token: ${pluginConfig.apiToken ? '********' : 'Not set'}</small><br>
-          <small>Polling Interval: ${pluginConfig.pollingInterval || 'Default'}</small><br>
-          <small>UI Version: 1.0.0</small>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SleepMe Simple Configuration</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="section" id="api-section">
+            <div class="section-title">API Configuration</div>
+            <div class="form-group">
+                <label for="apiToken">API Token</label>
+                <input type="password" id="apiToken" placeholder="Enter your SleepMe API token">
+                <div class="info-text">
+                    Your SleepMe API token (obtain from your account at sleep.me)
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="tempUnit">Temperature Unit</label>
+                <select id="tempUnit">
+                    <option value="C">Celsius (°C)</option>
+                    <option value="F">Fahrenheit (°F)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="pollingInterval">Polling Interval (seconds)</label>
+                <input type="number" id="pollingInterval" min="60" max="300" placeholder="90">
+                <div class="info-text">
+                    How frequently to check device status (60-300 seconds)
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="logLevel">Log Level</label>
+                <select id="logLevel">
+                    <option value="normal">Normal</option>
+                    <option value="debug">Debug</option>
+                    <option value="verbose">Verbose</option>
+                </select>
+                <div class="info-text">
+                    Level of detail in logs
+                </div>
+            </div>
         </div>
-      </div>`;
-  } catch (error) {
-    console.error('Error loading plugin configuration:', error);
+        
+        <div class="section" id="schedule-section">
+            <div class="section-title">Sleep Schedules</div>
+            <div class="form-group">
+                <label for="enableSchedules">
+                    <input type="checkbox" id="enableSchedules"> Enable Temperature Scheduling
+                </label>
+                <div class="info-text">
+                    Configure scheduled temperature changes for better sleep
+                </div>
+            </div>
+            
+            <div id="schedule-options" class="hidden">
+                <div class="tab-container">
+                    <button class="tab-button active" data-tab="weekday">Weekday Schedule</button>
+                    <button class="tab-button" data-tab="weekend">Weekend Schedule</button>
+                </div>
+                
+                <div id="weekday-tab" class="tab-content active">
+                    <div class="template-container" id="weekday-templates">
+                        <!-- Weekday templates will be inserted here dynamically -->
+                    </div>
+                </div>
+                
+                <div id="weekend-tab" class="tab-content">
+                    <div class="template-container" id="weekend-templates">
+                        <!-- Weekend templates will be inserted here dynamically -->
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <button id="save-schedules" class="btn">Save Schedules</button>
+                    <button id="cancel-schedules" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section" id="advanced-section">
+            <div class="section-title">Advanced Settings</div>
+            <div class="form-group">
+                <label for="warmHugIncrement">Warm Hug Temperature Increment (°C)</label>
+                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.5" placeholder="2">
+                <div class="info-text">
+                    Temperature increase per minute during Warm Hug mode (0.5-5°C)
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="warmHugDuration">Warm Hug Duration (minutes)</label>
+                <input type="number" id="warmHugDuration" min="5" max="30" placeholder="10">
+                <div class="info-text">
+                    Duration of warm hug mode in minutes (5-30)
+                </div>
+            </div>
+        </div>
+    </div>
     
-    // Show error in the UI
-    const responseArea = document.getElementById('responseArea');
-    responseArea.innerHTML = `
-      <div class="alert alert-danger">
-        <strong>Error!</strong> Could not connect to Homebridge API: ${error.message}
-      </div>`;
-  }
-  
-  // Add event listener for the test button
-  document.getElementById('testButton').addEventListener('click', async () => {
-    const inputValue = document.getElementById('testInput').value;
-    const responseArea = document.getElementById('responseArea');
+    <div id="toast"></div>
     
-    responseArea.innerHTML = `
-      <div class="alert alert-warning">
-        <strong>Testing...</strong> Sending request to server.js
-      </div>`;
-    
-    try {
-      // Make a request to our server.js handler
-      const result = await homebridge.request('/hello', { 
-        message: inputValue || 'Hello from SleepMe UI!' 
-      });
-      
-      // Show the response
-      responseArea.innerHTML = `
-        <div class="alert alert-success">
-          <strong>Success!</strong> Server responded with: ${JSON.stringify(result)}
-        </div>`;
-    } catch (error) {
-      responseArea.innerHTML = `
-        <div class="alert alert-danger">
-          <strong>Error!</strong> ${error.message}
-        </div>`;
-    }
-  });
-})();
-</script>
+    <!-- Load homebridge plugin UI utils library -->
+    <script type="module" src="../index.js"></script>
+</body>
+</html>
