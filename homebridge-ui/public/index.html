@@ -769,49 +769,111 @@ homebridge.on('save-config', (data) => {
             // Cancel edit button handler
             cancelEditBtn.addEventListener('click', exitEditMode);
             
-            // Load current configuration
-            async function loadConfig() {
-                try {
-                    // Get configuration from Homebridge
-                    let config = {};
-                    
-                    try {
-                        const response = await homebridge.request('/config');
-                        
-                        if (response && response.success && response.config) {
-                            config = response.config;
-                            console.log('Config loaded successfully');
-                        } else {
-                            console.warn('Could not load config from server, using defaults');
-                        }
-                    } catch (loadError) {
-                        console.warn('Error loading config, using defaults:', loadError);
-                        // Don't show error to user, just use defaults
-                    }
-                    
-                    // Fill form with current values or defaults
-                    document.getElementById('apiToken').value = config.apiToken || '';
-                    document.getElementById('unit').value = config.unit || 'C';
-                    document.getElementById('pollingInterval').value = config.pollingInterval || 90;
-                    document.getElementById('logLevel').value = config.logLevel || 'normal';
-                    
-                    // Handle schedules
-                    const enableSchedules = !!config.enableSchedules;
-                    document.getElementById('enableSchedules').checked = enableSchedules;
-                    schedulesContainer.classList.toggle('hidden', !enableSchedules);
-                    
-                    // Load schedules
-                    schedules = Array.isArray(config.schedules) ? config.schedules : [];
-                    renderScheduleList();
-                    
-                    // Update temperature validation based on unit
-                    updateTemperatureValidation();
-                    
-                } catch (error) {
-                    console.error('Error in loadConfig:', error);
-                    // Don't show loading errors to user, just use defaults
-                }
+          // Load current configuration from the server
+async function loadConfig() {
+    try {
+        // Get configuration from Homebridge
+        let config = {};
+        
+        try {
+            // Request configuration from the server
+            const response = await homebridge.request('/config');
+            
+            if (response && response.success && response.config) {
+                config = response.config;
+                console.log('Config loaded successfully', config);
+            } else {
+                console.warn('Could not load config from server, using defaults');
             }
+        } catch (loadError) {
+            console.warn('Error loading config, using defaults:', loadError);
+            // Don't show error to user, just use defaults
+        }
+        
+        // Fill form with current values or defaults
+        // Use more specific property access to handle potentially nested config
+        const apiTokenElem = document.getElementById('apiToken');
+        const unitElem = document.getElementById('unit');
+        const pollingIntervalElem = document.getElementById('pollingInterval');
+        const logLevelElem = document.getElementById('logLevel');
+        const enableSchedulesElem = document.getElementById('enableSchedules');
+        
+        // More robust property access with explicit defaults
+        if (apiTokenElem) apiTokenElem.value = config.apiToken || '';
+        if (unitElem) unitElem.value = config.unit || 'C';
+        if (pollingIntervalElem) pollingIntervalElem.value = config.pollingInterval || 90;
+        if (logLevelElem) logLevelElem.value = config.logLevel || 'normal';
+        
+        // Handle schedules
+        const enableSchedules = Boolean(config.enableSchedules);
+        if (enableSchedulesElem) enableSchedulesElem.checked = enableSchedules;
+        schedulesContainer.classList.toggle('hidden', !enableSchedules);
+        
+        // Load schedules with proper validation
+        schedules = Array.isArray(config.schedules) ? [...config.schedules] : [];
+        
+        // Ensure all schedules have required properties
+        schedules = schedules.filter(schedule => {
+            return schedule && 
+                   typeof schedule.type === 'string' && 
+                   typeof schedule.time === 'string' &&
+                   !isNaN(parseFloat(schedule.temperature));
+        });
+        
+        renderScheduleList();
+        
+        // Update temperature validation based on unit
+        updateTemperatureValidation();
+        
+    } catch (error) {
+        console.error('Error in loadConfig:', error);
+        // Don't show loading errors to user, just use defaults
+    }
+}
+
+// Save configuration to the server
+async function saveConfig(formData) {
+    try {
+        // Construct config object from form data
+        const config = {
+            platform: "SleepMeSimple",
+            name: 'SleepMe Simple',
+            apiToken: formData.get('apiToken'),
+            unit: formData.get('unit'),
+            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
+            logLevel: formData.get('logLevel'),
+            enableSchedules: formData.get('enableSchedules') === 'on'
+        };
+        
+        // Add schedules if enabled
+        if (config.enableSchedules && schedules.length > 0) {
+            config.schedules = schedules;
+        }
+        
+        console.log('Saving config...', config);
+        
+        try {
+            // Try direct client-side save first
+            await homebridge.updatePluginConfig(config);
+            showStatus('Configuration saved successfully!');
+        } catch (directError) {
+            console.error('Direct save failed, trying via server:', directError);
+            
+            // Fall back to server-side save if direct save fails
+            const response = await homebridge.request('/saveConfig', { 
+                body: { config: config }
+            });
+            
+            if (response && response.success) {
+                showStatus('Configuration saved successfully!');
+            } else {
+                showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
+            }
+        }
+    } catch (error) {
+        showStatus('Error saving configuration: ' + error.message, true);
+    }
+} 
             // Render the schedule list with logical ordering
 function renderScheduleList() {
     scheduleList.innerHTML = '';

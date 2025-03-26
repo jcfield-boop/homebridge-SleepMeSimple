@@ -1,4 +1,4 @@
-// homebridge-ui/server.js - CORRECTED VERSION
+// homebridge-ui/server.js
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
 
@@ -9,24 +9,27 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
 
-    // Route handling for UI
+    // Register request handlers for UI endpoints
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config', this.getConfig.bind(this));
     this.onRequest('/saveConfig', this.saveConfig.bind(this));
     
     this.log('SleepMe UI Server initialized');
-    this.ready();
+    this.ready(); // Signal that the server is ready
   }
 
+  // Helper method for consistent logging
   log(message, isError = false) {
     const logMethod = isError ? console.error : console.log;
     logMethod(`[SleepMe UI] ${message}`);
   }
 
+  // Test the connection to the SleepMe API with the provided token
   async testDeviceConnection(payload) {
     try {
       this.log('Test connection request received');
       
+      // Validate input
       if (!payload?.body?.apiToken) {
         this.log('Missing API token in request', true);
         return {
@@ -39,6 +42,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       this.log(`Testing connection with token: ${apiToken.substring(0, 4)}...`);
       
       try {
+        // Make request to SleepMe API to verify the token
         const response = await axios({
           method: 'GET',
           url: `${API_BASE_URL}/devices`,
@@ -46,9 +50,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
             'Authorization': `Bearer ${apiToken}`,
             'Content-Type': 'application/json'
           },
-          timeout: 10000
+          timeout: 10000 // 10-second timeout
         });
         
+        // Handle different API response formats
         const devices = Array.isArray(response.data) ? response.data : (response.data.devices || []);
         
         this.log(`API connection successful, found ${devices.length} devices`);
@@ -76,13 +81,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
 
-  // Using the correct method to get plugin config according to docs
+  // Retrieve the current plugin configuration
   async getConfig() {
     try {
       this.log('Get config request received');
       
-      // Use the standard method to retrieve the current config
-      const pluginConfig = await this.readHomebridge();
+      // Get current configuration using the proper method
+      const pluginConfig = await this.getPluginConfig();
       
       this.log('Configuration retrieved successfully');
       return {
@@ -98,11 +103,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // Correct method for saving config based on documentation
+  // Save the updated plugin configuration
   async saveConfig(payload) {
     try {
       this.log('Save config request received');
       
+      // Validate input
       if (!payload?.body?.config) {
         this.log('Missing config in request body', true);
         return {
@@ -132,11 +138,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       try {
         this.log('Saving configuration to Homebridge...');
         
-        // Use the proper method for saving config - pushEvent to UI client
-        // which will use homebridge.updatePluginConfig
+        // Update configuration using the proper method
+        await this.updatePluginConfig(config);
+        
+        // Also notify UI clients that config has changed
         this.pushEvent('save-config', { config: config });
         
-        this.log('Configuration save request sent');
+        this.log('Configuration saved successfully');
         return {
           success: true,
           message: 'Configuration saved successfully'
@@ -158,4 +166,5 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
+// Create and export an instance of the server
 export default new SleepMeUiServer();
