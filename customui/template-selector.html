@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SleepMe Schedule Templates</title>
+    <style>
+        .sleepme-template-container {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px;
+            color: #333;
+        }
+        .template-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .template-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            width: 220px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .template-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 0 10px rgba(0,123,255,0.2);
+        }
+        .template-card.selected {
+            border-color: #007bff;
+            background-color: rgba(0,123,255,0.05);
+        }
+        .template-card.selected::after {
+            content: "✓";
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .template-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        .template-description {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .schedule-preview {
+            border-top: 1px solid #eee;
+            padding-top: 8px;
+            font-size: 13px;
+        }
+        .schedule-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .time {
+            color: #007bff;
+        }
+        .temp {
+            font-weight: 500;
+        }
+        .weekday-toggle {
+            display: flex;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .weekday-toggle button {
+            flex: 1;
+            padding: 8px 0;
+            border: none;
+            background: #f8f8f8;
+            border-right: 1px solid #ddd;
+            cursor: pointer;
+        }
+        .weekday-toggle button:last-child {
+            border-right: none;
+        }
+        .weekday-toggle button.active {
+            background: #007bff;
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="sleepme-template-container">
+        <h3>Sleep Schedule Templates</h3>
+        <p>Select a template as your starting point. Your schedules will be created based on this template.</p>
+        
+        <div class="weekday-toggle">
+            <button class="weekday-btn active" data-type="weekday">Weekday</button>
+            <button class="weekend-btn" data-type="weekend">Weekend</button>
+        </div>
+        
+        <div class="template-container weekday-templates">
+            <div class="template-card selected" data-template-id="optimal">
+                <div class="template-title">Optimal Sleep Cycle</div>
+                <div class="template-description">Designed for complete sleep cycles with REM enhancement</div>
+                <div class="schedule-preview">
+                    <div class="schedule-item">
+                        <span class="time">10:00 PM</span>
+                        <span class="temp">21°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">11:00 PM</span>
+                        <span class="temp">19°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">2:00 AM</span>
+                        <span class="temp">23°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">6:00 AM</span>
+                        <span class="temp">Warm Hug</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="template-card" data-template-id="nightowl">
+                <div class="template-title">Night Owl</div>
+                <div class="template-description">Later bedtime with extended morning warm-up</div>
+                <div class="schedule-preview">
+                    <div class="schedule-item">
+                        <span class="time">11:30 PM</span>
+                        <span class="temp">21°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">12:30 AM</span>
+                        <span class="temp">19°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">3:30 AM</span>
+                        <span class="temp">23°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">7:30 AM</span>
+                        <span class="temp">Warm Hug</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="template-card" data-template-id="earlybird">
+                <div class="template-title">Early Bird</div>
+                <div class="template-description">Earlier bedtime and wake-up schedule</div>
+                <div class="schedule-preview">
+                    <div class="schedule-item">
+                        <span class="time">9:00 PM</span>
+                        <span class="temp">21°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">10:00 PM</span>
+                        <span class="temp">19°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">1:00 AM</span>
+                        <span class="temp">23°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">5:00 AM</span>
+                        <span class="temp">Warm Hug</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="template-container weekend-templates hidden">
+            <div class="template-card" data-template-id="weekend-optimal">
+                <div class="template-title">Weekend Recovery</div>
+                <div class="template-description">Extra sleep with later wake-up time</div>
+                <div class="schedule-preview">
+                    <div class="schedule-item">
+                        <span class="time">11:00 PM</span>
+                        <span class="temp">21°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">12:00 AM</span>
+                        <span class="temp">19°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">3:00 AM</span>
+                        <span class="temp">23°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">8:00 AM</span>
+                        <span class="temp">Warm Hug</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="template-card" data-template-id="weekend-relax">
+                <div class="template-title">Relaxed Weekend</div>
+                <div class="template-description">Gradual transitions for weekend leisure</div>
+                <div class="schedule-preview">
+                    <div class="schedule-item">
+                        <span class="time">11:30 PM</span>
+                        <span class="temp">22°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">1:00 AM</span>
+                        <span class="temp">20°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">4:00 AM</span>
+                        <span class="temp">24°C</span>
+                    </div>
+                    <div class="schedule-item">
+                        <span class="time">9:00 AM</span>
+                        <span class="temp">Warm Hug</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hidden-inputs">
+            <!-- These hidden inputs will store the selected template data -->
+            <input type="hidden" id="weekday-template" value="optimal">
+            <input type="hidden" id="weekend-template" value="weekend-optimal">
+        </div>
+    </div>
+    
+    <script>
+        // Store template definitions
+        const templates = {
+            // Weekday templates
+            "optimal": {
+                name: "Optimal Sleep Cycle",
+                schedules: [
+                    { type: "Weekdays", time: "22:00", temperature: 21, name: "Cool Down" },
+                    { type: "Weekdays", time: "23:00", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekdays", time: "02:00", temperature: 23, name: "REM Support" },
+                    { type: "Weekdays", time: "06:00", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            "nightowl": {
+                name: "Night Owl",
+                schedules: [
+                    { type: "Weekdays", time: "23:30", temperature: 21, name: "Cool Down" },
+                    { type: "Weekdays", time: "00:30", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekdays", time: "03:30", temperature: 23, name: "REM Support" },
+                    { type: "Weekdays", time: "07:30", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            "earlybird": {
+                name: "Early Bird",
+                schedules: [
+                    { type: "Weekdays", time: "21:00", temperature: 21, name: "Cool Down" },
+                    { type: "Weekdays", time: "22:00", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekdays", time: "01:00", temperature: 23, name: "REM Support" },
+                    { type: "Weekdays", time: "05:00", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            
+            // Weekend templates
+            "weekend-optimal": {
+                name: "Weekend Recovery",
+                schedules: [
+                    { type: "Weekend", time: "23:00", temperature: 21, name: "Cool Down" },
+                    { type: "Weekend", time: "00:00", temperature: 19, name: "Deep Sleep" },
+                    { type: "Weekend", time: "03:00", temperature: 23, name: "REM Support" },
+                    { type: "Weekend", time: "08:00", temperature: 24, name: "Warm Hug" }
+                ]
+            },
+            "weekend-relax": {
+                name: "Relaxed Weekend",
+                schedules: [
+                    { type: "Weekend", time: "23:30", temperature: 22, name: "Cool Down" },
+                    { type: "Weekend", time: "01:00", temperature: 20, name: "Deep Sleep" },
+                    { type: "Weekend", time: "04:00", temperature: 24, name: "REM Support" },
+                    { type: "Weekend", time: "09:00", temperature: 26, name: "Warm Hug" }
+                ]
+            }
+        };
+        
+        // Handles selection of a template card
+        function selectTemplate(templateCard, templateType) {
+            // Remove selection from all cards in this category
+            document.querySelectorAll(`.${templateType}-templates .template-card`).forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Add selection to clicked card
+            templateCard.classList.add('selected');
+            
+            // Store the selected template ID
+            const templateId = templateCard.getAttribute('data-template-id');
+            document.getElementById(`${templateType}-template`).value = templateId;
+            
+            // Save to parent window if in iframe
+            saveTemplateSelections();
+        }
+        
+        // Toggle between weekday and weekend views
+        function toggleTemplateView(viewType) {
+            const weekdayBtn = document.querySelector('.weekday-btn');
+            const weekendBtn = document.querySelector('.weekend-btn');
+            const weekdayTemplates = document.querySelector('.weekday-templates');
+            const weekendTemplates = document.querySelector('.weekend-templates');
+            
+            if (viewType === 'weekday') {
+                weekdayBtn.classList.add('active');
+                weekendBtn.classList.remove('active');
+                weekdayTemplates.classList.remove('hidden');
+                weekendTemplates.classList.add('hidden');
+            } else {
+                weekdayBtn.classList.remove('active');
+                weekendBtn.classList.add('active');
+                weekdayTemplates.classList.add('hidden');
+                weekendTemplates.classList.remove('hidden');
+            }
+        }
+        
+        // Save template selections to Homebridge config
+        function saveTemplateSelections() {
+            const weekdayTemplate = document.getElementById('weekday-template').value;
+            const weekendTemplate = document.getElementById('weekend-template').value;
+            
+            // Create schedule array from selected templates
+            const schedules = [
+                ...templates[weekdayTemplate].schedules,
+                ...templates[weekendTemplate].schedules
+            ];
+            
+            // If running in Homebridge iframe, send data to parent
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    action: 'save-template',
+                    schedules: schedules
+                }, '*');
+            }
+            
+            // Log selection for debugging
+            console.log('Selected templates:', {
+                weekday: weekdayTemplate,
+                weekend: weekendTemplate,
+                schedules: schedules
+            });
+        }
+        
+        // Setup event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up template card click handlers
+            document.querySelectorAll('.template-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const templateType = this.closest('.weekend-templates') ? 'weekend' : 'weekday';
+                    selectTemplate(this, templateType);
+                });
+            });
+            
+            // Set up weekday/weekend toggle
+            document.querySelector('.weekday-btn').addEventListener('click', function() {
+                toggleTemplateView('weekday');
+            });
+            
+            document.querySelector('.weekend-btn').addEventListener('click', function() {
+                toggleTemplateView('weekend');
+            });
+            
+            // Initialize the UI
+            initializeFromConfig();
+        });
+        
+        // Initialize UI from any existing config
+        function initializeFromConfig() {
+            // If running in Homebridge iframe, look for existing config
+            if (window.parent && window.parent !== window) {
+                // Listen for messages from parent
+                window.addEventListener('message', function(event) {
+                    if (event.data && event.data.action === 'init-template' && event.data.schedules) {
+                        // Process existing schedules
+                        processExistingSchedules(event.data.schedules);
+                    }
+                });
+                
+                // Request initialization data
+                window.parent.postMessage({
+                    action: 'request-init-data'
+                }, '*');
+            }
+        }
+        
+        // Process existing schedules to select the right template
+        function processExistingSchedules(schedules) {
+            if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+                return; // No schedules to process
+            }
+            
+            // Separate weekday and weekend schedules
+            const weekdaySchedules = schedules.filter(s => s.type === 'Weekdays');
+            const weekendSchedules = schedules.filter(s => s.type === 'Weekend');
+            
+            // Find matching templates
+            let weekdayTemplateId = findMatchingTemplate(weekdaySchedules, 'weekday');
+            let weekendTemplateId = findMatchingTemplate(weekendSchedules, 'weekend');
+            
+            // Select the appropriate templates in UI
+            if (weekdayTemplateId) {
+                const weekdayCard = document.querySelector(`.weekday-templates [data-template-id="${weekdayTemplateId}"]`);
+                if (weekdayCard) {
+                    selectTemplate(weekdayCard, 'weekday');
+                }
+            }
+            
+            if (weekendTemplateId) {
+                const weekendCard = document.querySelector(`.weekend-templates [data-template-id="${weekendTemplateId}"]`);
+                if (weekendCard) {
+                    selectTemplate(weekendCard, 'weekend');
+                }
+            }
+        }
+        
+        // Find a template that matches given schedules
+        function findMatchingTemplate(schedules, templateType) {
+            if (!schedules || schedules.length === 0) {
+                return templateType === 'weekday' ? 'optimal' : 'weekend-optimal'; // Default templates
+            }
+            
+            // Get templates of this type
+            const templateKeys = Object.keys(templates).filter(key => {
+                return templateType === 'weekday' ? 
+                    !key.startsWith('weekend-') : 
+                    key.startsWith('weekend-');
+            });
+            
+            // Check each template for a match
+            for (const key of templateKeys) {
+                const template = templates[key];
+                
+                // Simple matching - just check if times roughly match
+                // This is a simplified approach - could be enhanced for better matching
+                if (schedules.length === template.schedules.length) {
+                    // Count matching times
+                    const matchCount = schedules.filter(userSchedule => {
+                        return template.schedules.some(templateSchedule => 
+                            Math.abs(timeToMinutes(userSchedule.time) - timeToMinutes(templateSchedule.time)) < 30
+                        );
+                    }).length;
+                    
+                    // If most times match, consider it a match
+                    if (matchCount >= Math.ceil(template.schedules.length * 0.75)) {
+                        return key;
+                    }
+                }
+            }
+            
+            // No match found, return default
+            return templateType === 'weekday' ? 'optimal' : 'weekend-optimal';
+        }
+        
+        // Convert time string (HH:MM) to minutes
+        function timeToMinutes(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+    </script>
+</body>
+</html>
