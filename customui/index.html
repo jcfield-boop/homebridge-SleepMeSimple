@@ -45,6 +45,25 @@
             border: none;
             margin-top: 15px;
         }
+        #loading-indicator {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        #loading-indicator.visible {
+            display: block;
+        }
+        .status-indicator {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            padding: 5px 10px;
+            background-color: #28a745;
+            color: white;
+            border-radius: 3px;
+            font-size: 12px;
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
@@ -59,40 +78,95 @@
             <div id="template-selector-container">
                 <h3>Sleep Schedule Templates</h3>
                 <p>Select a template to automatically configure your sleep schedules:</p>
-                <iframe id="template-frame" src="template-selector.html"></iframe>
+                <div id="loading-indicator" class="visible">
+                    <p>Loading templates...</p>
+                </div>
+                <iframe id="template-frame" src="template-selector.html" style="display:none;"></iframe>
             </div>
         </div>
     </div>
     
+    <div id="ui-status" class="status-indicator">UI Ready</div>
+    
     <script>
+        // Debug indicator to show UI is loaded
+        console.log('SleepMe UI: main index.html loaded at ' + new Date().toISOString());
+        
+        // Show UI status for debugging
+        const uiStatus = document.getElementById('ui-status');
+        
+        // Handle iframe loading
+        const templateFrame = document.getElementById('template-frame');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        
+        // Listen for iframe load completion
+        templateFrame.addEventListener('load', function() {
+            console.log('Template iframe loaded');
+            loadingIndicator.classList.remove('visible');
+            templateFrame.style.display = 'block';
+            uiStatus.textContent = 'Template loaded';
+        });
+        
+        // Handle iframe errors
+        templateFrame.addEventListener('error', function(e) {
+            console.error('Error loading iframe:', e);
+            loadingIndicator.textContent = 'Error loading templates. Please refresh.';
+            uiStatus.textContent = 'Template error';
+        });
+        
         // Listen for messages from the iframe
         window.addEventListener('message', function(event) {
-            // Only process messages that we expect
+            console.log('Received message from iframe:', event.data);
+            
+            // Handle different message types
             if (event.data && event.data.action === 'save-template') {
                 console.log('Received template data:', event.data.schedules);
+                uiStatus.textContent = 'Saving template';
+                
                 // Send to homebridge-ui
                 if (window.homebridge) {
                     window.homebridge.updatePluginConfig({
                         schedules: event.data.schedules
                     });
+                    uiStatus.textContent = 'Template saved';
+                } else {
+                    console.warn('Homebridge API not available');
+                    uiStatus.textContent = 'Homebridge API missing';
                 }
+            } else if (event.data && event.data.action === 'request-init-data') {
+                // Template is requesting initial data
+                sendConfigToFrame();
             }
         });
         
-        // When page loads, send current config to iframe
-        window.addEventListener('load', function() {
+        // Function to send config to iframe
+        function sendConfigToFrame() {
             // If homebridge API is available, get the current config
             if (window.homebridge) {
                 window.homebridge.getPluginConfig(function(config) {
-                    const templateFrame = document.getElementById('template-frame');
+                    console.log('Got config from Homebridge:', config);
+                    
                     if (templateFrame && templateFrame.contentWindow) {
                         templateFrame.contentWindow.postMessage({
                             action: 'init-template',
                             schedules: config.schedules || []
                         }, '*');
+                        uiStatus.textContent = 'Config sent to template';
                     }
                 });
+            } else {
+                console.warn('Homebridge API not available for getting config');
+                uiStatus.textContent = 'Config API missing';
             }
+        }
+        
+        // When page loads, initialize
+        window.addEventListener('load', function() {
+            console.log('Window loaded, preparing to send config');
+            uiStatus.textContent = 'Window loaded';
+            
+            // Short delay to ensure iframe is ready
+            setTimeout(sendConfigToFrame, 1000);
         });
     </script>
 </body>
