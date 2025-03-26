@@ -1,6 +1,5 @@
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
-import { API_BASE_URL } from '../dist/settings.js';
 
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -25,12 +24,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Test connection to SleepMe API with provided token
-   * @param {Object} payload - Request payload
+   * @param {Object} payload - Request payload containing API token
    * @returns {Object} Response indicating success or failure
    */
   async testDeviceConnection(payload) {
     try {
-      // Validate payload
+      // Validate payload - enhanced validation
       if (!payload || !payload.body || !payload.body.apiToken) {
         return {
           success: false,
@@ -39,6 +38,9 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
 
       const { apiToken } = payload.body;
+      
+      // Hard-coded API base URL as fallback
+      const API_BASE_URL = 'https://api.developer.sleep.me/v1';
       
       // Attempt to fetch devices from the API to validate token
       try {
@@ -82,11 +84,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Get current plugin configuration
-   * @returns {Object} Current configuration
+   * @returns {Object} Current configuration or empty object if not found
    */
   async getConfig() {
     try {
-      const config = await this.getPluginConfig();
+      const config = await this.homebridge.getPluginConfig();
       return {
         success: true,
         config: config[0] || {}

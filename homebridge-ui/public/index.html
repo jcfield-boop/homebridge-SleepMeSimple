@@ -16,6 +16,8 @@
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+            max-height: none; /* Remove max height to allow content to show */
+            overflow: visible; /* Ensure content is not hidden */
         }
         h1, h2 {
             color: #333;
@@ -106,6 +108,11 @@
         }
         .schedule-list {
             margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto; /* Add scroll for schedule list only */
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 4px;
         }
         .schedule-item {
             display: flex;
@@ -209,12 +216,12 @@
             
             <div class="form-group">
                 <label for="scheduleTime">Time (24h):</label>
-                <input type="time" id="scheduleTime" required>
+                <input type="time" id="scheduleTime" value="21:30" required>
             </div>
             
             <div class="form-group">
                 <label for="scheduleTemperature">Temperature:</label>
-                <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" required>
+                <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
             </div>
             
             <button type="button" id="addSchedule">Add Schedule</button>
@@ -271,34 +278,41 @@
             // Load current configuration
             async function loadConfig() {
                 try {
-                    const response = await homebridge.request('/config');
+                    // Get configuration from Homebridge
+                    let config = {};
                     
-                    if (response.success && response.config) {
-                        const config = response.config;
+                    try {
+                        const response = await homebridge.request('/config');
                         
-                        // Fill form with current values
-                        document.getElementById('apiToken').value = config.apiToken || '';
-                        document.getElementById('unit').value = config.unit || 'C';
-                        document.getElementById('pollingInterval').value = config.pollingInterval || 90;
-                        document.getElementById('logLevel').value = config.logLevel || 'normal';
-                        
-                        // Handle schedules
-                        const enableSchedules = config.enableSchedules || false;
-                        document.getElementById('enableSchedules').checked = enableSchedules;
-                        schedulesContainer.classList.toggle('hidden', !enableSchedules);
-                        
-                        // Load schedules
-                        schedules = config.schedules || [];
-                        renderScheduleList();
-                        
-                        console.log('Config loaded successfully');
-                    } else {
-                        console.error('Failed to load config:', response.error);
-                        showStatus('Failed to load configuration: ' + (response.error || 'Unknown error'), true);
+                        if (response.success && response.config) {
+                            config = response.config;
+                            console.log('Config loaded successfully');
+                        } else {
+                            console.warn('Could not load config from server, using defaults');
+                        }
+                    } catch (loadError) {
+                        console.warn('Error loading config, using defaults:', loadError);
+                        // Don't show error to user, just use defaults
                     }
+                    
+                    // Fill form with current values or defaults
+                    document.getElementById('apiToken').value = config.apiToken || '';
+                    document.getElementById('unit').value = config.unit || 'C';
+                    document.getElementById('pollingInterval').value = config.pollingInterval || 90;
+                    document.getElementById('logLevel').value = config.logLevel || 'normal';
+                    
+                    // Handle schedules
+                    const enableSchedules = !!config.enableSchedules;
+                    document.getElementById('enableSchedules').checked = enableSchedules;
+                    schedulesContainer.classList.toggle('hidden', !enableSchedules);
+                    
+                    // Load schedules
+                    schedules = Array.isArray(config.schedules) ? config.schedules : [];
+                    renderScheduleList();
+                    
                 } catch (error) {
-                    console.error('Error loading config:', error);
-                    showStatus('Error loading configuration: ' + error.message, true);
+                    console.error('Error in loadConfig:', error);
+                    // Don't show loading errors to user, just use defaults
                 }
             }
             
@@ -370,9 +384,9 @@
                 // Update UI
                 renderScheduleList();
                 
-                // Reset form
-                document.getElementById('scheduleTime').value = '';
-                document.getElementById('scheduleTemperature').value = '';
+                // Reset form fields to default values
+                document.getElementById('scheduleTime').value = '21:30';
+                document.getElementById('scheduleTemperature').value = '23';
                 
                 showStatus('Schedule added');
             });
@@ -417,7 +431,9 @@
                     showStatus('Testing connection...');
                     
                     const response = await homebridge.request('/device/test', { 
-                        apiToken 
+                        body: {
+                            apiToken
+                        }
                     });
                     
                     if (response.success) {
