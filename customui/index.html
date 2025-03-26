@@ -1,38 +1,99 @@
-<script>
-  // This script forces the configuration page to open automatically
-  // when the plugin is first installed
-  (function() {
-    // Check if the plugin has been configured before
-    const configCache = window.localStorage.getItem('homebridge-sleepme-simple-configured');
-    
-    if (!configCache) {
-      // First time configuration - automatically open settings
-      setTimeout(function() {
-        // Select this plugin in the sidebar and open settings
-        const pluginName = 'homebridge-sleepme-simple';
-        const platformName = 'SleepMeSimple';
-        
-        // Find the sidebar item for this plugin and click it
-        const sidebarItems = document.querySelectorAll('.sidebar-item');
-        for (const item of sidebarItems) {
-          if (item.textContent.includes(platformName)) {
-            item.click();
-            
-            // Open config form
-            setTimeout(function() {
-              const configButton = document.querySelector('button.btn-config');
-              if (configButton) {
-                configButton.click();
-                
-                // Mark as configured
-                window.localStorage.setItem('homebridge-sleepme-simple-configured', 'true');
-              }
-            }, 500);
-            
-            break;
-          }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SleepMe Simple Configuration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
         }
-      }, 1000);
-    }
-  })();
-</script>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .card {
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 3px;
+        }
+        #template-selector-container {
+            margin-top: 20px;
+        }
+        #template-frame {
+            width: 100%;
+            height: 500px;
+            border: none;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h2>SleepMe Simple Configuration</h2>
+            <div class="info-box">
+                <p>This plugin provides HomeKit integration for SleepMe devices (Dock Pro, OOLER, ChiliPad). 
+                   Configure your device settings below.</p>
+            </div>
+            
+            <div id="template-selector-container">
+                <h3>Sleep Schedule Templates</h3>
+                <p>Select a template to automatically configure your sleep schedules:</p>
+                <iframe id="template-frame" src="template-selector.html"></iframe>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Listen for messages from the iframe
+        window.addEventListener('message', function(event) {
+            // Only process messages that we expect
+            if (event.data && event.data.action === 'save-template') {
+                console.log('Received template data:', event.data.schedules);
+                // Send to homebridge-ui
+                if (window.homebridge) {
+                    window.homebridge.updatePluginConfig({
+                        schedules: event.data.schedules
+                    });
+                }
+            }
+        });
+        
+        // When page loads, send current config to iframe
+        window.addEventListener('load', function() {
+            // If homebridge API is available, get the current config
+            if (window.homebridge) {
+                window.homebridge.getPluginConfig(function(config) {
+                    const templateFrame = document.getElementById('template-frame');
+                    if (templateFrame && templateFrame.contentWindow) {
+                        templateFrame.contentWindow.postMessage({
+                            action: 'init-template',
+                            schedules: config.schedules || []
+                        }, '*');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
