@@ -3,7 +3,6 @@
   "pluginType": "platform",
   "singular": true,
   "customUi": true,
-  "customUiPath": "./customui",
   "footerDisplay": "SleepMe Simple v4.0.3-dev.0",
   "schema": {
     "type": "object",
