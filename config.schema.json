@@ -2,6 +2,9 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "singular": true,
+  "customUiPath": "./customui",
+  "footerDisplay": "For more information, see the <a href=\"https://github.com/jcfield-boop/homebridge-sleepme-simple#readme\" target=\"_blank\">README</a>.",
+  "customUiPath": "./customui",
   "schema": {
     "type": "object",
     "properties": {
@@ -29,10 +32,10 @@
       },
       "pollingInterval": {
         "title": "Polling Interval",
-        "type": "integer",
-        "format": "int",
-        "default": 90,
-        "description": "How frequently to check device status (in seconds) don't go less than 30"
+        "type": "string",
+        "default": "90",
+        "pattern": "^([6-9][0-9]|[1-9][0-9]{2}|300)$",
+        "description": "How frequently to check device status (in seconds, 60-300)"
       },
       "enableSchedules": {
         "title": "Enable Schedules",
@@ -44,7 +47,7 @@
         "title": "Temperature Schedules",
         "type": "object",
         "expandable": true,
-        "expanded": false,
+        "expanded": true,
         "condition": {
           "functionBody": "return model.enableSchedules === true;"
         },
@@ -52,7 +55,7 @@
           "schedules": {
             "type": "array",
             "title": "Schedule List",
-            "description": "Configure scheduled temperature changes",
+            "description": "Configure scheduled temperature changes. Select from pre-defined templates or customize your own.",
             "items": {
               "type": "object",
               "properties": {
@@ -112,71 +115,3 @@
             }
           }
         }
-      },
-      "warmHugSettings": {
-        "title": "Warm Hug Settings",
-        "type": "object",
-        "expandable": true,
-        "expanded": false,
-        "description": "Configure the behavior of Warm Hug temperature ramping (gradually increases temperature to wake you with warmth)",
-        "properties": {
-          "warmHugIncrement": {
-            "title": "Temperature Increment per Minute",
-            "description": "How quickly the temperature increases during Warm Hug mode",
-            "oneOf": [
-              {
-                "title": "Celsius",
-                "type": "number",
-                "default": 2,
-                "minimum": 0.5,
-                "maximum": 5,
-                "multipleOf": 0.5,
-                "description": "Temperature increase per minute (°C)",
-                "condition": {
-                  "functionBody": "return model.unit === 'C';"
-                }
-              },
-              {
-                "title": "Fahrenheit",
-                "type": "number",
-                "default": 3.6,
-                "minimum": 1,
-                "maximum": 9,
-                "multipleOf": 1,
-                "description": "Temperature increase per minute (°F)",
-                "condition": {
-                  "functionBody": "return model.unit === 'F';"
-                }
-              }
-            ]
-          },
-          "warmHugDuration": {
-            "title": "Warm Hug Duration",
-            "type": "string",
-            "default": "10",
-            "pattern": "^([5-9]|[1-2][0-9]|30)$",
-            "description": "Duration of Warm Hug temperature ramp (5-30 minutes)",
-            "required": true
-          }
-        }
-      },
-      "advanced": {
-        "title": "Advanced Settings",
-        "type": "object",
-        "expandable": true,
-        "expanded": false,
-        "properties": {
-          "logLevel": {
-            "title": "Logging Level",
-            "type": "string",
-            "default": "normal",
-            "enum": ["normal", "debug", "verbose"],
-            "enumNames": ["Normal", "Debug", "Verbose"],
-            "description": "Controls the detail level of plugin logs"
-          }
-        }
-      }
-    },
-    "required": ["apiToken", "unit"]
-  }
-}
