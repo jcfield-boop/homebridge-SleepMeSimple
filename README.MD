@@ -1,6 +1,6 @@
 # SleepMe Simple - Homebridge Plugin
 
-https://github.com/jcfield-boop/homebridge-SleepMeSimple/blob/main/icons/sleepmebasic.jpg
+<img src="icons/sleepme.jpg" width="100" alt="SleepMe Simple Plugin Icon">
 
 A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad) that provides reliable and responsive HomeKit integration with advanced API management.
 
@@ -13,6 +13,7 @@ A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad
 - **Water Level Monitoring**: Check your device's water level through HomeKit
 - **Automatic Device Detection**: Auto-discovers your SleepMe devices
 - **Comprehensive Model Support**: Compatible with Dock Pro, OOLER, and ChiliPad devices
+- **Sleep Schedule Templates**: Pre-defined temperature profiles based on sleep science
 
 ## Why Use This Plugin?
 
@@ -79,6 +80,70 @@ Configure through the Homebridge UI or manually in your `config.json`:
 - **unit**: Temperature unit, "C" for Celsius or "F" for Fahrenheit (default: "C")
 - **pollingInterval**: How frequently to check device status in seconds (default: 90, minimum: 60)
 - **logLevel**: Log detail level - "normal", "debug", or "verbose"
+- **enableSchedules**: Enable temperature scheduling features (default: false)
+
+## Sleep Schedule Templates
+
+The SleepMe Simple plugin includes pre-defined sleep schedule templates designed to optimize your sleep experience. These templates are based on sleep science principles and provide temperature adjustments that work with your body's natural sleep cycles.
+
+### Using Schedule Templates
+
+1. Enable the "Enable Schedules" option in the plugin settings
+2. The Schedule Templates interface will appear above the schedule list
+3. Select a template for weekdays and weekends (you can choose different patterns for each)
+4. Click "Save" to apply the templates to your configuration
+
+### Available Templates
+
+#### Weekday Templates
+
+- **Optimal Sleep Cycle**
+  - Designed for complete sleep cycles with REM enhancement
+  - 10:00 PM: 21°C (Cool Down) - Helps you fall asleep faster
+  - 11:00 PM: 19°C (Deep Sleep) - Supports deeper sleep stages
+  - 2:00 AM: 23°C (REM Support) - Enhances REM sleep phases
+  - 6:00 AM: Warm Hug Wake-up - Gently wakes you with warmth
+
+- **Night Owl**
+  - Later bedtime with extended morning warm-up
+  - 11:30 PM: 21°C (Cool Down)
+  - 12:30 AM: 19°C (Deep Sleep)
+  - 3:30 AM: 23°C (REM Support)
+  - 7:30 AM: Warm Hug Wake-up
+
+- **Early Bird**
+  - Earlier bedtime and wake-up schedule
+  - 9:00 PM: 21°C (Cool Down)
+  - 10:00 PM: 19°C (Deep Sleep)
+  - 1:00 AM: 23°C (REM Support)
+  - 5:00 AM: Warm Hug Wake-up
+
+#### Weekend Templates
+
+- **Weekend Recovery**
+  - Extra sleep with later wake-up time
+  - 11:00 PM: 21°C (Cool Down)
+  - 12:00 AM: 19°C (Deep Sleep)
+  - 3:00 AM: 23°C (REM Support)
+  - 8:00 AM: Warm Hug Wake-up
+
+- **Relaxed Weekend**
+  - Gradual transitions for weekend leisure
+  - 11:30 PM: 22°C (Cool Down)
+  - 1:00 AM: 20°C (Deep Sleep)
+  - 4:00 AM: 24°C (REM Support)
+  - 9:00 AM: Warm Hug Wake-up
+
+### The Science Behind Temperature and Sleep
+
+Temperature plays a crucial role in sleep quality:
+
+1. **Cool Down Phase**: A slight drop in body temperature helps trigger sleep onset
+2. **Deep Sleep Phase**: Cooler temperatures promote deeper, more restorative sleep
+3. **REM Support Phase**: A slight warming helps support REM sleep cycles which are critical for cognitive function
+4. **Wake-Up Phase**: The "Warm Hug" feature gradually increases temperature to wake you gently and naturally
+
+These templates are designed to work with your body's natural temperature regulation system to optimize sleep quality.
 
 ## Troubleshooting
 
