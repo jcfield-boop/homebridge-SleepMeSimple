@@ -1,6 +1,6 @@
 // homebridge-ui/server.js
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
-import axios from 'axios';
+const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
+const axios = require('axios');
 
 // Fallback API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
@@ -78,13 +78,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Getting plugin configuration');
       
-      // Correctly get plugin config from Homebridge using the proper method
-      const pluginConfig = await this.getPluginConfig();
+      // Get plugin config from cache, not async method
+      const pluginConfig = this.getPluginConfig();
       
-      this.log('Plugin configuration retrieved successfully:', JSON.stringify(pluginConfig));
+      this.log('Plugin configuration retrieved');
       return {
         success: true,
-        config: pluginConfig
+        config: pluginConfig || {}
       };
     } catch (error) {
       this.log(`Failed to get plugin configuration: ${error.message}`, true);
@@ -123,16 +123,16 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         newConfig.schedules = [];
       }
       
-      this.log(`Saving config: ${JSON.stringify(newConfig, null, 2)}`);
+      this.log(`Saving config with token: ${newConfig.apiToken ? newConfig.apiToken.substring(0, 4) + '...' : 'none'}`);
       
       try {
-        // Use the correct method to update plugin config
+        // Save the configuration
         await this.updatePluginConfig(newConfig);
         
         this.log('Configuration saved successfully');
         
         // Notify UI of the updated config
-        await this.pushEvent('save-config', { config: newConfig });
+        await this.pushEvent('save-config', { success: true });
         
         return {
           success: true,
@@ -155,5 +155,5 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Export the server instance
-export default new SleepMeUiServer();
+// Export the server instance (CommonJS style)
+module.exports = new SleepMeUiServer();
