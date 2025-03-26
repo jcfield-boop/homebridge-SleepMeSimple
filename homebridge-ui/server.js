@@ -78,34 +78,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Getting plugin configuration');
       
-      // Use the correct method to get the Homebridge config
-      const homebridgeConfig = await this.readHomebridgeConfig();
+      // Correctly get plugin config from Homebridge using the proper method
+      const pluginConfig = await this.getPluginConfig();
       
-      if (!homebridgeConfig || !homebridgeConfig.platforms) {
-        this.log('No platforms found in Homebridge config', true);
-        return {
-          success: false,
-          error: 'No platforms found in Homebridge config'
-        };
-      }
-
-      // Find our platform in the Homebridge config
-      const platformConfig = homebridgeConfig.platforms.find(
-        platform => platform.platform === 'SleepMeSimple'
-      );
-      
-      if (!platformConfig) {
-        this.log('SleepMeSimple platform not found in config', true);
-        return {
-          success: false,
-          error: 'Platform not found in Homebridge config'
-        };
-      }
-      
-      this.log('Plugin configuration retrieved successfully');
+      this.log('Plugin configuration retrieved successfully:', JSON.stringify(pluginConfig));
       return {
         success: true,
-        config: platformConfig
+        config: pluginConfig
       };
     } catch (error) {
       this.log(`Failed to get plugin configuration: ${error.message}`, true);
@@ -144,29 +123,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         newConfig.schedules = [];
       }
       
+      this.log(`Saving config: ${JSON.stringify(newConfig, null, 2)}`);
+      
       try {
-        // Get the current Homebridge config
-        const homebridgeConfig = await this.readHomebridgeConfig();
-        
-        if (!homebridgeConfig || !Array.isArray(homebridgeConfig.platforms)) {
-          throw new Error('Invalid Homebridge configuration structure');
-        }
-        
-        // Find the index of our platform in the config
-        const platformIndex = homebridgeConfig.platforms.findIndex(
-          platform => platform.platform === 'SleepMeSimple'
-        );
-        
-        if (platformIndex >= 0) {
-          // Update existing platform config
-          homebridgeConfig.platforms[platformIndex] = newConfig;
-        } else {
-          // Add new platform config
-          homebridgeConfig.platforms.push(newConfig);
-        }
-        
-        // Save the updated config back to Homebridge
-        await this.writeHomebridgeConfig(homebridgeConfig);
+        // Use the correct method to update plugin config
+        await this.updatePluginConfig(newConfig);
         
         this.log('Configuration saved successfully');
         

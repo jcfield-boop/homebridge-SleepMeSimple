@@ -236,6 +236,38 @@
             border-top: 1px solid #eee;
             margin: 25px 0 15px;
         }
+        .schedule-group {
+            margin-bottom: 20px;
+            border-left: 3px solid #0070c9;
+            padding-left: 10px;
+        }
+        .schedule-group-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #0070c9;
+        }
+        .schedule-phase {
+            margin-left: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: normal;
+            color: white;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .phase-cooldown {
+            background-color: #5bc0de;
+        }
+        .phase-deep {
+            background-color: #0275d8;
+        }
+        .phase-rem {
+            background-color: #5cb85c;
+        }
+        .phase-wakeup {
+            background-color: #f0ad4e;
+        }
     </style>
 </head>
 <body>
@@ -499,8 +531,9 @@
                     ]
                 }
             };
-        // Enhanced showStatus with auto-hide option
-        function showStatus(message, isError = false, autoHide = true) {
+        
+            // Enhanced showStatus with auto-hide option
+            function showStatus(message, isError = false, autoHide = true) {
                 statusElement.textContent = message;
                 statusElement.className = isError ? 'status error' : 'status success';
                 statusElement.classList.remove('hidden');
@@ -573,7 +606,7 @@
                 try {
                     console.log('Attempting to load configuration...');
                     
-                    // Show loading indicator or message if needed
+                    // Show loading indicator or message
                     statusElement.textContent = 'Loading configuration...';
                     statusElement.className = 'status';
                     statusElement.classList.remove('hidden');
@@ -734,7 +767,8 @@
                     testConnectionBtn.textContent = 'Test Connection';
                 }
             });
-                // Apply templates
+            
+            // Apply templates
             applyTemplatesBtn.addEventListener('click', () => {
                 const weekdayKey = weekdayTemplateSelect.value;
                 const weekendKey = weekendTemplateSelect.value;
@@ -935,7 +969,8 @@
             
             // Cancel edit button handler
             cancelEditBtn.addEventListener('click', exitEditMode);
-            // Render the schedule list with logical ordering
+            
+            // Improved render schedule list with enhanced ordering and grouping
             function renderScheduleList() {
                 scheduleList.innerHTML = '';
                 
@@ -954,52 +989,97 @@
                     groupedSchedules[schedule.type].push(schedule);
                 });
                 
-                // Helper function to determine schedule order (bedtime first, wake-up last)
-                function getScheduleOrderWeight(schedule) {
-                    // Check for wake-up schedules by description
-                    if (schedule.description && 
-                        (schedule.description.toLowerCase().includes('wake') || 
-                        schedule.description.toLowerCase().includes('wake-up') ||
-                        schedule.description.toLowerCase().includes('warm hug'))) {
-                        return 3; // Wake-up schedules last
-                    }
+                // Define sleep cycle phases for better categorization
+                const phases = {
+                    COOL_DOWN: { name: 'Cool Down', weight: 10, class: 'phase-cooldown' },
+                    DEEP_SLEEP: { name: 'Deep Sleep', weight: 20, class: 'phase-deep' },
+                    REM: { name: 'REM Support', weight: 30, class: 'phase-rem' },
+                    WAKE_UP: { name: 'Wake-up', weight: 40, class: 'phase-wakeup' }
+                };
+                
+                // Helper function to determine schedule phase by description and temperature
+                function getSchedulePhase(schedule) {
+                    const desc = (schedule.description || '').toLowerCase();
+                    const temp = schedule.temperature;
+                    const unit = schedule.unit || 'C';
                     
-                    // Check if it's a morning time (5-10 AM)
-                    const hourMatch = schedule.time.match(/^(\d{1,2}):/);
-                    if (hourMatch) {
-                        const hour = parseInt(hourMatch[1], 10);
-                        if (hour >= 5 && hour < 10) {
-                            return 2; // Morning schedules second
-                        }
-                    }
+                    // Normalize temperature to Celsius for consistent comparison
+                    const tempC = unit === 'C' ? temp : convertFtoC(temp);
                     
-                    return 1; // Bedtime/evening schedules first
+                    if (desc.includes('wake') || desc.includes('hug') || tempC > 30) {
+                        return phases.WAKE_UP;
+                    } else if (desc.includes('rem') || (tempC > 22 && tempC < 30)) {
+                        return phases.REM;
+                    } else if (desc.includes('deep') || tempC < 20) {
+                        return phases.DEEP_SLEEP;
+                    } else {
+                        return phases.COOL_DOWN;
+                    }
                 }
                 
-                // Render each group
+                // Extract hour from time string for sorting
+                function getTimeHour(timeStr) {
+                    const parts = timeStr.split(':');
+                    return parseInt(parts[0], 10);
+                }
+                
+                // Determine if a time is in the evening (6 PM - midnight)
+                function isEveningTime(timeStr) {
+                    const hour = getTimeHour(timeStr);
+                    return hour >= 18 && hour <= 23;
+                }
+                
+                // Determine if a time is in the early morning (midnight - 6 AM)
+                function isEarlyMorningTime(timeStr) {
+                    const hour = getTimeHour(timeStr);
+                    return hour >= 0 && hour < 6;
+                }
+                
+                // Determine if a time is in the morning (6 AM - noon)
+                function isMorningTime(timeStr) {
+                    const hour = getTimeHour(timeStr);
+                    return hour >= 6 && hour < 12;
+                }
+                
+                // Sort schedules within each group by sleep cycle order
                 Object.keys(groupedSchedules).forEach(type => {
-                    const groupHeader = document.createElement('h4');
-                    groupHeader.textContent = type;
-                    groupHeader.style.marginTop = '15px';
-                    groupHeader.style.marginBottom = '5px';
-                    scheduleList.appendChild(groupHeader);
+                    // Create a group container
+                    const groupContainer = document.createElement('div');
+                    groupContainer.className = 'schedule-group';
                     
-                    // Sort schedules by logical order (bedtime first, wake-up last)
-                    const sortedSchedules = groupedSchedules[type].sort((a, b) => {
-                        const orderA = getScheduleOrderWeight(a);
-                        const orderB = getScheduleOrderWeight(b);
-                        
-                        // If they're the same category, sort by time
-                        if (orderA === orderB) {
-                            return a.time.localeCompare(b.time);
-                        }
-                        
-                        return orderA - orderB;
-                    });
+                    const groupTitle = document.createElement('div');
+                    groupTitle.className = 'schedule-group-title';
+                    groupTitle.textContent = type;
+                    groupContainer.appendChild(groupTitle);
                     
-                    sortedSchedules.forEach((schedule) => {
+                    // Group schedules by logical time periods
+                    const eveningSchedules = groupedSchedules[type].filter(s => isEveningTime(s.time));
+                    const earlyMorningSchedules = groupedSchedules[type].filter(s => isEarlyMorningTime(s.time));
+                    const morningSchedules = groupedSchedules[type].filter(s => isMorningTime(s.time));
+                    const otherSchedules = groupedSchedules[type].filter(s => 
+                        !isEveningTime(s.time) && !isEarlyMorningTime(s.time) && !isMorningTime(s.time));
+                    
+                    // Sort by time within each period
+                    const sortByTime = (a, b) => a.time.localeCompare(b.time);
+                    eveningSchedules.sort(sortByTime);
+                    earlyMorningSchedules.sort(sortByTime);
+                    morningSchedules.sort(sortByTime);
+                    otherSchedules.sort(sortByTime);
+                    
+                    // Combine in natural sleep cycle order: evening (bedtime), early morning (deep sleep/REM), morning (wake up)
+                    const sortedSchedules = [
+                        ...eveningSchedules,
+                        ...earlyMorningSchedules,
+                        ...morningSchedules,
+                        ...otherSchedules
+                    ];
+                    
+                    sortedSchedules.forEach(schedule => {
                         const scheduleItem = document.createElement('div');
                         scheduleItem.className = 'schedule-item';
+                        
+                        // Determine the schedule phase for display formatting
+                        const phase = getSchedulePhase(schedule);
                         
                         // Format display info
                         let displayInfo = '';
@@ -1024,38 +1104,62 @@
                         
                         displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
                         
-                        // Add description if available
-                        if (schedule.description) {
-                            displayInfo += ` (${schedule.description})`;
-                        }
+                        // Add phase label if not explicitly in description
+                        const hasPhaseInDesc = schedule.description && 
+                            (schedule.description.toLowerCase().includes(phase.name.toLowerCase()) || 
+                             (phase.name === 'Wake-up' && schedule.description.toLowerCase().includes('hug')));
+                        
+                        // Create phase label
+                        const phaseLabel = document.createElement('span');
+                        phaseLabel.className = `schedule-phase ${phase.class}`;
+                        phaseLabel.textContent = hasPhaseInDesc ? 
+                            schedule.description : 
+                            (schedule.description || phase.name);
                         
                         // Store the global index for this schedule
                         const globalIndex = schedules.indexOf(schedule);
                         
-                        // Create schedule item content with Edit and Remove buttons
-                        scheduleItem.innerHTML = `
-                            <div class="schedule-item-info">${displayInfo}</div>
-                            <div class="schedule-item-actions">
-                                <button type="button" class="edit" data-index="${globalIndex}">Edit</button>
-                                <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
-                            </div>
-                        `;
+                        // Create schedule item elements
+                        const infoDiv = document.createElement('div');
+                        infoDiv.className = 'schedule-item-info';
+                        infoDiv.textContent = displayInfo + ' ';
+                        infoDiv.appendChild(phaseLabel);
                         
-                        // Add event listener for edit button
-                        scheduleItem.querySelector('button.edit').addEventListener('click', (event) => {
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.className = 'schedule-item-actions';
+                        
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'edit';
+                        editBtn.textContent = 'Edit';
+                        editBtn.dataset.index = globalIndex;
+                        
+                        const removeBtn = document.createElement('button');
+                        removeBtn.className = 'danger';
+                        removeBtn.textContent = 'Remove';
+                        removeBtn.dataset.index = globalIndex;
+                        
+                        actionsDiv.appendChild(editBtn);
+                        actionsDiv.appendChild(removeBtn);
+                        
+                        scheduleItem.appendChild(infoDiv);
+                        scheduleItem.appendChild(actionsDiv);
+                        
+                        // Add event listeners
+                        editBtn.addEventListener('click', (event) => {
                             const idx = parseInt(event.target.getAttribute('data-index'), 10);
                             editSchedule(idx);
                         });
                         
-                        // Add event listener for remove button
-                        scheduleItem.querySelector('button.danger').addEventListener('click', (event) => {
+                        removeBtn.addEventListener('click', (event) => {
                             const idx = parseInt(event.target.getAttribute('data-index'), 10);
                             schedules.splice(idx, 1);
                             renderScheduleList();
                         });
                         
-                        scheduleList.appendChild(scheduleItem);
+                        groupContainer.appendChild(scheduleItem);
                     });
+                    
+                    scheduleList.appendChild(groupContainer);
                 });
             }
             
