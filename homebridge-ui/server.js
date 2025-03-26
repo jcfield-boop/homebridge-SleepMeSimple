@@ -154,5 +154,5 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Initialize the server
-export default () => new SleepMeUiServer();
+// FIXED: Export the instance directly instead of a factory function
+export default new SleepMeUiServer();
