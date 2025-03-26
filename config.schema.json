@@ -4,7 +4,6 @@
   "singular": true,
   "customUiPath": "./customui",
   "footerDisplay": "For more information, see the <a href=\"https://github.com/jcfield-boop/homebridge-sleepme-simple#readme\" target=\"_blank\">README</a>.",
-  "customUiPath": "./customui",
   "schema": {
     "type": "object",
     "properties": {
@@ -36,6 +35,13 @@
         "default": "90",
         "pattern": "^([6-9][0-9]|[1-9][0-9]{2}|300)$",
         "description": "How frequently to check device status (in seconds, 60-300)"
+      },
+      "logLevel": {
+        "title": "Log Level",
+        "type": "string",
+        "default": "normal",
+        "enum": ["normal", "debug", "verbose"],
+        "description": "Level of detail in logs"
       },
       "enableSchedules": {
         "title": "Enable Schedules",
@@ -115,3 +121,53 @@
             }
           }
         }
+      },
+      "advanced": {
+        "title": "Advanced Settings",
+        "type": "object",
+        "expandable": true,
+        "expanded": false,
+        "properties": {
+          "warmHugIncrement": {
+            "title": "Warm Hug Temperature Increment",
+            "type": "number",
+            "default": 2,
+            "minimum": 0.5,
+            "maximum": 5,
+            "description": "Temperature increase per minute (°C)"
+          },
+          "warmHugDuration": {
+            "title": "Warm Hug Duration",
+            "type": "number",
+            "default": 10,
+            "minimum": 5,
+            "maximum": 30,
+            "description": "Duration of warm hug (minutes)"
+          }
+        }
+      },
+      "devices": {
+        "title": "Manual Device Configuration",
+        "type": "array",
+        "expandable": true,
+        "expanded": false,
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "title": "Device ID",
+              "type": "string",
+              "description": "SleepMe device ID"
+            },
+            "name": {
+              "title": "Device Name",
+              "type": "string",
+              "description": "Custom name for this device"
+            }
+          },
+          "required": ["id"]
+        }
+      }
+    }
+  }
+}
