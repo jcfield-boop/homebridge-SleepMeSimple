@@ -1,14 +1,13 @@
 {
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
-  "singular": true,
   "customUi": true,
-  "footerDisplay": "SleepMe Simple v4.0.3-dev.0",
+  "footerDisplay": "SleepMe Simple Homebridge Plugin v4.0.3",
   "schema": {
     "type": "object",
     "properties": {
       "name": {
-        "title": "Platform Name",
+        "title": "Name",
         "type": "string",
         "default": "SleepMe Simple",
         "required": true
@@ -17,17 +16,15 @@
         "title": "API Token",
         "type": "string",
         "format": "password",
-        "description": "Your SleepMe API token (obtain from your account at sleep.me)",
+        "description": "Your SleepMe API token",
         "required": true
       },
       "unit": {
         "title": "Temperature Unit",
         "type": "string",
-        "default": "C",
         "enum": ["C", "F"],
-        "enumNames": ["Celsius (°C)", "Fahrenheit (°F)"],
-        "description": "Select preferred temperature unit",
-        "required": true
+        "default": "C",
+        "description": "Temperature display unit"
       },
       "pollingInterval": {
         "title": "Polling Interval",
@@ -35,91 +32,36 @@
         "minimum": 60,
         "maximum": 300,
         "default": 90,
-        "description": "How frequently to check device status (in seconds, 60-300)"
-      },
-      "logLevel": {
-        "title": "Log Level",
-        "type": "string",
-        "default": "normal",
-        "enum": ["normal", "debug", "verbose"],
-        "description": "Level of detail in logs"
+        "description": "Device status check interval (seconds)"
       },
       "enableSchedules": {
         "title": "Enable Schedules",
         "type": "boolean",
-        "default": false,
-        "description": "Enable temperature scheduling features"
+        "default": false
       },
       "schedules": {
         "type": "array",
-        "title": "Temperature Schedules",
-        "description": "Configure scheduled temperature changes",
-        "condition": {
-          "functionBody": "return model.enableSchedules === true;"
-        },
         "items": {
           "type": "object",
           "properties": {
             "type": {
-              "title": "Schedule Type",
               "type": "string",
-              "default": "Everyday",
-              "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"],
-              "description": "When this schedule should be active"
-            },
-            "day": {
-              "title": "Day",
-              "type": "string",
-              "default": "Monday",
-              "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-              "description": "Day of the week (for Specific Day schedules)",
-              "condition": {
-                "functionBody": "return model.schedules[arrayIndices[0]].type === 'Specific Day';"
-              }
+              "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day"]
             },
             "time": {
-              "title": "Time",
               "type": "string",
-              "format": "time",
-              "default": "21:30",
-              "description": "Time for this scheduled event (HH:MM 24-hour format)"
+              "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
             },
             "temperature": {
-              "title": "Target Temperature",
               "type": "number",
-              "description": "Target temperature in your selected unit",
-              "default": 21,
               "minimum": 13,
               "maximum": 46
             }
           },
           "required": ["type", "time", "temperature"]
         }
-      },
-      "advanced": {
-        "title": "Advanced Settings",
-        "type": "object",
-        "expandable": true,
-        "expanded": false,
-        "properties": {
-          "warmHugIncrement": {
-            "title": "Warm Hug Temperature Increment",
-            "type": "number",
-            "default": 2,
-            "minimum": 0.5,
-            "maximum": 5,
-            "description": "Temperature increase per minute (°C)"
-          },
-          "warmHugDuration": {
-            "title": "Warm Hug Duration",
-            "type": "number",
-            "default": 10,
-            "minimum": 5,
-            "maximum": 30,
-            "description": "Duration of warm hug (minutes)"
-          }
-        }
       }
-    }
+    },
+    "required": ["apiToken"]
   }
 }
