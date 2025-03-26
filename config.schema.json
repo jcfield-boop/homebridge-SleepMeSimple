@@ -3,7 +3,7 @@
   "pluginType": "platform",
   "singular": true,
   "customUiPath": "./customui",
- "footerDisplay": "<script src='customui/test.js'></script> For more information, see the <a href=\"https://github.com/jcfield-boop/homebridge-sleepme-simple#readme\" target=\"_blank\">README</a>."
+  "footerDisplay": "<script src='customui/test.js'></script> For more information, see the <a href=\"https://github.com/jcfield-boop/homebridge-sleepme-simple#readme\" target=\"_blank\">README</a>.",
   "schema": {
     "type": "object",
     "properties": {
