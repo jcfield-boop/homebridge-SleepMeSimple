@@ -1,28 +1,27 @@
-// Simple test file to verify custom UI loading
+// Simple test file that makes it obvious when it loads
 (function() {
-  // Create a visible indicator that the script has loaded
+  // Log to console
   console.log('SleepMe UI Test: Script loaded at ' + new Date().toISOString());
   
-  // Create a visual indicator on the page
+  // Add a clearly visible element to the page
   const div = document.createElement('div');
   div.id = 'sleepme-test-indicator';
-  div.textContent = 'SleepMe UI Test Script Loaded';
+  div.textContent = 'SleepMe UI Test Loaded Successfully!';
   div.style.position = 'fixed';
-  div.style.bottom = '10px';
+  div.style.top = '10px';
   div.style.right = '10px';
-  div.style.backgroundColor = '#4CAF50';
+  div.style.backgroundColor = 'red'; // Bright color to be obvious
   div.style.color = 'white';
-  div.style.padding = '5px 10px';
+  div.style.padding = '10px 20px';
   div.style.borderRadius = '5px';
   div.style.zIndex = '9999';
-  div.style.fontSize = '12px';
+  div.style.fontSize = '16px';
+  div.style.fontWeight = 'bold';
   document.body.appendChild(div);
   
-  // Hide the indicator after 10 seconds
-  setTimeout(() => {
-    div.style.opacity = '0.5';
-    setTimeout(() => {
-      div.style.display = 'none';
-    }, 2000);
-  }, 10000);
+  // Add a click handler to make it interactive
+  div.addEventListener('click', function() {
+    this.style.backgroundColor = 'green';
+    this.textContent = 'Test Script Working!';
+  });
 })();
