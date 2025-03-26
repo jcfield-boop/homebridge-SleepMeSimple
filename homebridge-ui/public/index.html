@@ -15,11 +15,18 @@
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
         }
-        h1 {
+        h1, h2 {
             color: #333;
             text-align: center;
+        }
+        h1 {
             margin-bottom: 20px;
+        }
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 15px;
         }
         .form-group {
             margin-bottom: 15px;
@@ -47,9 +54,22 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            margin-right: 5px;
         }
         button:hover {
             background-color: #00559b;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5a6268;
+        }
+        button.danger {
+            background-color: #dc3545;
+        }
+        button.danger:hover {
+            background-color: #c82333;
         }
         .status {
             margin-top: 20px;
@@ -69,6 +89,46 @@
         .hidden {
             display: none;
         }
+        .schedule-container {
+            margin-top: 20px;
+        }
+        .schedule-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: flex-end;
+        }
+        .schedule-form .form-group {
+            flex: 1;
+            min-width: 150px;
+            margin-bottom: 0;
+        }
+        .schedule-list {
+            margin-top: 20px;
+        }
+        .schedule-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .schedule-item button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .schedule-item-info {
+            flex: 1;
+        }
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+        }
     </style>
 </head>
 <body>
@@ -80,7 +140,7 @@
         <form id="configForm">
             <div class="form-group">
                 <label for="apiToken">API Token:</label>
-                <input type="password" id="apiToken" name="apiToken" required>
+                <input type="text" id="apiToken" name="apiToken" required>
             </div>
             
             <div class="form-group">
@@ -112,9 +172,58 @@
                 </label>
             </div>
             
-            <button type="submit">Save Configuration</button>
-            <button type="button" id="testConnection">Test Connection</button>
+            <div class="button-group">
+                <button type="button" id="testConnection">Test Connection</button>
+                <button type="submit">Save Configuration</button>
+            </div>
         </form>
+    </div>
+    
+    <div id="schedulesContainer" class="container hidden">
+        <h2>Temperature Schedules</h2>
+        <p>Create schedules to automatically adjust your device temperature.</p>
+        
+        <div class="schedule-form">
+            <div class="form-group">
+                <label for="scheduleType">Schedule Type:</label>
+                <select id="scheduleType">
+                    <option value="Everyday">Everyday</option>
+                    <option value="Weekdays">Weekdays</option>
+                    <option value="Weekend">Weekend</option>
+                    <option value="Specific Day">Specific Day</option>
+                </select>
+            </div>
+            
+            <div id="daySelectContainer" class="form-group hidden">
+                <label for="scheduleDay">Day:</label>
+                <select id="scheduleDay">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="scheduleTime">Time (24h):</label>
+                <input type="time" id="scheduleTime" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="scheduleTemperature">Temperature:</label>
+                <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" required>
+            </div>
+            
+            <button type="button" id="addSchedule">Add Schedule</button>
+        </div>
+        
+        <div class="schedule-list">
+            <h3>Current Schedules</h3>
+            <div id="scheduleList"></div>
+        </div>
     </div>
 
     <script>
@@ -126,6 +235,15 @@
             const configForm = document.getElementById('configForm');
             const statusElement = document.getElementById('status');
             const testConnectionBtn = document.getElementById('testConnection');
+            const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+            const schedulesContainer = document.getElementById('schedulesContainer');
+            const scheduleTypeSelect = document.getElementById('scheduleType');
+            const daySelectContainer = document.getElementById('daySelectContainer');
+            const addScheduleBtn = document.getElementById('addSchedule');
+            const scheduleList = document.getElementById('scheduleList');
+            
+            // Schedule storage
+            let schedules = [];
             
             // Function to show status messages
             function showStatus(message, isError = false) {
@@ -138,6 +256,17 @@
                     statusElement.classList.add('hidden');
                 }, 5000);
             }
+            
+            // Toggle day select visibility based on schedule type
+            scheduleTypeSelect.addEventListener('change', () => {
+                const showDaySelect = scheduleTypeSelect.value === 'Specific Day';
+                daySelectContainer.classList.toggle('hidden', !showDaySelect);
+            });
+            
+            // Toggle schedule section visibility
+            enableSchedulesCheckbox.addEventListener('change', () => {
+                schedulesContainer.classList.toggle('hidden', !enableSchedulesCheckbox.checked);
+            });
             
             // Load current configuration
             async function loadConfig() {
@@ -152,7 +281,15 @@
                         document.getElementById('unit').value = config.unit || 'C';
                         document.getElementById('pollingInterval').value = config.pollingInterval || 90;
                         document.getElementById('logLevel').value = config.logLevel || 'normal';
-                        document.getElementById('enableSchedules').checked = config.enableSchedules || false;
+                        
+                        // Handle schedules
+                        const enableSchedules = config.enableSchedules || false;
+                        document.getElementById('enableSchedules').checked = enableSchedules;
+                        schedulesContainer.classList.toggle('hidden', !enableSchedules);
+                        
+                        // Load schedules
+                        schedules = config.schedules || [];
+                        renderScheduleList();
                         
                         console.log('Config loaded successfully');
                     } else {
@@ -165,6 +302,81 @@
                 }
             }
             
+            // Render the schedule list
+            function renderScheduleList() {
+                scheduleList.innerHTML = '';
+                
+                if (schedules.length === 0) {
+                    scheduleList.innerHTML = '<p>No schedules configured.</p>';
+                    return;
+                }
+                
+                schedules.forEach((schedule, index) => {
+                    const scheduleItem = document.createElement('div');
+                    scheduleItem.className = 'schedule-item';
+                    
+                    // Format display info
+                    let displayInfo = `${schedule.type}`;
+                    if (schedule.type === 'Specific Day') {
+                        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        displayInfo += ` (${days[schedule.day]})`;
+                    }
+                    displayInfo += ` at ${schedule.time}: ${schedule.temperature}°${document.getElementById('unit').value}`;
+                    
+                    // Create schedule item content
+                    scheduleItem.innerHTML = `
+                        <div class="schedule-item-info">${displayInfo}</div>
+                        <button type="button" class="danger" data-index="${index}">Remove</button>
+                    `;
+                    
+                    // Add event listener for remove button
+                    scheduleItem.querySelector('button').addEventListener('click', (event) => {
+                        const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                        schedules.splice(idx, 1);
+                        renderScheduleList();
+                    });
+                    
+                    scheduleList.appendChild(scheduleItem);
+                });
+            }
+            
+            // Add new schedule
+            addScheduleBtn.addEventListener('click', () => {
+                const type = scheduleTypeSelect.value;
+                const time = document.getElementById('scheduleTime').value;
+                const temperature = parseFloat(document.getElementById('scheduleTemperature').value);
+                
+                // Validate inputs
+                if (!time || isNaN(temperature)) {
+                    showStatus('Please fill in all schedule fields', true);
+                    return;
+                }
+                
+                // Create schedule object
+                const schedule = {
+                    type,
+                    time,
+                    temperature
+                };
+                
+                // Add day for specific day schedules
+                if (type === 'Specific Day') {
+                    schedule.day = parseInt(document.getElementById('scheduleDay').value, 10);
+                }
+                
+                // Add to schedules array
+                schedules.push(schedule);
+                
+                // Update UI
+                renderScheduleList();
+                
+                // Reset form
+                document.getElementById('scheduleTime').value = '';
+                document.getElementById('scheduleTemperature').value = '';
+                
+                showStatus('Schedule added');
+            });
+            
             // Save configuration
             async function saveConfig(formData) {
                 try {
@@ -175,7 +387,8 @@
                         unit: formData.get('unit'),
                         pollingInterval: parseInt(formData.get('pollingInterval'), 10),
                         logLevel: formData.get('logLevel'),
-                        enableSchedules: formData.get('enableSchedules') === 'on'
+                        enableSchedules: formData.get('enableSchedules') === 'on',
+                        schedules: schedules
                     };
                     
                     // Send to server

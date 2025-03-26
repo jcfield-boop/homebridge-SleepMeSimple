@@ -101,6 +101,48 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 
   /**
+   * Validate schedule data format
+   * @param {Array} schedules - Array of schedule objects
+   * @returns {Boolean} Whether schedules are valid
+   */
+  validateSchedules(schedules) {
+    if (!Array.isArray(schedules)) {
+      return false;
+    }
+    
+    return schedules.every(schedule => {
+      // Check required fields
+      if (!schedule.type || !schedule.time || schedule.temperature === undefined) {
+        return false;
+      }
+      
+      // Validate schedule type
+      const validTypes = ['Everyday', 'Weekdays', 'Weekend', 'Specific Day'];
+      if (!validTypes.includes(schedule.type)) {
+        return false;
+      }
+      
+      // Check day for specific day schedules
+      if (schedule.type === 'Specific Day' && (schedule.day === undefined || schedule.day < 0 || schedule.day > 6)) {
+        return false;
+      }
+      
+      // Validate time format (HH:MM)
+      if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(schedule.time)) {
+        return false;
+      }
+      
+      // Validate temperature range
+      const temp = parseFloat(schedule.temperature);
+      if (isNaN(temp) || temp < 13 || temp > 46) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+
+  /**
    * Save updated plugin configuration
    * @param {Object} payload - Configuration data
    * @returns {Object} Response indicating success or failure
@@ -135,7 +177,19 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         }
       }
       
+      // Validate schedules if enabled
+      if (config.enableSchedules && config.schedules) {
+        if (!this.validateSchedules(config.schedules)) {
+          return {
+            success: false,
+            error: 'Invalid schedule format'
+          };
+        }
+      }
+      
       await this.updatePluginConfig([config]);
+      this.log(`Configuration saved successfully: ${config.enableSchedules ? config.schedules.length : 0} schedules`);
+      
       return { success: true };
     } catch (error) {
       this.log(`Save config failed: ${error.message}`, true);
