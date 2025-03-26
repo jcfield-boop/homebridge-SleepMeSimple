@@ -1020,8 +1020,37 @@ function renderScheduleList() {
                 await saveConfig(formData);
             });
             
-            // Handle test connection button
-            testConnectionBtn.addEventListener('click', testApiConnection);
+// Handle test connection button
+testConnectionBtn.addEventListener('click', async () => {
+    const apiToken = document.getElementById('apiToken').value.trim();
+    
+    if (!apiToken) {
+        showStatus('API token is required', true);
+        return;
+    }
+    
+    // Disable button during test
+    testConnectionBtn.disabled = true;
+    testConnectionBtn.textContent = 'Testing...';
+    
+    try {
+        const response = await homebridge.request('/device/test', {
+            body: { apiToken }
+        });
+        
+        if (response.success) {
+            showStatus(response.message || 'Connection successful');
+        } else {
+            showStatus(response.error || 'Connection failed', true);
+        }
+    } catch (error) {
+        showStatus(`Connection test failed: ${error.message}`, true);
+    } finally {
+        // Re-enable button
+        testConnectionBtn.disabled = false;
+        testConnectionBtn.textContent = 'Test Connection';
+    }
+});
             
             // Load initial configuration
             await loadConfig();
