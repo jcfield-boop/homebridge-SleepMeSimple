@@ -16,8 +16,8 @@
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            max-height: none; /* Remove max height to allow content to show */
-            overflow: visible; /* Ensure content is not hidden */
+            max-height: none;
+            overflow: visible;
         }
         h1, h2 {
             color: #333;
@@ -32,6 +32,7 @@
         }
         .form-group {
             margin-bottom: 15px;
+            position: relative;
         }
         label {
             display: block;
@@ -44,6 +45,9 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
+        }
+        input.invalid {
+            border-color: #dc3545;
         }
         input[type="checkbox"] {
             width: auto;
@@ -109,7 +113,7 @@
         .schedule-list {
             margin-top: 20px;
             max-height: 300px;
-            overflow-y: auto; /* Add scroll for schedule list only */
+            overflow-y: auto;
             border: 1px solid #eee;
             padding: 10px;
             border-radius: 4px;
@@ -136,16 +140,10 @@
             display: flex;
             justify-content: flex-end;
         }
-        /* Custom style for time input to ensure 24h display */
-        input[type="time"] {
-            -webkit-appearance: none;
-            -moz-appearance: textfield;
-            appearance: textfield;
-        }
         .error-text {
             color: #dc3545;
             font-size: 14px;
-            margin-top: 5px;
+            margin-bottom: 5px;
             display: none;
         }
         .error-text.visible {
@@ -231,14 +229,14 @@
             
             <div class="form-group">
                 <label for="scheduleTime">Time (24h):</label>
-                <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
                 <div id="timeError" class="error-text">Please enter a valid 24-hour time (HH:MM)</div>
+                <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
             </div>
             
             <div class="form-group">
                 <label for="scheduleTemperature">Temperature:</label>
+                <div id="tempError" class="error-text">Temperature must be between 55-115°F</div>
                 <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
-                <div id="tempError" class="error-text">Temperature must be between 13-46°C (55-115°F)</div>
             </div>
             
             <button type="button" id="addSchedule">Add Schedule</button>
@@ -307,6 +305,7 @@
                 
                 // Show/hide error message
                 timeError.classList.toggle('visible', !isValid);
+                scheduleTimeInput.classList.toggle('invalid', !isValid);
                 
                 return isValid;
             }
@@ -337,6 +336,7 @@
                 // Show/hide error message
                 tempError.textContent = errorMsg;
                 tempError.classList.toggle('visible', !isValid);
+                scheduleTemperatureInput.classList.toggle('invalid', !isValid);
                 
                 return isValid;
             }
@@ -347,9 +347,11 @@
                 if (unit === 'C') {
                     scheduleTemperatureInput.setAttribute('min', '13');
                     scheduleTemperatureInput.setAttribute('max', '46');
+                    scheduleTemperatureInput.value = '23';
                 } else {
                     scheduleTemperatureInput.setAttribute('min', '55');
                     scheduleTemperatureInput.setAttribute('max', '115');
+                    scheduleTemperatureInput.value = '73';
                 }
                 
                 // Re-validate with new unit
@@ -522,17 +524,12 @@
                         config.schedules = schedules;
                     }
                     
-                    // Send to server
-                    const response = await homebridge.request('/save-config', { 
-                        body: {
-                            config: config
-                        }
-                    });
-                    
-                    if (response.success) {
+                    // Send to server - using direct plugin API method
+                    try {
+                        await homebridge.updatePluginConfig([config]);
                         showStatus('Configuration saved successfully!');
-                    } else {
-                        showStatus('Failed to save configuration: ' + (response.error || 'Unknown error'), true);
+                    } catch (error) {
+                        showStatus('Failed to save configuration: ' + error.message, true);
                     }
                 } catch (error) {
                     showStatus('Error saving configuration: ' + error.message, true);

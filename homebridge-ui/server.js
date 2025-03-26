@@ -11,8 +11,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Route handling for UI
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config', this.getConfig.bind(this));
-    this.onRequest('/save-config', this.saveConfig.bind(this));
-
+    
     // Log initialization
     this.log('SleepMe UI Server initialized');
 
@@ -95,10 +94,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Get config request received');
       
-      // Use try-catch with fallback to empty config
+      // Use the plugin-ui-utils built-in method to get configuration
+      // This avoids the use of the deprecated this.getPluginConfig() method
       let config = [{}];
       try {
-        config = await this.homebridge.getPluginConfig();
+        config = await this.getPluginConfig();
         if (!Array.isArray(config) || config.length === 0) {
           config = [{}];
         }
@@ -114,133 +114,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       };
     } catch (error) {
       this.log(`Get config failed: ${error.message}`, true);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Validate schedule data format
-   * @param {Array} schedules - Array of schedule objects
-   * @returns {Boolean} Whether schedules are valid
-   */
-  validateSchedules(schedules) {
-    if (!Array.isArray(schedules)) {
-      return false;
-    }
-    
-    return schedules.every(schedule => {
-      // Check required fields
-      if (!schedule.type || !schedule.time || schedule.temperature === undefined) {
-        return false;
-      }
-      
-      // Validate schedule type
-      const validTypes = ['Everyday', 'Weekdays', 'Weekend', 'Specific Day'];
-      if (!validTypes.includes(schedule.type)) {
-        return false;
-      }
-      
-      // Check day for specific day schedules
-      if (schedule.type === 'Specific Day' && (schedule.day === undefined || schedule.day < 0 || schedule.day > 6)) {
-        return false;
-      }
-      
-      // Validate time format (HH:MM)
-      if (!/^([01]?[0-9]|2[0-3]):([0-5][0-9])$/.test(schedule.time)) {
-        return false;
-      }
-      
-      // Validate temperature range based on unit
-      const temp = parseFloat(schedule.temperature);
-      if (isNaN(temp)) {
-        return false;
-      }
-      
-      // Check temperature range
-      if (schedule.unit === 'C' && (temp < 13 || temp > 46)) {
-        return false;
-      } else if (schedule.unit === 'F' && (temp < 55 || temp > 115)) {
-        return false;
-      }
-      
-      return true;
-    });
-  }
-
-  /**
-   * Save updated plugin configuration
-   * @param {Object} payload - Configuration data
-   * @returns {Object} Response indicating success or failure
-   */
-  async saveConfig(payload) {
-    try {
-      this.log('Save config request received');
-      
-      // Validate payload structure
-      if (!payload?.body?.config) {
-        this.log('Invalid configuration data received', true);
-        return { 
-          success: false, 
-          error: 'Invalid configuration data' 
-        };
-      }
-      
-      const { config } = payload.body;
-      
-      // Validate required fields
-      if (!config.apiToken) {
-        this.log('API token missing in configuration', true);
-        return {
-          success: false,
-          error: 'API token is required'
-        };
-      }
-      
-      // Validate numeric fields
-      if (config.pollingInterval) {
-        const pollingInterval = parseInt(config.pollingInterval, 10);
-        if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
-          this.log('Invalid polling interval', true);
-          return {
-            success: false,
-            error: 'Polling interval must be between 60 and 300 seconds'
-          };
-        }
-      }
-      
-      // Validate schedules if enabled
-      if (config.enableSchedules && config.schedules) {
-        if (!this.validateSchedules(config.schedules)) {
-          this.log('Invalid schedule data', true);
-          return {
-            success: false,
-            error: 'Invalid schedule format'
-          };
-        }
-      }
-      
-      try {
-        // Ensure platform property is present and correct
-        if (!config.platform) {
-          config.platform = "SleepMeSimple";
-        }
-        
-        await this.homebridge.updatePluginConfig([config]);
-        this.log(`Configuration saved successfully: ${config.enableSchedules ? (config.schedules?.length || 0) : 0} schedules`);
-        
-        return { success: true };
-      } catch (saveError) {
-        this.log(`Error saving to Homebridge: ${saveError.message}`, true);
-        return {
-          success: false,
-          error: `Error saving to Homebridge: ${saveError.message}`
-        };
-      }
-    } catch (error) {
-      this.log(`Save config failed: ${error.message}`, true);
       return {
         success: false,
         error: error.message
