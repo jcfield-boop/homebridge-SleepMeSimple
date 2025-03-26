@@ -19,7 +19,7 @@
             max-height: none;
             overflow: visible;
         }
-        h1, h2 {
+        h1, h2, h3 {
             color: #333;
             text-align: center;
         }
@@ -29,6 +29,11 @@
         h2 {
             margin-top: 30px;
             margin-bottom: 15px;
+        }
+        h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 18px;
         }
         .form-group {
             margin-bottom: 15px;
@@ -149,6 +154,71 @@
         .error-text.visible {
             display: block;
         }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-color: #ddd;
+            border-bottom-color: #fff;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .template-section {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .template-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .template-col {
+            flex: 1;
+        }
+        .template-desc {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .info-card {
+            background-color: #e6f7ff;
+            border: 1px solid #91d5ff;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        .info-card h4 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            color: #0070c9;
+        }
+        .info-card p {
+            margin: 0;
+            font-size: 14px;
+        }
+        .section-divider {
+            border-top: 1px solid #eee;
+            margin: 25px 0 15px;
+        }
     </style>
 </head>
 <body>
@@ -201,46 +271,106 @@
     
     <div id="schedulesContainer" class="container hidden">
         <h2>Temperature Schedules</h2>
-        <p>Create schedules to automatically adjust your device temperature.</p>
         
-        <div class="schedule-form">
-            <div class="form-group">
-                <label for="scheduleType">Schedule Type:</label>
-                <select id="scheduleType">
-                    <option value="Everyday">Everyday</option>
-                    <option value="Weekdays">Weekdays</option>
-                    <option value="Weekend">Weekend</option>
-                    <option value="Specific Day">Specific Day</option>
-                </select>
-            </div>
-            
-            <div id="daySelectContainer" class="form-group hidden">
-                <label for="scheduleDay">Day:</label>
-                <select id="scheduleDay">
-                    <option value="0">Sunday</option>
-                    <option value="1">Monday</option>
-                    <option value="2">Tuesday</option>
-                    <option value="3">Wednesday</option>
-                    <option value="4">Thursday</option>
-                    <option value="5">Friday</option>
-                    <option value="6">Saturday</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="scheduleTime">Time (24h):</label>
-                <div id="timeError" class="error-text">Please enter a valid 24-hour time (HH:MM)</div>
-                <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="scheduleTemperature">Temperature:</label>
-                <div id="tempError" class="error-text">Temperature must be between 55-115°F</div>
-                <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
-            </div>
-            
-            <button type="button" id="addSchedule">Add Schedule</button>
+        <div class="tabs">
+            <div class="tab active" data-tab="manual">Manual Schedule</div>
+            <div class="tab" data-tab="templates">Schedule Templates</div>
         </div>
+        
+        <!-- Manual Schedule Tab -->
+        <div id="manualTab" class="tab-content active">
+            <p>Create schedules to automatically adjust your device temperature.</p>
+            
+            <div class="schedule-form">
+                <div class="form-group">
+                    <label for="scheduleType">Schedule Type:</label>
+                    <select id="scheduleType">
+                        <option value="Everyday">Everyday</option>
+                        <option value="Weekdays">Weekdays</option>
+                        <option value="Weekend">Weekend</option>
+                        <option value="Specific Day">Specific Day</option>
+                        <option value="Warm Hug">Warm Hug</option>
+                    </select>
+                </div>
+                
+                <div id="daySelectContainer" class="form-group hidden">
+                    <label for="scheduleDay">Day:</label>
+                    <select id="scheduleDay">
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="scheduleTime">Time (24h):</label>
+                    <div id="timeError" class="error-text">Please enter a valid 24-hour time (HH:MM)</div>
+                    <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="scheduleTemperature">Temperature:</label>
+                    <div id="tempError" class="error-text">Temperature must be between 55-115°F</div>
+                    <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
+                </div>
+                
+                <button type="button" id="addSchedule">Add Schedule</button>
+            </div>
+            
+            <div id="warmHugInfo" class="info-card hidden">
+                <h4>Warm Hug Feature</h4>
+                <p>The Warm Hug feature gradually increases temperature over time, starting before the scheduled time, for a gentle wake-up experience.</p>
+            </div>
+        </div>
+        
+        <!-- Template Tab -->
+        <div id="templatesTab" class="tab-content">
+            <div class="info-card">
+                <h4>About Schedule Templates</h4>
+                <p>These templates are designed based on sleep science to optimize your sleep experience throughout the night. Choose a template for weekdays and weekends to automatically create multiple schedule entries.</p>
+            </div>
+            
+            <div class="template-section">
+                <h3>Weekday Template</h3>
+                <div class="template-row">
+                    <div class="template-col">
+                        <label for="weekdayTemplate">Select Template:</label>
+                        <select id="weekdayTemplate">
+                            <option value="">None</option>
+                            <option value="optimal">Optimal Sleep Cycle</option>
+                            <option value="nightOwl">Night Owl</option>
+                            <option value="earlyBird">Early Bird</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="weekdayTemplateDesc" class="template-desc"></div>
+            </div>
+            
+            <div class="template-section">
+                <h3>Weekend Template</h3>
+                <div class="template-row">
+                    <div class="template-col">
+                        <label for="weekendTemplate">Select Template:</label>
+                        <select id="weekendTemplate">
+                            <option value="">None</option>
+                            <option value="recovery">Weekend Recovery</option>
+                            <option value="relaxed">Relaxed Weekend</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="weekendTemplateDesc" class="template-desc"></div>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" id="applyTemplates">Apply Templates</button>
+            </div>
+        </div>
+        
+        <div class="section-divider"></div>
         
         <div class="schedule-list">
             <h3>Current Schedules</h3>
@@ -261,6 +391,7 @@
             const schedulesContainer = document.getElementById('schedulesContainer');
             const scheduleTypeSelect = document.getElementById('scheduleType');
             const daySelectContainer = document.getElementById('daySelectContainer');
+            const warmHugInfo = document.getElementById('warmHugInfo');
             const addScheduleBtn = document.getElementById('addSchedule');
             const scheduleList = document.getElementById('scheduleList');
             const scheduleTimeInput = document.getElementById('scheduleTime');
@@ -268,9 +399,70 @@
             const timeError = document.getElementById('timeError');
             const tempError = document.getElementById('tempError');
             const unitSelect = document.getElementById('unit');
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            const weekdayTemplateSelect = document.getElementById('weekdayTemplate');
+            const weekendTemplateSelect = document.getElementById('weekendTemplate');
+            const weekdayTemplateDesc = document.getElementById('weekdayTemplateDesc');
+            const weekendTemplateDesc = document.getElementById('weekendTemplateDesc');
+            const applyTemplatesBtn = document.getElementById('applyTemplates');
             
             // Schedule storage
             let schedules = [];
+            
+            // Template definitions
+            const templates = {
+                optimal: {
+                    name: "Optimal Sleep Cycle",
+                    description: "Designed for complete sleep cycles with REM enhancement",
+                    schedules: [
+                        { type: "Weekdays", time: "22:00", temperature: 21, description: "Cool Down - Helps you fall asleep faster" },
+                        { type: "Weekdays", time: "23:00", temperature: 19, description: "Deep Sleep - Supports deeper sleep stages" },
+                        { type: "Weekdays", time: "02:00", temperature: 23, description: "REM Support - Enhances REM sleep phases" },
+                        { type: "Weekdays", time: "06:00", temperature: 25, description: "Warm Hug Wake-up - Gently wakes you with warmth" }
+                    ]
+                },
+                nightOwl: {
+                    name: "Night Owl",
+                    description: "Later bedtime with extended morning warm-up",
+                    schedules: [
+                        { type: "Weekdays", time: "23:30", temperature: 21, description: "Cool Down" },
+                        { type: "Weekdays", time: "00:30", temperature: 19, description: "Deep Sleep" },
+                        { type: "Weekdays", time: "03:30", temperature: 23, description: "REM Support" },
+                        { type: "Weekdays", time: "07:30", temperature: 25, description: "Warm Hug Wake-up" }
+                    ]
+                },
+                earlyBird: {
+                    name: "Early Bird",
+                    description: "Earlier bedtime and wake-up schedule",
+                    schedules: [
+                        { type: "Weekdays", time: "21:00", temperature: 21, description: "Cool Down" },
+                        { type: "Weekdays", time: "22:00", temperature: 19, description: "Deep Sleep" },
+                        { type: "Weekdays", time: "01:00", temperature: 23, description: "REM Support" },
+                        { type: "Weekdays", time: "05:00", temperature: 25, description: "Warm Hug Wake-up" }
+                    ]
+                },
+                recovery: {
+                    name: "Weekend Recovery",
+                    description: "Extra sleep with later wake-up time",
+                    schedules: [
+                        { type: "Weekend", time: "23:00", temperature: 21, description: "Cool Down" },
+                        { type: "Weekend", time: "00:00", temperature: 19, description: "Deep Sleep" },
+                        { type: "Weekend", time: "03:00", temperature: 23, description: "REM Support" },
+                        { type: "Weekend", time: "08:00", temperature: 25, description: "Warm Hug Wake-up" }
+                    ]
+                },
+                relaxed: {
+                    name: "Relaxed Weekend",
+                    description: "Gradual transitions for weekend leisure",
+                    schedules: [
+                        { type: "Weekend", time: "23:30", temperature: 22, description: "Cool Down" },
+                        { type: "Weekend", time: "01:00", temperature: 20, description: "Deep Sleep" },
+                        { type: "Weekend", time: "04:00", temperature: 24, description: "REM Support" },
+                        { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up" }
+                    ]
+                }
+            };
             
             // Function to show status messages
             function showStatus(message, isError = false) {
@@ -284,15 +476,112 @@
                 }, 5000);
             }
             
+            // Tab functionality
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs
+                    tabs.forEach(t => t.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+                    
+                    // Show corresponding tab content
+                    const tabId = tab.getAttribute('data-tab');
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    document.getElementById(tabId + 'Tab').classList.add('active');
+                });
+            });
+            
             // Toggle day select visibility based on schedule type
             scheduleTypeSelect.addEventListener('change', () => {
-                const showDaySelect = scheduleTypeSelect.value === 'Specific Day';
-                daySelectContainer.classList.toggle('hidden', !showDaySelect);
+                const scheduleType = scheduleTypeSelect.value;
+                
+                // Show/hide day select for specific day schedules
+                daySelectContainer.classList.toggle('hidden', scheduleType !== 'Specific Day');
+                
+                // Show/hide warm hug info
+                warmHugInfo.classList.toggle('hidden', scheduleType !== 'Warm Hug');
             });
             
             // Toggle schedule section visibility
             enableSchedulesCheckbox.addEventListener('change', () => {
                 schedulesContainer.classList.toggle('hidden', !enableSchedulesCheckbox.checked);
+            });
+            
+            // Update template descriptions when a template is selected
+            weekdayTemplateSelect.addEventListener('change', () => {
+                const templateKey = weekdayTemplateSelect.value;
+                if (templateKey && templates[templateKey]) {
+                    const template = templates[templateKey];
+                    weekdayTemplateDesc.textContent = `${template.name}: ${template.description}`;
+                } else {
+                    weekdayTemplateDesc.textContent = '';
+                }
+            });
+            
+            weekendTemplateSelect.addEventListener('change', () => {
+                const templateKey = weekendTemplateSelect.value;
+                if (templateKey && templates[templateKey]) {
+                    const template = templates[templateKey];
+                    weekendTemplateDesc.textContent = `${template.name}: ${template.description}`;
+                } else {
+                    weekendTemplateDesc.textContent = '';
+                }
+            });
+            
+            // Apply templates
+            applyTemplatesBtn.addEventListener('click', () => {
+                const weekdayKey = weekdayTemplateSelect.value;
+                const weekendKey = weekendTemplateSelect.value;
+                
+                let count = 0;
+                
+                if (weekdayKey && templates[weekdayKey]) {
+                    // Remove existing weekday schedules
+                    schedules = schedules.filter(s => s.type !== 'Weekdays');
+                    
+                    // Add new weekday schedules
+                    templates[weekdayKey].schedules.forEach(templateSchedule => {
+                        const schedule = {
+                            type: templateSchedule.type,
+                            time: templateSchedule.time,
+                            temperature: templateSchedule.temperature,
+                            unit: unitSelect.value,
+                            description: templateSchedule.description
+                        };
+                        schedules.push(schedule);
+                        count++;
+                    });
+                }
+                
+                if (weekendKey && templates[weekendKey]) {
+                    // Remove existing weekend schedules
+                    schedules = schedules.filter(s => s.type !== 'Weekend');
+                    
+                    // Add new weekend schedules
+                    templates[weekendKey].schedules.forEach(templateSchedule => {
+                        const schedule = {
+                            type: templateSchedule.type,
+                            time: templateSchedule.time,
+                            temperature: templateSchedule.temperature,
+                            unit: unitSelect.value,
+                            description: templateSchedule.description
+                        };
+                        schedules.push(schedule);
+                        count++;
+                    });
+                }
+                
+                // Update the UI
+                renderScheduleList();
+                
+                if (count > 0) {
+                    showStatus(`Applied templates: added ${count} schedules`);
+                } else {
+                    showStatus('No templates selected', true);
+                }
             });
             
             // Validate time format (24h)
@@ -420,46 +709,79 @@
                     return;
                 }
                 
-                schedules.forEach((schedule, index) => {
-                    const scheduleItem = document.createElement('div');
-                    scheduleItem.className = 'schedule-item';
-                    
-                    // Format display info
-                    let displayInfo = `${schedule.type}`;
-                    if (schedule.type === 'Specific Day') {
-                        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                        displayInfo += ` (${days[schedule.day]})`;
+                // Group schedules by type for better organization
+                const groupedSchedules = {};
+                
+                schedules.forEach(schedule => {
+                    if (!groupedSchedules[schedule.type]) {
+                        groupedSchedules[schedule.type] = [];
                     }
+                    groupedSchedules[schedule.type].push(schedule);
+                });
+                
+                // Render each group
+                Object.keys(groupedSchedules).forEach(type => {
+                    const groupHeader = document.createElement('h4');
+                    groupHeader.textContent = type;
+                    groupHeader.style.marginTop = '15px';
+                    groupHeader.style.marginBottom = '5px';
+                    scheduleList.appendChild(groupHeader);
                     
-                    // Format temperature based on current selected unit
-                    let displayTemp = schedule.temperature;
-                    const currentUnit = unitSelect.value;
-                    
-                    // If temperature is stored in Celsius but we're displaying Fahrenheit
-                    if (schedule.unit === 'C' && currentUnit === 'F') {
-                        displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
-                    } 
-                    // If temperature is stored in Fahrenheit but we're displaying Celsius
-                    else if (schedule.unit === 'F' && currentUnit === 'C') {
-                        displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
-                    }
-                    
-                    displayInfo += ` at ${schedule.time}: ${displayTemp}°${currentUnit}`;
-                    
-                    // Create schedule item content
-                    scheduleItem.innerHTML = `
-                        <div class="schedule-item-info">${displayInfo}</div>
-                        <button type="button" class="danger" data-index="${index}">Remove</button>
-                    `;
-                    
-                    // Add event listener for remove button
-                    scheduleItem.querySelector('button').addEventListener('click', (event) => {
-                        const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                        schedules.splice(idx, 1);
-                        renderScheduleList();
+                    // Sort schedules by time
+                    const sortedSchedules = groupedSchedules[type].sort((a, b) => {
+                        return a.time.localeCompare(b.time);
                     });
                     
-                    scheduleList.appendChild(scheduleItem);
+                    sortedSchedules.forEach((schedule, index) => {
+                        const scheduleItem = document.createElement('div');
+                        scheduleItem.className = 'schedule-item';
+                        
+                        // Format display info
+                        let displayInfo = '';
+                        
+                        if (schedule.type === 'Specific Day') {
+                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            displayInfo += `${days[schedule.day]} `;
+                        }
+                        
+                        // Format temperature based on current selected unit
+                        let displayTemp = schedule.temperature;
+                        const currentUnit = unitSelect.value;
+                        
+                        // If temperature is stored in Celsius but we're displaying Fahrenheit
+                        if (schedule.unit === 'C' && currentUnit === 'F') {
+                            displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
+                        } 
+                        // If temperature is stored in Fahrenheit but we're displaying Celsius
+                        else if (schedule.unit === 'F' && currentUnit === 'C') {
+                            displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
+                        }
+                        
+                        displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
+                        
+                        // Add description if available
+                        if (schedule.description) {
+                            displayInfo += ` (${schedule.description})`;
+                        }
+                        
+                        // Store the global index for this schedule
+                        const globalIndex = schedules.indexOf(schedule);
+                        
+                        // Create schedule item content
+                        scheduleItem.innerHTML = `
+                            <div class="schedule-item-info">${displayInfo}</div>
+                            <button type="button" class="danger" data-index="${globalIndex}">Remove</button>
+                        `;
+                        
+                        // Add event listener for remove button
+                        scheduleItem.querySelector('button').addEventListener('click', (event) => {
+                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                            schedules.splice(idx, 1);
+                            renderScheduleList();
+                        });
+                        
+                        scheduleList.appendChild(scheduleItem);
+                    });
                 });
             }
             
@@ -478,7 +800,6 @@
                 const time = scheduleTimeInput.value;
                 const temperature = parseFloat(scheduleTemperatureInput.value);
                 const unit = unitSelect.value;
-                
                 // Create schedule object
                 const schedule = {
                     type,
