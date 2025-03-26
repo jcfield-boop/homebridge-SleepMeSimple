@@ -1,608 +1,614 @@
 // Entry point for SleepMe Simple custom UI integration
 (function() {
-    // Report that our script is loading
-    console.log('SleepMe Simple Custom UI: Loading started...');
-    
-    // Add a debug element to verify script loading
-    const debugElement = document.createElement('div');
-    debugElement.id = 'sleepme-ui-debug';
-    debugElement.style.position = 'fixed';
-    debugElement.style.bottom = '10px';
-    debugElement.style.right = '10px';
-    debugElement.style.padding = '5px';
-    debugElement.style.background = 'rgba(0,0,0,0.1)';
-    debugElement.style.borderRadius = '5px';
-    debugElement.style.fontSize = '12px';
-    debugElement.style.zIndex = 10000;
-    debugElement.style.display = 'none'; // Initially hidden
-    debugElement.textContent = 'SleepMe UI Ready: ' + new Date().toISOString();
-    document.body.appendChild(debugElement);
-    
-    // Function to check if we're on the Homebridge UI
-    function isHomebridgeUI() {
-        return window.location.href.includes('/homebridge') || 
-               document.title.includes('Homebridge') ||
-               !!document.querySelector('[class*="homebridge"]');
+  // Report that our script is loading
+  console.log('SleepMe Simple Custom UI: Loading started...');
+  
+  // Create a status indicator to help with debugging
+  const statusIndicator = document.createElement('div');
+  statusIndicator.id = 'sleepme-status';
+  statusIndicator.style.position = 'fixed';
+  statusIndicator.style.right = '10px';
+  statusIndicator.style.bottom = '10px';
+  statusIndicator.style.backgroundColor = 'rgba(0,0,0,0.6)';
+  statusIndicator.style.color = 'white';
+  statusIndicator.style.padding = '5px 10px';
+  statusIndicator.style.borderRadius = '4px';
+  statusIndicator.style.fontSize = '12px';
+  statusIndicator.style.zIndex = '9999';
+  statusIndicator.style.display = 'none'; // Start hidden
+  statusIndicator.textContent = 'SleepMe UI initializing...';
+  document.body.appendChild(statusIndicator);
+  
+  // Function to update status with timestamp
+  function updateStatus(message) {
+    if (!statusIndicator) return;
+    const time = new Date().toLocaleTimeString();
+    statusIndicator.textContent = `${time}: ${message}`;
+    // Show status briefly then fade
+    statusIndicator.style.display = 'block';
+    setTimeout(() => {
+      statusIndicator.style.opacity = '0.5';
+      setTimeout(() => {
+        statusIndicator.style.display = 'none';
+        statusIndicator.style.opacity = '1';
+      }, 3000);
+    }, 7000);
+  }
+  
+  // Wait for document to be fully loaded
+  document.addEventListener('DOMContentLoaded', function() {
+    initializeDetection();
+  });
+  
+  // Also try at window load as a fallback
+  window.addEventListener('load', function() {
+    initializeDetection();
+  });
+  
+  // Initialize detection process
+  function initializeDetection() {
+    // Delay initial check to ensure Homebridge UI is loaded
+    setTimeout(function() {
+      checkAndInitialize();
+    }, 1500);
+  }
+  
+  // Check if we're on the right page and initialize if so
+  function checkAndInitialize() {
+    // Check if we're on the plugin config page
+    if (isPluginConfigPage()) {
+      updateStatus('Plugin config page detected');
+      initializeCustomUI();
+    } else {
+      // Try again after a delay
+      setTimeout(checkAndInitialize, 2000);
+    }
+  }
+  
+  // Check if this is the SleepMe plugin config page
+  function isPluginConfigPage() {
+    // Look for elements specific to our plugin
+    const platform = document.querySelector('h2.card-title');
+    if (platform && platform.textContent.includes('SleepMe')) {
+      return true;
     }
     
-    // Function to load template handler directly
-    function loadTemplateHandler() {
-        console.log('SleepMe Simple Custom UI: Loading template handler directly');
+    // Try finding the platform name in form inputs
+    const inputs = document.querySelectorAll('input[type="text"]');
+    for (const input of inputs) {
+      if (input.value === 'SleepMe Simple') {
+        return true;
+      }
+    }
+    
+    // Look for our Enable Schedules checkbox
+    const labels = document.querySelectorAll('label');
+    for (const label of labels) {
+      if (label.textContent && label.textContent.includes('Enable Schedules')) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  // Initialize our custom UI components
+  function initializeCustomUI() {
+    updateStatus('Initializing custom UI');
+    
+    // Check if schedules are enabled
+    const schedulesEnabled = isSchedulesEnabled();
+    if (!schedulesEnabled) {
+      updateStatus('Schedules not enabled, UI not needed');
+      return;
+    }
+    
+    // Find the schedules section
+    const scheduleSection = findScheduleSection();
+    if (!scheduleSection) {
+      updateStatus('Schedule section not found, retrying...');
+      setTimeout(initializeCustomUI, 2000);
+      return;
+    }
+    
+    // Add template selector UI
+    insertTemplateUI(scheduleSection);
+  }
+  
+  // Check if schedules are enabled in the config
+  function isSchedulesEnabled() {
+    const enableCheckbox = findElementByLabel('Enable Schedules');
+    return enableCheckbox && enableCheckbox.checked;
+  }
+  
+  // Find element by label text
+  function findElementByLabel(labelText) {
+    const labels = document.querySelectorAll('label');
+    for (const label of labels) {
+      if (label.textContent && label.textContent.trim() === labelText) {
+        // Try to find the associated input
+        if (label.htmlFor) {
+          return document.getElementById(label.htmlFor);
+        }
+        // Look for input inside or near the label
+        const input = label.querySelector('input') || 
+                     label.nextElementSibling?.querySelector('input');
+        if (input) return input;
+      }
+    }
+    return null;
+  }
+  
+  // Find the schedule section in the form
+  function findScheduleSection() {
+    // Look for schedules heading or array section
+    const headings = document.querySelectorAll('h3, h4, legend');
+    for (const heading of headings) {
+      if (heading.textContent && heading.textContent.includes('Schedule')) {
+        // Try to find the related form section
+        let section = heading.closest('.form-group') || 
+                     heading.closest('.form-array') ||
+                     heading.closest('[class*="array"]');
         
-        // Include the handler code directly rather than trying to load from external file
-        // This is the simplest way to ensure it loads correctly
-        const script = document.createElement('script');
-        script.textContent = `
-            // Template selector handler script for Homebridge UI
-            (function() {
-                console.log("SleepMe inline handler starting...");
-                
-                // Wait for DOM content to be loaded
-                document.addEventListener('DOMContentLoaded', function() {
-                    console.log("SleepMe DOM loaded, starting initialization...");
-                    setTimeout(detectAndInitialize, 2000);
-                });
-                
-                // Also try at window load as a fallback
-                window.addEventListener('load', function() {
-                    console.log("SleepMe window loaded, starting initialization...");
-                    setTimeout(detectAndInitialize, 2000);
-                });
-                
-                // Try to detect and initialize at regular intervals until successful
-                function detectAndInitialize() {
-                    console.log("SleepMe attempting to detect and initialize...");
-                    
-                    // Toggle debug visibility for troubleshooting
-                    const debug = document.getElementById('sleepme-ui-debug');
-                    if (debug) {
-                        debug.style.display = 'block';
-                        debug.textContent = 'Detecting plugin page: ' + new Date().toISOString();
-                    }
-                    
-                    // Check if we're on the plugin config page
-                    if (isOnPluginConfigPage()) {
-                        console.log("Found SleepMe plugin config page");
-                        if (debug) debug.textContent = 'Found plugin page! ' + new Date().toISOString();
-                        initializeCustomUI();
-                    } else {
-                        // Try again after a delay
-                        console.log("SleepMe plugin config page not found, waiting...");
-                        if (debug) debug.textContent = 'Not found, retrying: ' + new Date().toISOString();
-                        setTimeout(detectAndInitialize, 2000);
-                    }
-                }
-                
-                // Check if we're on the plugin config page with more robust detection
-                function isOnPluginConfigPage() {
-                    // Update the debug element
-                    const debug = document.getElementById('sleepme-ui-debug');
-                    
-                    // Look for elements that would exist on our plugin's config page
-                    const form = document.querySelector('form');
-                    if (!form) {
-                        if (debug) debug.textContent += '\\nNo form found';
-                        return false;
-                    }
-                    
-                    // Check for heading containing our plugin name
-                    const headings = document.querySelectorAll('h2, h3, h4');
-                    for (const heading of headings) {
-                        if (heading.textContent && heading.textContent.includes('SleepMe')) {
-                            if (debug) debug.textContent += '\\nFound heading: ' + heading.textContent;
-                            return true;
-                        }
-                    }
-                    
-                    // Check for our platform name in form fields
-                    const inputs = document.querySelectorAll('input');
-                    for (const input of inputs) {
-                        if (input.value === 'SleepMe Simple') {
-                            if (debug) debug.textContent += '\\nFound input with SleepMe value';
-                            return true;
-                        }
-                    }
-                    
-                    // Check for enableSchedules checkbox which is unique to our plugin
-                    const enableSchedulesCheckbox = findElementByLabelText('Enable Schedules');
-                    if (enableSchedulesCheckbox) {
-                        if (debug) debug.textContent += '\\nFound Enable Schedules checkbox';
-                        return true;
-                    }
-                    
-                    return false;
-                }
-                
-                // Helper to find element by its label text
-                function findElementByLabelText(text) {
-                    const labels = document.querySelectorAll('label');
-                    for (const label of labels) {
-                        if (label.textContent && label.textContent.trim() === text) {
-                            // If label has a for attribute, get the referenced element
-                            if (label.htmlFor) {
-                                return document.getElementById(label.htmlFor);
-                            }
-                            // Otherwise look for input inside label
-                            return label.querySelector('input');
-                        }
-                    }
-                    return null;
-                }
-                
-                // Initialize our custom UI
-                function initializeCustomUI() {
-                    console.log("Initializing SleepMe custom UI");
-                    // Update debug
-                    const debug = document.getElementById('sleepme-ui-debug');
-                    if (debug) debug.textContent = 'Initializing UI: ' + new Date().toISOString();
-                    
-                    // Check if the Enable Schedules checkbox is checked
-                    const enableSchedulesCheckbox = findElementByLabelText('Enable Schedules');
-                    if (!enableSchedulesCheckbox || !enableSchedulesCheckbox.checked) {
-                        console.log('Schedules not enabled, skipping template UI');
-                        if (debug) debug.textContent += '\\nSchedules not enabled';
-                        return;
-                    }
-                    
-                    // Find the schedules section
-                    const scheduleSection = findScheduleSection();
-                    if (!scheduleSection) {
-                        console.log('Schedule section not found, retrying...');
-                        if (debug) debug.textContent += '\\nSchedule section not found';
-                        setTimeout(initializeCustomUI, 2000);
-                        return;
-                    }
-                    
-                    if (debug) debug.textContent += '\\nFound schedule section';
-                    
-                    // Create template UI
-                    insertTemplateSelectorUI(scheduleSection);
-                }
-                
-                // Find the schedule section
-                function findScheduleSection() {
-                    // First try with schedules heading
-                    const scheduleHeadings = Array.from(document.querySelectorAll('h3, h4'))
-                        .filter(h => h.textContent && h.textContent.includes('Schedule'));
-                    
-                    if (scheduleHeadings.length > 0) {
-                        // Find the closest array-like container
-                        let section = scheduleHeadings[0].closest('div[class*="array"]');
-                        if (section) return section;
-                        
-                        // Try parent container if array not found
-                        section = scheduleHeadings[0].closest('div[class*="form"]');
-                        if (section) return section;
-                    }
-                    
-                    // Next look for array sections that have schedule fields
-                    const formSections = document.querySelectorAll('div[class*="array"], div[class*="form-array"]');
-                    for (const section of formSections) {
-                        if (section.innerHTML.includes('Schedule Type') || 
-                            section.innerHTML.includes('Time')) {
-                            return section;
-                        }
-                    }
-                    
-                    return null;
-                }
-                
-                // Insert template selector UI
-                function insertTemplateSelectorUI(scheduleSection) {
-                    console.log("Creating template UI");
-                    
-                    // Create container
-                    const container = document.createElement('div');
-                    container.className = 'sleepme-template-container';
-                    container.style.marginBottom = '20px';
-                    container.style.border = '1px solid #ddd';
-                    container.style.padding = '15px';
-                    container.style.borderRadius = '4px';
-                    
-                    // Create heading
-                    const heading = document.createElement('h4');
-                    heading.textContent = 'Sleep Schedule Templates';
-                    heading.style.marginTop = '0';
-                    container.appendChild(heading);
-                    
-                    // Create description
-                    const description = document.createElement('p');
-                    description.textContent = 'Choose from our pre-defined sleep templates designed for optimal sleep. Click a template to apply it.';
-                    container.appendChild(description);
-                  // Create template cards
-                    const templateContainer = document.createElement('div');
-                    templateContainer.style.display = 'flex';
-                    templateContainer.style.flexWrap = 'wrap';
-                    templateContainer.style.gap = '15px';
-                    templateContainer.style.marginTop = '15px';
-                    
-                    // Create optimal template card
-                    const template1 = createTemplateCard(
-                        'Optimal Sleep',
-                        'For complete sleep cycles with enhanced REM patterns',
-                        [
-                            { time: '22:00', temp: '21°C' },
-                            { time: '23:00', temp: '19°C' },
-                            { time: '02:00', temp: '23°C' },
-                            { time: '06:00', temp: '24°C' }
-                        ]
-                    );
-                    
-                    // Create night owl template card
-                    const template2 = createTemplateCard(
-                        'Night Owl',
-                        'Later bedtime with extended morning warming',
-                        [
-                            { time: '23:30', temp: '21°C' },
-                            { time: '00:30', temp: '19°C' },
-                            { time: '03:30', temp: '23°C' },
-                            { time: '07:30', temp: '24°C' }
-                        ]
-                    );
-                    
-                    // Add event listeners to template cards
-                    template1.addEventListener('click', () => applyTemplate('optimal'));
-                    template2.addEventListener('click', () => applyTemplate('nightowl'));
-                    
-                    // Add cards to container
-                    templateContainer.appendChild(template1);
-                    templateContainer.appendChild(template2);
-                    container.appendChild(templateContainer);
-                    
-                    // Insert container before schedule section
-                    if (scheduleSection.parentNode) {
-                        scheduleSection.parentNode.insertBefore(container, scheduleSection);
-                        console.log("Template UI added successfully");
-                        
-                        // Update debug
-                        const debug = document.getElementById('sleepme-ui-debug');
-                        if (debug) debug.textContent += '\\nTemplate UI added!';
-                    }
-                }
-                
-                // Helper to create a template card
-                function createTemplateCard(title, description, schedules) {
-                    const card = document.createElement('div');
-                    card.style.border = '1px solid #ddd';
-                    card.style.borderRadius = '8px';
-                    card.style.padding = '15px';
-                    card.style.width = '220px';
-                    card.style.cursor = 'pointer';
-                    card.style.transition = 'all 0.2s ease';
-                    
-                    // Hover effect
-                    card.addEventListener('mouseover', () => {
-                        card.style.borderColor = '#007bff';
-                        card.style.boxShadow = '0 0 10px rgba(0,123,255,0.2)';
-                    });
-                    
-                    card.addEventListener('mouseout', () => {
-                        card.style.borderColor = '#ddd';
-                        card.style.boxShadow = 'none';
-                    });
-                    
-                    // Title
-                    const titleElem = document.createElement('h5');
-                    titleElem.textContent = title;
-                    titleElem.style.margin = '0 0 10px 0';
-                    card.appendChild(titleElem);
-                    
-                    // Description
-                    const descElem = document.createElement('p');
-                    descElem.textContent = description;
-                    descElem.style.fontSize = '14px';
-                    descElem.style.color = '#666';
-                    descElem.style.margin = '0 0 10px 0';
-                    card.appendChild(descElem);
-                    
-                    // Schedule preview
-                    const previewDiv = document.createElement('div');
-                    previewDiv.style.borderTop = '1px solid #eee';
-                    previewDiv.style.paddingTop = '10px';
-                    
-                    schedules.forEach(schedule => {
-                        const item = document.createElement('div');
-                        item.style.display = 'flex';
-                        item.style.justifyContent = 'space-between';
-                        item.style.marginBottom = '5px';
-                        item.style.fontSize = '13px';
-                        
-                        const timeSpan = document.createElement('span');
-                        timeSpan.textContent = schedule.time;
-                        timeSpan.style.color = '#007bff';
-                        
-                        const tempSpan = document.createElement('span');
-                        tempSpan.textContent = schedule.temp;
-                        tempSpan.style.fontWeight = 'bold';
-                        
-                        item.appendChild(timeSpan);
-                        item.appendChild(tempSpan);
-                        previewDiv.appendChild(item);
-                    });
-                    
-                    card.appendChild(previewDiv);
-                    return card;
-                }
-                
-                // Apply a template
-                function applyTemplate(templateId) {
-                    console.log(`Applying template: ${templateId}`);
-                    
-                    // Template definitions
-                    const templates = {
-                        'optimal': [
-                            { type: 'Weekdays', time: '22:00', temperature: 21 },
-                            { type: 'Weekdays', time: '23:00', temperature: 19 },
-                            { type: 'Weekdays', time: '02:00', temperature: 23 },
-                            { type: 'Weekdays', time: '06:00', temperature: 24 },
-                            { type: 'Weekend', time: '23:00', temperature: 21 },
-                            { type: 'Weekend', time: '00:00', temperature: 19 },
-                            { type: 'Weekend', time: '03:00', temperature: 23 },
-                            { type: 'Weekend', time: '08:00', temperature: 24 }
-                        ],
-                        'nightowl': [
-                            { type: 'Weekdays', time: '23:30', temperature: 21 },
-                            { type: 'Weekdays', time: '00:30', temperature: 19 },
-                            { type: 'Weekdays', time: '03:30', temperature: 23 },
-                            { type: 'Weekdays', time: '07:30', temperature: 24 },
-                            { type: 'Weekend', time: '00:30', temperature: 21 },
-                            { type: 'Weekend', time: '01:30', temperature: 19 },
-                            { type: 'Weekend', time: '04:30', temperature: 23 },
-                            { type: 'Weekend', time: '09:00', temperature: 24 }
-                        ]
-                    };
-                    
-                    // Get template schedule
-                    const schedules = templates[templateId];
-                    if (!schedules) {
-                        console.error(`Template not found: ${templateId}`);
-                        return;
-                    }
-                    
-                    // Apply to UI
-                    applySchedulesToUI(schedules);
-                }
-                
-                // Apply schedules to UI
-                function applySchedulesToUI(schedules) {
-                    // Find schedule section again to ensure it's current
-                    const scheduleSection = findScheduleSection();
-                    if (!scheduleSection) {
-                        console.error("Could not find schedule section");
-                        return;
-                    }
-                    
-                    // Clear existing schedules
-                    clearExistingSchedules(scheduleSection);
-                    
-                    // Add new schedules
-                    console.log(`Adding ${schedules.length} schedules`);
-                    
-                    // Find add button
-                    const addButton = findAddButton(scheduleSection);
-                    if (!addButton) {
-                        console.error("Could not find add button");
-                        return;
-                    }
-                    
-                    // Click add button for each schedule
-                    schedules.forEach((schedule, index) => {
-                        setTimeout(() => {
-                            // Click add button
-                            addButton.click();
-                            
-                            // Wait for DOM update
-                            setTimeout(() => {
-                                fillNewSchedule(scheduleSection, schedule, index);
-                            }, 200);
-                        }, 300 * index); // Stagger additions
-                    });
-                }
-                
-                // Find add button
-                function findAddButton(container) {
-                    // Try common button patterns
-                    const addButtons = Array.from(container.querySelectorAll('button'))
-                        .filter(button => {
-                            const text = button.textContent.toLowerCase().trim();
-                            return text === 'add' || text.includes('add') || 
-                                   text === '+' || button.innerHTML.includes('plus') ||
-                                   button.classList.contains('add');
-                        });
-                    
-                    if (addButtons.length > 0) return addButtons[0];
-                    
-                    // Try to find button with plus icon
-                    const iconButtons = container.querySelectorAll('button i[class*="plus"], button svg');
-                    if (iconButtons.length > 0) return iconButtons[0].closest('button');
-                    
-                    return null;
-                }
-                
-                // Clear existing schedules
-                function clearExistingSchedules(container) {
-                    // Find all delete/remove buttons
-                    const deleteButtons = Array.from(container.querySelectorAll('button'))
-                        .filter(button => {
-                            const text = button.textContent.toLowerCase().trim();
-                            return text === 'delete' || text.includes('delete') ||
-                                   text === 'remove' || text.includes('remove') ||
-                                   text === '×' || text === 'x' ||
-                                   button.classList.contains('delete') ||
-                                   button.classList.contains('remove');
-                        });
-                    
-                    console.log(`Found ${deleteButtons.length} delete buttons`);
-                    
-                    // Click each delete button
-                    deleteButtons.forEach((button, index) => {
-                        setTimeout(() => {
-                            button.click();
-                        }, 100 * index);
-                    });
-                }
-                
-                // Fill a new schedule
-                function fillNewSchedule(container, schedule, index) {
-                    // Get the newly added schedule item (should be the last one)
-                    const scheduleItems = container.querySelectorAll('div[class*="form-group"]');
-                    const newItem = scheduleItems[scheduleItems.length - 1];
-                    
-                    if (!newItem) {
-                        console.error("Could not find new schedule item");
-                        return;
-                    }
-                    
-                    console.log(`Filling schedule ${index}: ${schedule.type} at ${schedule.time}`);
-                    
-                    // Find and set type select
-                    setSelectByLabel(newItem, 'Type', schedule.type);
-                    
-                    // Wait for any conditional fields
-                    setTimeout(() => {
-                        // Set time
-                        setInputByLabel(newItem, 'Time', schedule.time);
-                        
-                        // Set temperature
-                        setInputByLabel(newItem, 'Temperature', schedule.temperature);
-                    }, 200);
-                }
-                
-                // Set input by label
-                function setInputByLabel(container, labelText, value) {
-                    // Try to find the input with a label containing the text
-                    const labels = Array.from(container.querySelectorAll('label'));
-                    
-                    for (const label of labels) {
-                        if (label.textContent.includes(labelText)) {
-                            // Check for an input with an id matching the for attribute
-                            if (label.htmlFor) {
-                                const input = document.getElementById(label.htmlFor);
-                                if (input) {
-                                    setInputValue(input, value);
-                                    return true;
-                                }
-                            }
-                            
-                            // Check for input near the label
-                            const inputNear = label.nextElementSibling?.querySelector('input');
-                            if (inputNear) {
-                                setInputValue(inputNear, value);
-                                return true;
-                            }
-                            
-                            // Check in parent
-                            const formGroup = label.closest('div[class*="form-group"]');
-                            if (formGroup) {
-                                const input = formGroup.querySelector('input');
-                                if (input) {
-                                    setInputValue(input, value);
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    return false;
-                }
-                
-                // Set select by label
-                function setSelectByLabel(container, labelText, value) {
-                    // Try to find the select with a label containing the text
-                    const labels = Array.from(container.querySelectorAll('label'));
-                    
-                    for (const label of labels) {
-                        if (label.textContent.includes(labelText)) {
-                            // Check for a select with an id matching the for attribute
-                            if (label.htmlFor) {
-                                const select = document.getElementById(label.htmlFor);
-                                if (select && select.tagName === 'SELECT') {
-                                    setSelectValue(select, value);
-                                    return true;
-                                }
-                            }
-                            
-                            // Check for select near the label
-                            const selectNear = label.nextElementSibling?.querySelector('select');
-                            if (selectNear) {
-                                setSelectValue(selectNear, value);
-                                return true;
-                            }
-                            
-                            // Check in parent
-                            const formGroup = label.closest('div[class*="form-group"]');
-                            if (formGroup) {
-                                const select = formGroup.querySelector('select');
-                                if (select) {
-                                    setSelectValue(select, value);
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    return false;
-                }
-                
-                // Set input value with proper events
-                function setInputValue(input, value) {
-                    // Set value
-                    input.value = value;
-                    
-                    // Trigger events for frameworks to detect changes
-                    const inputEvent = new Event('input', { bubbles: true });
-                    const changeEvent = new Event('change', { bubbles: true });
-                    
-                    input.dispatchEvent(inputEvent);
-                    input.dispatchEvent(changeEvent);
-                }
-                
-                // Set select value with proper events
-                function setSelectValue(select, value) {
-                    // Find matching option
-                    let optionFound = false;
-                    for (const option of select.options) {
-                        if (option.value === value || option.text === value) {
-                            option.selected = true;
-                            optionFound = true;
-                            break;
-                        }
-                    }
-                    
-                    // If no exact match, try case-insensitive
-                    if (!optionFound) {
-                        const lowerValue = String(value).toLowerCase();
-                        for (const option of select.options) {
-                            if (option.value.toLowerCase() === lowerValue || 
-                                option.text.toLowerCase() === lowerValue) {
-                                option.selected = true;
-                                optionFound = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // If still no match, select first option
-                    if (!optionFound && select.options.length > 0) {
-                        select.options[0].selected = true;
-                    }
-                    
-                    // Trigger events
-                    const changeEvent = new Event('change', { bubbles: true });
-                    select.dispatchEvent(changeEvent);
-                }
-            })();
-        `;
-        document.head.appendChild(script);
+        if (section) return section;
+        
+        // Look for an array section after this heading
+        let next = heading.nextElementSibling;
+        while (next) {
+          if (next.classList.contains('form-array') || 
+              next.classList.contains('array-field-list') ||
+              next.innerHTML.includes('Schedule Type')) {
+            return next;
+          }
+          next = next.nextElementSibling;
+        }
+      }
     }
     
-    // Only execute our script if we're on the Homebridge UI
-    if (isHomebridgeUI()) {
-        // Give the page time to fully load
-        setTimeout(loadTemplateHandler, 1000);
-        
-        console.log('SleepMe Simple Custom UI: Init complete, handler loading...');
-   } else {
-        console.log('SleepMe Simple Custom UI: Not on Homebridge UI, script not loaded');
+    // Fallback: Look for sections with schedule-related content
+    const formGroups = document.querySelectorAll('.form-group, .array-field-list');
+    for (const group of formGroups) {
+      if (group.innerHTML.includes('Schedule Type') || 
+          group.innerHTML.includes('Target Temperature')) {
+        return group;
+      }
     }
+    
+    return null;
+  }
+  
+  // Insert template UI before the schedule list
+  function insertTemplateUI(scheduleSection) {
+    // Create template card interface
+    const container = document.createElement('div');
+    container.className = 'sleepme-template-ui';
+    container.style.marginBottom = '20px';
+    container.style.padding = '15px';
+    container.style.border = '1px solid #ddd';
+    container.style.borderRadius = '5px';
+    container.style.backgroundColor = '#f9f9f9';
+    
+    // Add heading
+    const heading = document.createElement('h4');
+    heading.textContent = 'Sleep Schedule Templates';
+    heading.style.margin = '0 0 10px 0';
+    heading.style.color = '#333';
+    container.appendChild(heading);
+    
+    // Add description
+    const description = document.createElement('p');
+    description.textContent = 'Apply a sleep science-based temperature schedule to optimize your sleep.';
+    description.style.marginBottom = '15px';
+    container.appendChild(description);
+    
+    // Create template card container
+    const cardContainer = document.createElement('div');
+    cardContainer.style.display = 'flex';
+    cardContainer.style.flexWrap = 'wrap';
+    cardContainer.style.gap = '15px';
+    
+    // Add template cards
+    cardContainer.appendChild(createTemplateCard(
+      'Optimal Sleep Cycle',
+      'Complete sleep cycles with REM enhancement',
+      [
+        { time: '22:00', temp: '21°C', name: 'Cool Down' },
+        { time: '23:00', temp: '19°C', name: 'Deep Sleep' },
+        { time: '02:00', temp: '23°C', name: 'REM Support' },
+        { time: '06:00', temp: '24°C', name: 'Wake Up' }
+      ],
+      'optimal'
+    ));
+    
+    cardContainer.appendChild(createTemplateCard(
+      'Night Owl',
+      'Later bedtime with extended morning warmth',
+      [
+        { time: '23:30', temp: '21°C', name: 'Cool Down' },
+        { time: '00:30', temp: '19°C', name: 'Deep Sleep' },
+        { time: '03:30', temp: '23°C', name: 'REM Support' },
+        { time: '07:30', temp: '24°C', name: 'Wake Up' }
+      ],
+      'nightowl'
+    ));
+    
+    container.appendChild(cardContainer);
+    
+    // Insert the template UI before the schedule section
+    if (scheduleSection.parentNode) {
+      scheduleSection.parentNode.insertBefore(container, scheduleSection);
+      updateStatus('Template UI added successfully');
+    } else {
+      updateStatus('Failed to add template UI - no parent found');
+    }
+  }
+  
+  // Create a template card element
+  function createTemplateCard(title, description, schedules, templateId) {
+    const card = document.createElement('div');
+    card.className = 'sleepme-template-card';
+    card.setAttribute('data-template', templateId);
+    card.style.width = '220px';
+    card.style.padding = '15px';
+    card.style.border = '1px solid #ddd';
+    card.style.borderRadius = '5px';
+    card.style.backgroundColor = 'white';
+    card.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    card.style.cursor = 'pointer';
+    card.style.transition = 'all 0.2s';
+    
+    // Add hover effect
+    card.addEventListener('mouseenter', () => {
+      card.style.borderColor = '#007bff';
+      card.style.boxShadow = '0 3px 8px rgba(0,123,255,0.2)';
+    });
+    
+    card.addEventListener('mouseleave', () => {
+      card.style.borderColor = '#ddd';
+      card.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    });
+    
+    // Add click handler
+    card.addEventListener('click', () => {
+      applyTemplate(templateId);
+      updateStatus(`Applied ${title} template`);
+    });
+    
+    // Add title
+    const titleElem = document.createElement('h5');
+    titleElem.textContent = title;
+    titleElem.style.margin = '0 0 8px 0';
+    titleElem.style.color = '#333';
+    card.appendChild(titleElem);
+    
+    // Add description
+    const descElem = document.createElement('p');
+    descElem.textContent = description;
+    descElem.style.fontSize = '13px';
+    descElem.style.color = '#666';
+    descElem.style.margin = '0 0 12px 0';
+    card.appendChild(descElem);
+    
+    // Add schedule preview
+    const previewDiv = document.createElement('div');
+    previewDiv.style.borderTop = '1px solid #eee';
+    previewDiv.style.paddingTop = '10px';
+    
+    schedules.forEach(schedule => {
+      const scheduleRow = document.createElement('div');
+      scheduleRow.style.display = 'flex';
+      scheduleRow.style.justifyContent = 'space-between';
+      scheduleRow.style.marginBottom = '6px';
+      scheduleRow.style.fontSize = '12px';
+      
+      const timeElem = document.createElement('span');
+      timeElem.textContent = schedule.time;
+      timeElem.style.color = '#007bff';
+      
+      const tempElem = document.createElement('span');
+      tempElem.textContent = schedule.temp;
+      tempElem.style.fontWeight = '500';
+      
+      scheduleRow.appendChild(timeElem);
+      scheduleRow.appendChild(tempElem);
+      previewDiv.appendChild(scheduleRow);
+    });
+    
+    card.appendChild(previewDiv);
+    return card;
+  }
+  
+  // Apply template schedules
+  function applyTemplate(templateId) {
+    // Define templates
+    const templates = {
+      'optimal': [
+        { type: 'Weekdays', time: '22:00', temperature: 21 },
+        { type: 'Weekdays', time: '23:00', temperature: 19 },
+        { type: 'Weekdays', time: '02:00', temperature: 23 },
+        { type: 'Weekdays', time: '06:00', temperature: 24 },
+        { type: 'Weekend', time: '23:00', temperature: 21 },
+        { type: 'Weekend', time: '00:00', temperature: 19 },
+        { type: 'Weekend', time: '03:00', temperature: 23 },
+        { type: 'Weekend', time: '08:00', temperature: 24 }
+      ],
+      'nightowl': [
+        { type: 'Weekdays', time: '23:30', temperature: 21 },
+        { type: 'Weekdays', time: '00:30', temperature: 19 },
+        { type: 'Weekdays', time: '03:30', temperature: 23 },
+        { type: 'Weekdays', time: '07:30', temperature: 24 },
+        { type: 'Weekend', time: '00:30', temperature: 21 },
+        { type: 'Weekend', time: '01:30', temperature: 19 },
+        { type: 'Weekend', time: '04:30', temperature: 23 },
+        { type: 'Weekend', time: '09:00', temperature: 24 }
+      ]
+    };
+    
+    const schedules = templates[templateId];
+    if (!schedules) {
+      updateStatus('Template not found: ' + templateId);
+      return;
+    }
+    
+    // Apply schedules to form
+    applySchedulesToForm(schedules);
+  }
+  
+  // Apply schedules to the form
+  function applySchedulesToForm(schedules) {
+    // Find schedule section again
+    const scheduleSection = findScheduleSection();
+    if (!scheduleSection) {
+      updateStatus('Schedule section not found');
+      return;
+    }
+    
+    // Clear existing schedules
+    clearExistingSchedules(scheduleSection);
+    
+    // Add each schedule with delay between them
+    schedules.forEach((schedule, index) => {
+      setTimeout(() => {
+        addSchedule(scheduleSection, schedule);
+      }, 500 * index); // 500ms between each addition
+    });
+  }
+  // Clear existing schedules
+  function clearExistingSchedules(container) {
+    // Find all delete buttons
+    const deleteButtons = Array.from(container.querySelectorAll('button'))
+      .filter(btn => {
+        const text = btn.textContent.toLowerCase().trim();
+        const hasDeleteText = text === 'delete' || text.includes('delete') || 
+                             text === 'remove' || text.includes('remove') ||
+                             text === '×' || text === 'x';
+        const hasDeleteClass = btn.classList.contains('btn-danger') || 
+                              btn.classList.contains('delete') ||
+                              btn.classList.contains('remove');
+        return hasDeleteText || hasDeleteClass;
+      });
+    
+    // Click each delete button with delay between
+    deleteButtons.forEach((btn, index) => {
+      setTimeout(() => {
+        btn.click();
+      }, 200 * index);
+    });
+    
+    updateStatus(`Cleared ${deleteButtons.length} existing schedules`);
+  }
+  
+  // Add a new schedule
+  function addSchedule(container, schedule) {
+    // Find the add button
+    const addButton = findAddButton(container);
+    if (!addButton) {
+      updateStatus('Add button not found');
+      return;
+    }
+    
+    // Click add button
+    addButton.click();
+    
+    // Wait for DOM update then set values
+    setTimeout(() => {
+      // Find newly added schedule item
+      const items = container.querySelectorAll('.form-group');
+      const newItem = items[items.length - 1];
+      
+      if (!newItem) {
+        updateStatus('New schedule item not found');
+        return;
+      }
+      
+      // Set type first
+      setFieldValue(newItem, 'type', schedule.type, 'select');
+      
+      // Wait for conditional fields to appear
+      setTimeout(() => {
+        // Set day if specific day
+        if (schedule.type === 'Specific Day' && schedule.day) {
+          setFieldValue(newItem, 'day', schedule.day, 'select');
+        }
+        
+        // Set time and temperature
+        setFieldValue(newItem, 'time', schedule.time, 'input');
+        setFieldValue(newItem, 'temperature', schedule.temperature, 'input');
+        
+        updateStatus(`Added schedule: ${schedule.type} ${schedule.time}`);
+      }, 300);
+    }, 300);
+  }
+  
+  // Find add button
+  function findAddButton(container) {
+    // Look for add button with various methods
+    const buttons = container.querySelectorAll('button');
+    
+    // By text content
+    for (const btn of buttons) {
+      const text = btn.textContent.trim().toLowerCase();
+      if (text === 'add' || text === '+' || text.includes('add')) {
+        return btn;
+      }
+    }
+    
+    // By class
+    for (const btn of buttons) {
+      if (btn.classList.contains('btn-primary') || 
+          btn.classList.contains('add-btn') ||
+          btn.classList.contains('add-button')) {
+        return btn;
+      }
+    }
+    
+    // By icon
+    const buttonsWithIcons = container.querySelectorAll('button i[class*="plus"], button svg');
+    if (buttonsWithIcons.length > 0) {
+      return buttonsWithIcons[0].closest('button');
+    }
+    
+    // Last resort: any non-danger button
+    for (const btn of buttons) {
+      if (!btn.classList.contains('btn-danger') && 
+          !btn.classList.contains('delete') && 
+          !btn.classList.contains('remove')) {
+        return btn;
+      }
+    }
+    
+    return null;
+  }
+  
+  // Set value for a form field
+  function setFieldValue(container, fieldName, value, type) {
+    // Try multiple methods to find the field
+    let field = null;
+    
+    // Try by attribute
+    field = container.querySelector(`${type}[formcontrolname="${fieldName}"]`) || 
+            container.querySelector(`${type}[ng-reflect-name="${fieldName}"]`) ||
+            container.querySelector(`${type}[name="${fieldName}"]`);
+    
+    // Try by label
+    if (!field) {
+      const label = Array.from(container.querySelectorAll('label'))
+        .find(label => {
+          const text = label.textContent.trim();
+          return text.toLowerCase().includes(fieldName.toLowerCase());
+        });
+      
+      if (label) {
+        // Try by label's for attribute
+        if (label.htmlFor) {
+          field = document.getElementById(label.htmlFor);
+        }
+        
+        // Try sibling or parent
+        if (!field) {
+          field = label.nextElementSibling?.querySelector(type) || 
+                 label.closest('.form-group')?.querySelector(type);
+        }
+      }
+    }
+    
+    if (!field) {
+      // Try general field in container
+      field = container.querySelector(`${type}`);
+    }
+    
+    if (!field) {
+      updateStatus(`Could not find ${fieldName} field`);
+      return false;
+    }
+    
+    // Set value based on field type
+    if (type === 'select') {
+      setSelectValue(field, value);
+    } else {
+      setInputValue(field, value);
+    }
+    
+    return true;
+  }
+  
+  // Set value for an input field
+  function setInputValue(input, value) {
+    // Set the value
+    input.value = value;
+    
+    // Trigger events for framework change detection
+    // Using both direct property assignment and event dispatching
+    // to maximize compatibility across frameworks
+    
+    // Trigger built-in events
+    const inputEvent = new Event('input', { bubbles: true });
+    const changeEvent = new Event('change', { bubbles: true });
+    
+    input.dispatchEvent(inputEvent);
+    input.dispatchEvent(changeEvent);
+    
+    // For Angular reactive forms
+    if (typeof Event === 'function') {
+      try {
+        // Create a more specific Angular-compatible event
+        const ngModelChange = new CustomEvent('ngModelChange', { 
+          detail: value,
+          bubbles: true 
+        });
+        input.dispatchEvent(ngModelChange);
+      } catch (e) {
+        // Ignore errors in custom event creation
+      }
+    }
+  }
+  
+  // Set value for a select field
+  function setSelectValue(select, value) {
+    // Find and select the matching option
+    let matched = false;
+    
+    // Try exact match
+    for (const option of select.options) {
+      if (option.value === value || option.text === value) {
+        option.selected = true;
+        matched = true;
+        break;
+      }
+    }
+    
+    // Try case-insensitive match
+    if (!matched) {
+      const lcValue = String(value).toLowerCase();
+      for (const option of select.options) {
+        if (option.value.toLowerCase() === lcValue || 
+            option.text.toLowerCase() === lcValue) {
+          option.selected = true;
+          matched = true;
+          break;
+        }
+      }
+    }
+    
+    // Default to first option if no match
+    if (!matched && select.options.length > 0) {
+      select.options[0].selected = true;
+    }
+    
+    // Trigger change events
+    const changeEvent = new Event('change', { bubbles: true });
+    select.dispatchEvent(changeEvent);
+    
+    // For Angular
+    try {
+      // Create a more specific Angular-compatible event
+      const ngModelChange = new CustomEvent('ngModelChange', { 
+        detail: select.value,
+        bubbles: true 
+      });
+      select.dispatchEvent(ngModelChange);
+    } catch (e) {
+      // Ignore errors in custom event creation
+    }
+  }
 })();
