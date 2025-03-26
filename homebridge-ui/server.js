@@ -38,6 +38,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.log(`Testing connection with token: ${apiToken.substring(0, 4)}...`);
     
     try {
+      // Make API call to test connection
       const response = await axios({
         method: 'GET',
         url: `${API_BASE_URL}/devices`,
@@ -48,7 +49,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         timeout: 10000
       });
       
-      const devices = Array.isArray(response.data) ? response.data : (response.data.devices || []);
+      // Handle different API response formats
+      let devices = [];
+      if (Array.isArray(response.data)) {
+        devices = response.data;
+      } else if (response.data && typeof response.data === 'object') {
+        devices = response.data.devices || [];
+      }
       
       this.log(`API connection successful, found ${devices.length} devices`);
       return {
@@ -71,23 +78,34 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Getting plugin configuration');
       
-      // Get all platforms from Homebridge config
-      const homebridgeConfig = await this.homebridge.getPluginConfig();
+      // Use the correct method to get the Homebridge config
+      const homebridgeConfig = await this.readHomebridgeConfig();
       
-      // Find our platform configuration
-      let pluginConfig = {};
-      if (Array.isArray(homebridgeConfig)) {
-        // For multi-instance plugins
-        pluginConfig = homebridgeConfig[0] || {};
-      } else {
-        // For single instance plugins
-        pluginConfig = homebridgeConfig || {};
+      if (!homebridgeConfig || !homebridgeConfig.platforms) {
+        this.log('No platforms found in Homebridge config', true);
+        return {
+          success: false,
+          error: 'No platforms found in Homebridge config'
+        };
+      }
+
+      // Find our platform in the Homebridge config
+      const platformConfig = homebridgeConfig.platforms.find(
+        platform => platform.platform === 'SleepMeSimple'
+      );
+      
+      if (!platformConfig) {
+        this.log('SleepMeSimple platform not found in config', true);
+        return {
+          success: false,
+          error: 'Platform not found in Homebridge config'
+        };
       }
       
       this.log('Plugin configuration retrieved successfully');
       return {
         success: true,
-        config: pluginConfig
+        config: platformConfig
       };
     } catch (error) {
       this.log(`Failed to get plugin configuration: ${error.message}`, true);
@@ -110,29 +128,51 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         };
       }
       
-      const config = payload.body.config;
+      const newConfig = payload.body.config;
       
       // Ensure required fields
-      if (!config.platform) {
-        config.platform = "SleepMeSimple";
+      if (!newConfig.platform) {
+        newConfig.platform = "SleepMeSimple";
       }
       
-      if (!config.name) {
-        config.name = "SleepMe Simple";
+      if (!newConfig.name) {
+        newConfig.name = "SleepMe Simple";
       }
       
       // Validate schedules
-      if (config.enableSchedules && !Array.isArray(config.schedules)) {
-        config.schedules = [];
+      if (newConfig.enableSchedules && !Array.isArray(newConfig.schedules)) {
+        newConfig.schedules = [];
       }
       
-      this.log(`Saving config: ${JSON.stringify(config, null, 2)}`);
-      
       try {
-        // Update the plugin config directly
-        await this.homebridge.updatePluginConfig([config]);
+        // Get the current Homebridge config
+        const homebridgeConfig = await this.readHomebridgeConfig();
+        
+        if (!homebridgeConfig || !Array.isArray(homebridgeConfig.platforms)) {
+          throw new Error('Invalid Homebridge configuration structure');
+        }
+        
+        // Find the index of our platform in the config
+        const platformIndex = homebridgeConfig.platforms.findIndex(
+          platform => platform.platform === 'SleepMeSimple'
+        );
+        
+        if (platformIndex >= 0) {
+          // Update existing platform config
+          homebridgeConfig.platforms[platformIndex] = newConfig;
+        } else {
+          // Add new platform config
+          homebridgeConfig.platforms.push(newConfig);
+        }
+        
+        // Save the updated config back to Homebridge
+        await this.writeHomebridgeConfig(homebridgeConfig);
         
         this.log('Configuration saved successfully');
+        
+        // Notify UI of the updated config
+        await this.pushEvent('save-config', { config: newConfig });
+        
         return {
           success: true,
           message: 'Configuration saved successfully'
@@ -154,5 +194,5 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// FIXED: Export the instance directly instead of a factory function
+// Export the server instance
 export default new SleepMeUiServer();
