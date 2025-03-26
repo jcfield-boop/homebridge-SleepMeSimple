@@ -1,107 +1,185 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SleepMe Simple Configuration</title>
-    <link rel="stylesheet" href="css/styles.css">
+  <meta charset="UTF-8">
+  <title>SleepMe Simple Configuration</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+  <style>
+    body { padding: 20px; }
+    .template-card { cursor: pointer; transition: all 0.3s; }
+    .template-card:hover { transform: scale(1.02); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .template-card.selected { border-color: #007bff; background-color: #f1f7ff; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="section" id="api-section">
-            <div class="section-title">API Configuration</div>
-            <div class="form-group">
-                <label for="apiToken">API Token</label>
-                <input type="password" id="apiToken" placeholder="Enter your SleepMe API token">
-                <div class="info-text">
-                    Your SleepMe API token (obtain from your account at sleep.me)
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="tempUnit">Temperature Unit</label>
-                <select id="tempUnit">
-                    <option value="C">Celsius (°C)</option>
-                    <option value="F">Fahrenheit (°F)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="pollingInterval">Polling Interval (seconds)</label>
-                <input type="number" id="pollingInterval" min="60" max="300" placeholder="90">
-                <div class="info-text">
-                    How frequently to check device status (60-300 seconds)
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="logLevel">Log Level</label>
-                <select id="logLevel">
-                    <option value="normal">Normal</option>
-                    <option value="debug">Debug</option>
-                    <option value="verbose">Verbose</option>
-                </select>
-                <div class="info-text">
-                    Level of detail in logs
-                </div>
-            </div>
+  <div class="container">
+    <h2>SleepMe Simple Configuration</h2>
+    
+    <div class="card mb-4">
+      <div class="card-header">API Configuration</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label for="apiToken" class="form-label">SleepMe API Token</label>
+          <input type="password" class="form-control" id="apiToken" placeholder="Enter your API token">
         </div>
-        
-        <div class="section" id="schedule-section">
-            <div class="section-title">Sleep Schedules</div>
-            <div class="form-group">
-                <label for="enableSchedules">
-                    <input type="checkbox" id="enableSchedules"> Enable Temperature Scheduling
-                </label>
-                <div class="info-text">
-                    Configure scheduled temperature changes for better sleep
-                </div>
-            </div>
-            
-            <div id="schedule-options" class="hidden">
-                <div class="tab-container">
-                    <button class="tab-button active" data-tab="weekday">Weekday Schedule</button>
-                    <button class="tab-button" data-tab="weekend">Weekend Schedule</button>
-                </div>
-                
-                <div id="weekday-tab" class="tab-content active">
-                    <div class="template-container" id="weekday-templates">
-                        <!-- Weekday templates will be inserted here dynamically -->
-                    </div>
-                </div>
-                
-                <div id="weekend-tab" class="tab-content">
-                    <div class="template-container" id="weekend-templates">
-                        <!-- Weekend templates will be inserted here dynamically -->
-                    </div>
-                </div>
-                
-                <div class="form-group" style="margin-top: 20px;">
-                    <button id="save-schedules" class="btn">Save Schedules</button>
-                    <button id="cancel-schedules" class="btn btn-secondary">Cancel</button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="section" id="advanced-section">
-            <div class="section-title">Advanced Settings</div>
-            <div class="form-group">
-                <label for="warmHugIncrement">Warm Hug Temperature Increment (°C)</label>
-                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.5" placeholder="2">
-                <div class="info-text">
-                    Temperature increase per minute during Warm Hug mode (0.5-5°C)
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="warmHugDuration">Warm Hug Duration (minutes)</label>
-                <input type="number" id="warmHugDuration" min="5" max="30" placeholder="10">
-                <div class="info-text">
-                    Duration of warm hug mode in minutes (5-30)
-                </div>
-            </div>
-        </div>
+        <button id="testConnection" class="btn btn-primary">Test Connection</button>
+        <div id="connectionStatus" class="mt-2"></div>
+      </div>
     </div>
-    
-    <div id="toast"></div>
-    
-    <!-- Load homebridge plugin UI utils library -->
-    <script type="module" src="../index.js"></script>
+
+    <div class="card">
+      <div class="card-header">Sleep Schedule Templates</div>
+      <div class="card-body">
+        <div class="row" id="weekdayTemplates"></div>
+        <div class="row mt-3" id="weekendTemplates"></div>
+        <button id="saveSchedules" class="btn btn-success mt-3">Save Schedules</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Utility function to show toast-like notifications
+    function showNotification(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Render schedule templates
+    async function renderScheduleTemplates() {
+      try {
+        const response = await homebridge.request('/schedules/templates');
+        
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to load templates');
+        }
+
+        const weekdayContainer = document.getElementById('weekdayTemplates');
+        const weekendContainer = document.getElementById('weekendTemplates');
+
+        // Render weekday templates
+        response.templates.weekday.forEach(template => {
+          const card = document.createElement('div');
+          card.className = 'col-md-4 mb-3';
+          card.innerHTML = `
+            <div class="card template-card" data-type="weekday">
+              <div class="card-body">
+                <h5 class="card-title">${template.name}</h5>
+                ${template.schedules.map(schedule => 
+                  `<p>${schedule.time}: ${schedule.temperature}°C (${schedule.description})</p>`
+                ).join('')}
+              </div>
+            </div>
+          `;
+          weekdayContainer.appendChild(card);
+        });
+
+        // Render weekend templates
+        response.templates.weekend.forEach(template => {
+          const card = document.createElement('div');
+          card.className = 'col-md-4 mb-3';
+          card.innerHTML = `
+            <div class="card template-card" data-type="weekend">
+              <div class="card-body">
+                <h5 class="card-title">${template.name}</h5>
+                ${template.schedules.map(schedule => 
+                  `<p>${schedule.time}: ${schedule.temperature}°C (${schedule.description})</p>`
+                ).join('')}
+              </div>
+            </div>
+          `;
+          weekendContainer.appendChild(card);
+        });
+
+        // Add click handlers for template selection
+        document.querySelectorAll('.template-card').forEach(card => {
+          card.addEventListener('click', function() {
+            // Deselect other templates in the same type group
+            const group = this.getAttribute('data-type');
+            document.querySelectorAll(`.template-card[data-type="${group}"]`)
+              .forEach(c => c.classList.remove('selected'));
+            
+            // Select this template
+            this.classList.add('selected');
+          });
+        });
+
+      } catch (error) {
+        showNotification(error.message, 'danger');
+      }
+    }
+
+    // Test API connection
+    document.getElementById('testConnection').addEventListener('click', async () => {
+      const apiToken = document.getElementById('apiToken').value;
+      const statusEl = document.getElementById('connectionStatus');
+
+      if (!apiToken) {
+        showNotification('Please enter an API token', 'warning');
+        return;
+      }
+
+      try {
+        const result = await homebridge.request('/device/test', { apiToken });
+        
+        if (result.success) {
+          statusEl.innerHTML = `
+            <div class="alert alert-success">
+              ${result.message}
+            </div>
+          `;
+        } else {
+          statusEl.innerHTML = `
+            <div class="alert alert-danger">
+              ${result.error || 'Connection test failed'}
+            </div>
+          `;
+        }
+      } catch (error) {
+        showNotification(error.message, 'danger');
+      }
+    });
+
+    // Save schedules
+    document.getElementById('saveSchedules').addEventListener('click', async () => {
+      const selectedWeekdayTemplate = document.querySelector('.template-card[data-type="weekday"].selected');
+      const selectedWeekendTemplate = document.querySelector('.template-card[data-type="weekend"].selected');
+
+      if (!selectedWeekdayTemplate || !selectedWeekendTemplate) {
+        showNotification('Please select both weekday and weekend templates', 'warning');
+        return;
+      }
+
+      try {
+        const schedules = [
+          ...Array.from(selectedWeekdayTemplate.querySelectorAll('p')).map(el => ({
+            type: 'Everyday',
+            time: el.textContent.split(':')[0].trim(),
+            temperature: parseFloat(el.textContent.split(':')[1].split('°')[0])
+          })),
+          ...Array.from(selectedWeekendTemplate.querySelectorAll('p')).map(el => ({
+            type: 'Weekend',
+            time: el.textContent.split(':')[0].trim(),
+            temperature: parseFloat(el.textContent.split(':')[1].split('°')[0])
+          }))
+        ];
+
+        const result = await homebridge.request('/schedules/save', { schedules });
+
+        if (result.success) {
+          showNotification('Schedules saved successfully!', 'success');
+        } else {
+          showNotification(result.error || 'Failed to save schedules', 'danger');
+        }
+      } catch (error) {
+        showNotification(error.message, 'danger');
+      }
+    });
+
+    // Initialize on page load
+    renderScheduleTemplates();
+  </script>
 </body>
 </html>

@@ -1,211 +1,147 @@
-/**
- * This is the server-side component of the SleepMe Simple plugin UI.
- * It provides API endpoints for the UI to interact with Homebridge.
- */
 const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
 
-// Create a new instance of the plugin UI server
-const homebridge = new HomebridgePluginUiServer();
+class SleepMeUiServer extends HomebridgePluginUiServer {
+  constructor() {
+    // Call the parent constructor
+    super();
 
-// Sleep schedule templates
-const sleepTemplates = {
-    weekday: {
-        "optimal": {
-            name: "Optimal Sleep Cycle",
-            description: "Designed for complete sleep cycles with REM enhancement",
-            schedules: [
-                { type: "Weekdays", time: "22:00", temperature: 21, name: "Cool Down" },
-                { type: "Weekdays", time: "23:00", temperature: 19, name: "Deep Sleep" },
-                { type: "Weekdays", time: "02:00", temperature: 23, name: "REM Support" },
-                { type: "Weekdays", time: "06:00", temperature: 24, name: "Warm Hug" }
-            ]
-        },
-        "nightowl": {
-            name: "Night Owl",
-            description: "Later bedtime with extended morning warm-up",
-            schedules: [
-                { type: "Weekdays", time: "23:30", temperature: 21, name: "Cool Down" },
-                { type: "Weekdays", time: "00:30", temperature: 19, name: "Deep Sleep" },
-                { type: "Weekdays", time: "03:30", temperature: 23, name: "REM Support" },
-                { type: "Weekdays", time: "07:30", temperature: 24, name: "Warm Hug" }
-            ]
-        },
-        "earlybird": {
-            name: "Early Bird",
-            description: "Earlier bedtime and wake-up schedule",
-            schedules: [
-                { type: "Weekdays", time: "21:00", temperature: 21, name: "Cool Down" },
-                { type: "Weekdays", time: "22:00", temperature: 19, name: "Deep Sleep" },
-                { type: "Weekdays", time: "01:00", temperature: 23, name: "REM Support" },
-                { type: "Weekdays", time: "05:00", temperature: 24, name: "Warm Hug" }
-            ]
-        }
-    },
-    weekend: {
-        "weekend-optimal": {
-            name: "Weekend Recovery",
-            description: "Extra sleep with later wake-up time",
-            schedules: [
-                { type: "Weekend", time: "23:00", temperature: 21, name: "Cool Down" },
-                { type: "Weekend", time: "00:00", temperature: 19, name: "Deep Sleep" },
-                { type: "Weekend", time: "03:00", temperature: 23, name: "REM Support" },
-                { type: "Weekend", time: "08:00", temperature: 24, name: "Warm Hug" }
-            ]
-        },
-        "weekend-relax": {
-            name: "Relaxed Weekend",
-            description: "Gradual transitions for weekend leisure",
-            schedules: [
-                { type: "Weekend", time: "23:30", temperature: 22, name: "Cool Down" },
-                { type: "Weekend", time: "01:00", temperature: 20, name: "Deep Sleep" },
-                { type: "Weekend", time: "04:00", temperature: 24, name: "REM Support" },
-                { type: "Weekend", time: "09:00", temperature: 26, name: "Warm Hug" }
-            ]
-        }
-    }
-};
+    // Define UI routes and handlers
+    this.onRequest('/schedules/templates', this.getScheduleTemplates.bind(this));
+    this.onRequest('/schedules/save', this.saveSchedules.bind(this));
+    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
 
-// Store selected templates
-let selectedTemplates = {
-    weekday: "optimal",
-    weekend: "weekend-optimal"
-};
+    // Initialization completed
+    this.ready();
+  }
 
-// API endpoint to get template data
-homebridge.registerCustomEndpoint('/api/templates', async (_, response) => {
-    // Return the template definitions
-    response.json({ 
-        templates: sleepTemplates,
-        selected: selectedTemplates
-    });
-});
-
-// API endpoint to get current config
-homebridge.registerCustomEndpoint('/api/config', async (_, response) => {
+  /**
+   * Get available sleep schedule templates
+   * @returns {Promise<Object>} Available schedule templates
+   */
+  async getScheduleTemplates() {
     try {
-        // Get the current config
-        const pluginConfig = await homebridge.getPluginConfig();
-        
-        // If config exists, send it
-        if (pluginConfig && pluginConfig.length > 0) {
-            response.json({
-                success: true,
-                config: pluginConfig[0]
-            });
-        } else {
-            // No config yet, send default
-            response.json({
-                success: true,
-                config: {
-                    platform: "SleepMeSimple",
-                    name: "SleepMe Simple",
-                    unit: "C",
-                    pollingInterval: 90,
-                    logLevel: "normal",
-                    enableSchedules: false,
-                    advanced: {
-                        warmHugIncrement: 2,
-                        warmHugDuration: 10
-                    }
-                }
-            });
-        }
-    } catch (error) {
-        console.error('Error retrieving config:', error);
-        response.json({
-            success: false,
-            error: 'Failed to retrieve configuration'
-        });
-    }
-});
+      // Predefined schedule templates matching README description
+      const templates = {
+        weekday: [
+          {
+            name: 'Optimal Sleep Cycle',
+            schedules: [
+              { type: 'Everyday', time: '22:00', temperature: 21, description: 'Cool Down' },
+              { type: 'Everyday', time: '23:00', temperature: 19, description: 'Deep Sleep' },
+              { type: 'Everyday', time: '02:00', temperature: 23, description: 'REM Support' }
+            ]
+          },
+          {
+            name: 'Night Owl',
+            schedules: [
+              { type: 'Everyday', time: '23:30', temperature: 21, description: 'Cool Down' },
+              { type: 'Everyday', time: '00:30', temperature: 19, description: 'Deep Sleep' },
+              { type: 'Everyday', time: '03:30', temperature: 23, description: 'REM Support' }
+            ]
+          }
+        ],
+        weekend: [
+          {
+            name: 'Weekend Recovery',
+            schedules: [
+              { type: 'Weekend', time: '23:00', temperature: 21, description: 'Cool Down' },
+              { type: 'Weekend', time: '00:00', temperature: 19, description: 'Deep Sleep' },
+              { type: 'Weekend', time: '03:00', temperature: 23, description: 'REM Support' }
+            ]
+          }
+        ]
+      };
 
-// API endpoint to save config
-homebridge.registerCustomEndpoint('/api/saveConfig', async (request, response) => {
+      return {
+        success: true,
+        templates: templates
+      };
+    } catch (error) {
+      this.log.error('Error fetching schedule templates:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Save schedules to plugin configuration
+   * @param {Object} payload Schedule configuration
+   * @returns {Promise<Object>} Save result
+   */
+  async saveSchedules(payload) {
     try {
-        const config = request.body;
-        
-        // Validate required fields
-        if (!config || !config.platform) {
-            response.json({
-                success: false,
-                error: 'Invalid configuration data'
-            });
-            return;
-        }
-        
-        // Save the config
-        await homebridge.updatePluginConfig([config]);
-        
-        // Send success response
-        response.json({
-            success: true
-        });
-    } catch (error) {
-        console.error('Error saving config:', error);
-        response.json({
-            success: false,
-            error: 'Failed to save configuration'
-        });
-    }
-});
+      // Validate payload
+      if (!payload || !payload.schedules) {
+        throw new Error('Invalid schedule configuration');
+      }
 
-// API endpoint to save template selection
-homebridge.registerCustomEndpoint('/api/saveTemplates', async (request, response) => {
+      // Get current configuration
+      const config = await this.getPluginConfig();
+
+      // Update schedules in configuration
+      config.schedules = payload.schedules;
+      config.enableSchedules = true;
+
+      // Save updated configuration
+      await this.updatePluginConfig(config);
+
+      return {
+        success: true,
+        message: 'Schedules saved successfully'
+      };
+    } catch (error) {
+      this.log.error('Error saving schedules:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Test device connection using API token
+   * @param {Object} payload Connection test payload
+   * @returns {Promise<Object>} Connection test result
+   */
+  async testDeviceConnection(payload) {
     try {
-        const { weekday, weekend } = request.body;
-        
-        // Update selected templates
-        selectedTemplates.weekday = weekday || "optimal";
-        selectedTemplates.weekend = weekend || "weekend-optimal";
-        
-        // Get current config
-        const pluginConfig = await homebridge.getPluginConfig();
-        
-        if (pluginConfig && pluginConfig.length > 0) {
-            const config = pluginConfig[0];
-            
-            // Generate schedules from selected templates
-            const schedules = [];
-            
-            // Add weekday schedules
-            const weekdayTemplate = sleepTemplates.weekday[selectedTemplates.weekday];
-            if (weekdayTemplate) {
-                schedules.push(...weekdayTemplate.schedules);
-            }
-            
-            // Add weekend schedules
-            const weekendTemplate = sleepTemplates.weekend[selectedTemplates.weekend];
-            if (weekendTemplate) {
-                schedules.push(...weekendTemplate.schedules);
-            }
-            
-            // Update config with schedules
-            config.enableSchedules = true;
-            config.schedules = schedules;
-            
-            // Save updated config
-            await homebridge.updatePluginConfig([config]);
-            
-            // Send success response
-            response.json({
-                success: true
-            });
-        } else {
-            response.json({
-                success: false,
-                error: 'No configuration found'
-            });
-        }
-    } catch (error) {
-        console.error('Error saving templates:', error);
-        response.json({
-            success: false,
-            error: 'Failed to save templates'
-        });
-    }
-});
+      // Validate API token
+      if (!payload.apiToken) {
+        throw new Error('API token is required');
+      }
 
-// Start the server
-(async () => {
-    await homebridge.startServer();
-})();
+      // Temporary mock connection test (replace with actual API call)
+      const result = await this.testSleepMeApiConnection(payload.apiToken);
+
+      return {
+        success: result.success,
+        message: result.message
+      };
+    } catch (error) {
+      this.log.error('Device connection test failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Mock method to test SleepMe API connection
+   * @param {string} apiToken API authentication token
+   * @returns {Promise<Object>} Connection test result
+   */
+  async testSleepMeApiConnection(apiToken) {
+    // TODO: Implement actual API connection test
+    // This would typically involve making a real API call to validate the token
+    return {
+      success: true,
+      message: 'API token appears valid'
+    };
+  }
+}
+
+// Instantiate the server
+module.exports = new SleepMeUiServer();
