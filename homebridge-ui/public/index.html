@@ -314,6 +314,7 @@
             <div class="form-group">
                 <label for="apiToken">API Token:</label>
                 <input type="text" id="apiToken" name="apiToken" required>
+                <small id="apiTokenHelp" class="form-text text-muted">Your SleepMe API token. Obtain this from your account at sleep.me</small>
             </div>
             
             <div class="form-group">
@@ -1335,11 +1336,14 @@ testConnectionBtn.addEventListener('click', async () => {
         return (fahrenheit - 32) * 5/9;
     }
 
+
 /**
  * Edit a schedule by its index
  * @param {number} index - Index of the schedule to edit
  */
  function editSchedule(index) {
+  console.log("editSchedule called with index:", index);
+  
   // Validate index is within bounds
   if (index < 0 || index >= schedules.length) {
     showToast('error', 'Could not edit schedule (invalid index)', 'Edit Error');
@@ -1352,6 +1356,7 @@ testConnectionBtn.addEventListener('click', async () => {
   
   // Get the schedule to edit
   const schedule = schedules[index];
+  console.log("Editing schedule:", schedule);
   
   // Set form values
   scheduleTypeSelect.value = schedule.type || 'Everyday';
@@ -1398,7 +1403,6 @@ testConnectionBtn.addEventListener('click', async () => {
   // Show toast notification
   showToast('info', 'Editing schedule', 'Schedule Edit');
 }
-
     
     // Function to exit edit mode
     function exitEditMode() {
@@ -1512,9 +1516,6 @@ function renderScheduleList() {
         displayInfo += schedule.description;
       }
       
-      // Find global index in schedules array
-      const globalIndex = schedules.indexOf(schedule);
-      
       // Create info div
       const infoDiv = document.createElement('div');
       infoDiv.className = 'schedule-item-info';
@@ -1524,17 +1525,33 @@ function renderScheduleList() {
       const actionsDiv = document.createElement('div');
       actionsDiv.className = 'schedule-item-actions';
       
-      // Create edit button
+      // Create edit button with direct onclick handler
       const editBtn = document.createElement('button');
       editBtn.className = 'edit';
       editBtn.textContent = 'Edit';
-      editBtn.dataset.index = globalIndex.toString();
+      editBtn.onclick = function() {
+        const idx = schedules.indexOf(schedule);
+        console.log("Edit button clicked for index:", idx);
+        if (idx >= 0) {
+          editSchedule(idx);
+        }
+      };
       
-      // Create remove button
+      // Create remove button with direct onclick handler
       const removeBtn = document.createElement('button');
       removeBtn.className = 'danger';
       removeBtn.textContent = 'Remove';
-      removeBtn.dataset.index = globalIndex.toString();
+      removeBtn.onclick = function() {
+        const idx = schedules.indexOf(schedule);
+        console.log("Remove button clicked for index:", idx);
+        if (idx >= 0) {
+          if (confirm('Are you sure you want to remove this schedule?')) {
+            schedules.splice(idx, 1);
+            renderScheduleList();
+            showToast('success', 'Schedule removed successfully', 'Schedule Removed');
+          }
+        }
+      };
       
       // Add buttons to actions div
       actionsDiv.appendChild(editBtn);
@@ -1543,26 +1560,6 @@ function renderScheduleList() {
       // Add elements to schedule item
       scheduleItem.appendChild(infoDiv);
       scheduleItem.appendChild(actionsDiv);
-      
-      // Add event listeners for buttons
-      editBtn.addEventListener('click', function() {
-        const idx = parseInt(this.dataset.index, 10);
-        if (!isNaN(idx) && idx >= 0 && idx < schedules.length) {
-          editSchedule(idx);
-        }
-      });
-      
-      removeBtn.addEventListener('click', function() {
-        const idx = parseInt(this.dataset.index, 10);
-        if (!isNaN(idx) && idx >= 0 && idx < schedules.length) {
-          // Confirm before removing
-          if (confirm('Are you sure you want to remove this schedule?')) {
-            schedules.splice(idx, 1);
-            renderScheduleList();
-            showToast('success', 'Schedule removed successfully', 'Schedule Removed');
-          }
-        }
-      });
       
       // Add schedule item to group container
       groupContainer.appendChild(scheduleItem);
@@ -1768,9 +1765,13 @@ function renderScheduleList() {
             // Add group container to schedule list
             scheduleList.appendChild(groupContainer);
         });
-    
+  
     // Add/Update schedule button handler
-addScheduleBtn.addEventListener('click', () => {
+addScheduleBtn.addEventListener('click', function() {
+  console.log("Add/Update button clicked");
+  console.log("isEditing:", isEditing);
+  console.log("editingScheduleIndex:", editingScheduleIndex);
+  
   // Validate inputs first
   const isTimeValid = validateScheduleTime();
   const isTempValid = validateTemperature();
@@ -1793,6 +1794,8 @@ addScheduleBtn.addEventListener('click', () => {
   
   try {
     if (isEditing && editingScheduleIndex >= 0 && editingScheduleIndex < schedules.length) {
+      console.log("Updating schedule at index:", editingScheduleIndex);
+      
       // Keep the original ID when updating
       const originalSchedule = schedules[editingScheduleIndex];
       const scheduleId = originalSchedule.id || Date.now().toString();
@@ -1833,6 +1836,8 @@ addScheduleBtn.addEventListener('click', () => {
       scheduleTimeInput.value = '21:30';
       scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
     } else {
+      console.log("Adding new schedule");
+      
       // Create new schedule object
       const schedule = {
         id: Date.now().toString(), // Unique identifier
@@ -1865,10 +1870,11 @@ addScheduleBtn.addEventListener('click', () => {
     // Update UI
     renderScheduleList();
   } catch (error) {
-    showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
     console.error('Error saving schedule:', error);
+    showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
   }
-});
+});  
+ 
    // Add a helper button to the form to view logs
 const addDebugButton = () => {
     const configForm = document.getElementById('configForm');
