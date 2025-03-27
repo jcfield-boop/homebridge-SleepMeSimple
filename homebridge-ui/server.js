@@ -4,7 +4,6 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { promises as fsPromises } from 'fs';
 
 // Get current file path (ESM replacement for __dirname)
 const __filename = fileURLToPath(import.meta.url);
@@ -96,7 +95,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Get the current plugin configuration
-   * This method reads the plugin configuration directly from the Homebridge config.json file
+   * Uses the Homebridge UI APIs to access the config
    * 
    * @returns {Promise<Object>} Configuration object with success status and config data
    */
@@ -104,8 +103,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Retrieving plugin configuration');
       
-      // Try to get the config.json path from Homebridge
-      const configPath = this.getConfigPath();
+      // Get the Homebridge config.json path using the proper UI API
+      const configPath = this.homebridgeConfigPath();
       
       if (!configPath) {
         this.log('Could not determine config.json path', 'error');
@@ -117,11 +116,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       this.log(`Reading config from: ${configPath}`);
       
-      // Read and parse the config.json file
-      const configFile = await fsPromises.readFile(configPath, 'utf8');
-      const config = JSON.parse(configFile);
+      // Use the API to get the current configuration
+      const config = await this.readHomebridgeConfig();
       
-      this.log(`Successfully read config.json, file size: ${configFile.length} bytes`);
+      if (!config) {
+        throw new Error('Failed to read Homebridge configuration');
+      }
+      
+      this.log('Successfully read Homebridge configuration');
       
       // Extract our platform configuration
       let platformConfig = {};
@@ -144,8 +146,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         }
       }
       
-      this.log(`Extracted platform config: ${JSON.stringify(platformConfig, null, 2)}`);
-      
       return {
         success: true,
         config: platformConfig
@@ -164,60 +164,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 
   /**
-   * Get the path to the Homebridge config.json file
-   * This attempts multiple methods to find the config path
-   * 
-   * @returns {string|null} Path to config.json or null if not found
-   */
-  getConfigPath() {
-    try {
-      // First attempt: Use HomebridgePluginUiServer methods if available
-      if (typeof this.homebridgeStoragePath === 'function') {
-        const storagePath = this.homebridgeStoragePath();
-        this.log(`Storage path from homebridgeStoragePath(): ${storagePath}`);
-        return path.join(storagePath, 'config.json');
-      }
-      
-      // Second attempt: Check common Homebridge paths
-      const commonPaths = [
-        // User level installation
-        path.join(process.env.HOME || '', '.homebridge', 'config.json'),
-        // System level installation
-        '/var/lib/homebridge/config.json',
-        // Docker common path
-        '/homebridge/config.json',
-        // Windows common path
-        path.join(process.env.APPDATA || '', 'homebridge', 'config.json'),
-        // Current working directory
-        path.join(process.cwd(), 'config.json')
-      ];
-      
-      // Check each path
-      for (const configPath of commonPaths) {
-        try {
-          // Check if file exists (synchronously for simplicity)
-          const stats = fs.statSync(configPath);
-          if (stats.isFile()) {
-            this.log(`Found config.json at: ${configPath}`);
-            return configPath;
-          }
-        } catch (e) {
-          // Path doesn't exist, continue to next one
-          this.log(`Path ${configPath} does not exist or is not accessible`);
-        }
-      }
-      
-      this.log('Could not find config.json in any common locations', 'warn');
-      return null;
-      
-    } catch (error) {
-      this.log(`Error determining config path: ${error.message}`, 'error');
-      return null;
-    }
-  }
-
-  /**
    * Save the plugin configuration
+   * Uses the Homebridge UI APIs for updating the config
    * @param {Object} payload - Configuration payload
    * @returns {Promise<Object>} Save result
    */
@@ -225,30 +173,48 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Saving plugin configuration');
       
-      // Enhanced debugging with safely handled payload
-      const sanitizedPayload = payload ? JSON.parse(JSON.stringify(payload)) : undefined;
-      if (sanitizedPayload && sanitizedPayload.config && sanitizedPayload.config.apiToken) {
-        sanitizedPayload.config.apiToken = '[REDACTED]';
-      }
-      this.log(`Payload structure: ${sanitizedPayload ? JSON.stringify(sanitizedPayload, null, 2) : 'undefined'}`);
+      // Log raw payload type for debugging
+      this.log(`Raw payload type: ${typeof payload}`);
       
-      // Extract config (handle different possible payload structures)
+      // Properly extract the config object depending on payload structure
+      // In the Homebridge Plugin UI, the payload should have a standard structure
       let config;
-      if (payload && payload.config) {
+      
+      if (!payload) {
+        throw new Error('Payload is undefined or null');
+      }
+      
+      // The body property contains the actual data in Homebridge UI requests
+      if (payload.body && typeof payload.body === 'object') {
+        this.log('Found payload.body object');
+        
+        // The config property should contain our platform configuration
+        if (payload.body.config && typeof payload.body.config === 'object') {
+          this.log('Found config in payload.body.config');
+          config = payload.body.config;
+        } else {
+          // If we can't find the expected structure, log what we did find
+          this.log('No config in payload.body, available keys: ' + 
+            Object.keys(payload.body).join(', '), 'warn');
+          
+          throw new Error('Missing config property in payload.body');
+        }
+      } else if (payload.config && typeof payload.config === 'object') {
+        // Alternative structure sometimes used
+        this.log('Found config directly in payload.config');
         config = payload.config;
-      } else if (payload && payload.body && payload.body.config) {
-        config = payload.body.config;
-      } else if (payload && payload.platform === 'SleepMeSimple') {
+      } else if (payload.platform === 'SleepMeSimple') {
+        // Direct platform config object
+        this.log('Found platform config directly in payload');
         config = payload;
       } else {
-        throw new Error('Missing or invalid payload');
+        // If none of the above, log the payload structure for debugging
+        this.log('Unexpected payload structure: ' + JSON.stringify(Object.keys(payload)), 'warn');
+        throw new Error('Missing config property in payload');
       }
       
-      // Process and validate the config
-      this.log(`Processing config...`);
-      
       // Ensure required platform properties are set
-      config.platform = config.platform || 'SleepMeSimple';
+      config.platform = 'SleepMeSimple';
       config.name = config.name || 'SleepMe Simple';
       
       // Validate API token
@@ -256,42 +222,64 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('API token is required');
       }
 
-      // Convert enableSchedules to proper boolean if it's a string
+      // Normalize boolean values (handle string representations)
       if (typeof config.enableSchedules === 'string') {
-        config.enableSchedules = config.enableSchedules === 'true';
+        config.enableSchedules = config.enableSchedules.toLowerCase() === 'true';
       }
 
-      // Validate schedules
+      // Process schedules if enabled
       if (config.enableSchedules === true) {
         if (!Array.isArray(config.schedules)) {
           config.schedules = [];
+          this.log('Creating empty schedules array for enabled schedules');
         }
         
-        // Clean and validate each schedule
-        config.schedules = config.schedules.map(schedule => ({
-          type: String(schedule.type || 'Everyday'),
-          time: String(schedule.time || '00:00'),
-          temperature: Number(schedule.temperature || 21),
-          unit: String(schedule.unit || 'C'),
-          ...(schedule.type === 'Specific Day' ? { day: Number(schedule.day) } : {}),
-          ...(schedule.description ? { description: String(schedule.description) } : {})
-        }));
+        // Validate and normalize each schedule entry
+        this.log(`Processing ${config.schedules.length} schedules`);
+        config.schedules = config.schedules.map((schedule, index) => {
+          // Ensure we have valid schedule object
+          if (!schedule || typeof schedule !== 'object') {
+            this.log(`Invalid schedule at index ${index}, using defaults`, 'warn');
+            return {
+              type: 'Everyday',
+              time: '00:00',
+              temperature: 21,
+              unit: 'C'
+            };
+          }
+          
+          // Create normalized schedule with consistent types
+          return {
+            type: String(schedule.type || 'Everyday'),
+            time: String(schedule.time || '00:00'),
+            temperature: Number(schedule.temperature || 21),
+            unit: String(schedule.unit || 'C'),
+            ...(schedule.type === 'Specific Day' ? { day: Number(schedule.day) } : {}),
+            ...(schedule.description ? { description: String(schedule.description) } : {})
+          };
+        });
       } else if (config.enableSchedules === false) {
         // Explicitly remove schedules when disabled
         delete config.schedules;
+        this.log('Schedules disabled, removing schedules property');
       }
       
-      // Ensure pollingInterval is a number
-      if (config.pollingInterval) {
+      // Process numeric values
+      if (config.pollingInterval !== undefined) {
         config.pollingInterval = parseInt(String(config.pollingInterval), 10);
+        if (isNaN(config.pollingInterval)) {
+          config.pollingInterval = 90; // Default if parsing fails
+        }
       }
       
-      // Using the official Homebridge method to update config
-      await this.updateConfig([config]);
+      // Use the appropriate Homebridge UI API to update the config
+      // This will handle placing our platform config in the right place
+      this.log('Saving configuration with updatePluginConfig API');
+      await this.updatePluginConfig([config]);
       
       this.log('Configuration updated successfully');
       
-      // Push event to UI to notify of config change
+      // Notify UI of config change
       this.pushEvent('config-updated', { timestamp: Date.now() });
       
       return {
@@ -319,11 +307,18 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Testing device connection');
       
-      if (!payload || !payload.apiToken) {
-        throw new Error('API token is required');
+      // Extract API token from payload.body for consistency with other handlers
+      let apiToken;
+      
+      if (payload.body && payload.body.apiToken) {
+        apiToken = payload.body.apiToken;
+      } else if (payload.apiToken) {
+        apiToken = payload.apiToken;
       }
       
-      const { apiToken } = payload;
+      if (!apiToken) {
+        throw new Error('API token is required');
+      }
       
       // Make API call to test connection
       const response = await axios({
