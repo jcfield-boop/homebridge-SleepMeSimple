@@ -432,27 +432,39 @@
     </div>
     <script>
         // Wait for DOM to be fully loaded
-        document.addEventListener('DOMContentLoaded', async () => {
-// Listen for plugin events
-homebridge.addEventListener('event', async (data) => {
-        console.log('Plugin event received:', data);
-        if (data && data.event === 'save-config' && data.data && data.data.success) {
-            console.log('Config saved event received');
-            // Could reload config here if needed
-        }
-    });
-
-
-
-            // Listen for server events
-            homebridge.on('save-config', (data) => {
-                if (data && data.config) {
-                    // Use the client-side method to update the config
-                    homebridge.updatePluginConfig(data.config);
-                    console.log('Configuration saved via event');
-                    showStatus('Configuration saved successfully!');
+document.addEventListener('DOMContentLoaded', async () => {
+    // Create a centralized error handler for better error tracking
+    window.onerror = function(message, source, lineno, colno, error) {
+        console.error(`UI Error: ${message} at ${source}:${lineno}:${colno}`, error);
+        showStatus('An error occurred in the UI. See console for details.', true);
+        return false;
+    };
+    
+    // Properly set up communication with the Homebridge plugin
+    try {
+        // Listen for plugin events with proper error handling
+        homebridge.addEventListener('event', async (data) => {
+            try {
+                console.log('Plugin event received:', data);
+                if (data && data.event === 'config-updated' && data.data) {
+                    console.log('Config updated event received');
+                    // Reload config if needed
+                    await loadConfig();
                 }
-            });
+            } catch (error) {
+                console.error('Error handling plugin event:', error);
+            }
+        });
+        
+        console.log('SleepMe UI initialized');
+        
+        // Load initial configuration
+        await loadConfig();
+    } catch (error) {
+        console.error('Error initializing UI:', error);
+        showStatus('Error initializing UI: ' + error.message, true, false);
+    }
+});
             
             console.log('SleepMe UI initialized');
             
@@ -644,7 +656,7 @@ async function loadConfig() {
                 config = response.config;
                 console.log('Loaded config:', config);
                 
-                // Hide loading message
+                // Hide loading message on success
                 statusElement.classList.add('hidden');
             } else {
                 console.warn('Could not load config from server:', response);
@@ -671,19 +683,19 @@ async function loadConfig() {
         document.getElementById('pollingInterval').value = config.pollingInterval || 90;
         document.getElementById('logLevel').value = config.logLevel || 'normal';
         
-// Handle schedules
-const enableSchedules = !!config.enableSchedules;
-document.getElementById('enableSchedules').checked = enableSchedules;
-schedulesContainer.classList.toggle('hidden', !enableSchedules);
+        // Handle schedules
+        const enableSchedules = !!config.enableSchedules;
+        document.getElementById('enableSchedules').checked = enableSchedules;
+        schedulesContainer.classList.toggle('hidden', !enableSchedules);
 
-// Load schedules only if enabled
-if (enableSchedules && Array.isArray(config.schedules)) {
-    schedules = [...config.schedules];
-} else {
-    // Clear schedules array if disabled or not present
-    schedules = [];
-}
-renderScheduleList();
+        // Load schedules only if enabled
+        if (enableSchedules && Array.isArray(config.schedules)) {
+            schedules = [...config.schedules]; // Create a fresh copy using spread operator
+        } else {
+            // Clear schedules array if disabled or not present
+            schedules = [];
+        }
+        renderScheduleList();
         
         // Update temperature validation based on unit
         updateTemperatureValidation();
@@ -699,6 +711,20 @@ configForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     console.log('Form submission started');
     
+    // Validate required fields
+    const apiToken = document.getElementById('apiToken').value.trim();
+    if (!apiToken) {
+        showStatus('API token is required', true);
+        return;
+    }
+    
+    // Validate polling interval is within range
+    const pollingInterval = parseInt(document.getElementById('pollingInterval').value, 10);
+    if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
+        showStatus('Polling interval must be between 60 and 300 seconds', true);
+        return;
+    }
+    
     // Disable form elements during save
     const formElements = configForm.elements;
     for (let i = 0; i < formElements.length; i++) {
@@ -712,27 +738,27 @@ configForm.addEventListener('submit', async (event) => {
         const formData = new FormData(configForm);
         console.log('Form data collected, enable schedules:', formData.get('enableSchedules'));
         
-// Build configuration object
-const config = {
-    platform: "SleepMeSimple",
-    name: 'SleepMe Simple',
-    apiToken: formData.get('apiToken'),
-    unit: formData.get('unit'),
-    pollingInterval: parseInt(formData.get('pollingInterval'), 10),
-    logLevel: formData.get('logLevel'),
-    enableSchedules: formData.get('enableSchedules') === 'on'
-};
+        // Build configuration object
+        const config = {
+            platform: "SleepMeSimple",
+            name: 'SleepMe Simple',
+            apiToken: formData.get('apiToken'),
+            unit: formData.get('unit'),
+            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
+            logLevel: formData.get('logLevel'),
+            enableSchedules: formData.get('enableSchedules') === 'on'
+        };
 
-// Add schedules if enabled, otherwise explicitly remove them
-if (config.enableSchedules && schedules.length > 0) {
-    config.schedules = schedules;
-} else {
-    // Explicitly remove schedules when disabled to ensure clean state
-    delete config.schedules; // This is cleaner than setting to [] for config.json
-}
+        // Add schedules if enabled, otherwise explicitly remove them
+        if (config.enableSchedules && schedules.length > 0) {
+            config.schedules = schedules;
+        } else {
+            // Explicitly remove schedules when disabled to ensure clean state
+            delete config.schedules; // This is cleaner than setting to [] for config.json
+        }
         
-        console.log('Saving config with token:', 
-            config.apiToken ? config.apiToken.substring(0, 4) + '...' : 'none');
+        console.log('Saving config with token length:', 
+            config.apiToken ? config.apiToken.length : 0);
         
         // Send to server with timeout protection
         const response = await Promise.race([
@@ -741,7 +767,7 @@ if (config.enableSchedules && schedules.length > 0) {
                 body: { config }
             }),
             new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Request timeout')), 10000)
+                setTimeout(() => reject(new Error('Request timeout')), 15000)
             )
         ]);
         
@@ -806,106 +832,130 @@ testConnectionBtn.addEventListener('click', async () => {
         testConnectionBtn.textContent = 'Test Connection';
     }
 });
+           
+          // Apply templates
+applyTemplatesBtn.addEventListener('click', () => {
+    const weekdayKey = weekdayTemplateSelect.value;
+    const weekendKey = weekendTemplateSelect.value;
+    const currentUnit = unitSelect.value;
+    
+    let count = 0;
+    
+    if (weekdayKey && templates[weekdayKey]) {
+        // Remove existing weekday schedules
+        schedules = schedules.filter(s => s.type !== 'Weekdays');
+        
+        // Add new weekday schedules
+        templates[weekdayKey].schedules.forEach(templateSchedule => {
+            // Convert temperature if needed (templates are stored in Celsius)
+            let adjustedTemp = templateSchedule.temperature;
+            if (currentUnit === 'F') {
+                adjustedTemp = Math.round(convertCtoF(adjustedTemp) * 10) / 10;
+            }
             
-            // Apply templates
-            applyTemplatesBtn.addEventListener('click', () => {
-                const weekdayKey = weekdayTemplateSelect.value;
-                const weekendKey = weekendTemplateSelect.value;
-                
-                let count = 0;
-                
-                if (weekdayKey && templates[weekdayKey]) {
-                    // Remove existing weekday schedules
-                    schedules = schedules.filter(s => s.type !== 'Weekdays');
-                    
-                    // Add new weekday schedules
-                    templates[weekdayKey].schedules.forEach(templateSchedule => {
-                        const schedule = {
-                            type: templateSchedule.type,
-                            time: templateSchedule.time,
-                            temperature: templateSchedule.temperature,
-                            unit: unitSelect.value,
-                            description: templateSchedule.description
-                        };
-                        schedules.push(schedule);
-                        count++;
-                    });
-                }
-                
-                if (weekendKey && templates[weekendKey]) {
-                    // Remove existing weekend schedules
-                    schedules = schedules.filter(s => s.type !== 'Weekend');
-                    
-                    // Add new weekend schedules
-                    templates[weekendKey].schedules.forEach(templateSchedule => {
-                        const schedule = {
-                            type: templateSchedule.type,
-                            time: templateSchedule.time,
-                            temperature: templateSchedule.temperature,
-                            unit: unitSelect.value,
-                            description: templateSchedule.description
-                        };
-                        schedules.push(schedule);
-                        count++;
-                    });
-                }
-                
-                // Update the UI
-                renderScheduleList();
-                
-                if (count > 0) {
-                    showStatus(`Applied templates: added ${count} schedules`);
-                } else {
-                    showStatus('No templates selected', true);
-                }
-            });
+            const schedule = {
+                type: templateSchedule.type,
+                time: templateSchedule.time,
+                temperature: adjustedTemp,
+                unit: currentUnit,
+                description: templateSchedule.description
+            };
+            schedules.push(schedule);
+            count++;
+        });
+    }
+    
+    if (weekendKey && templates[weekendKey]) {
+        // Remove existing weekend schedules
+        schedules = schedules.filter(s => s.type !== 'Weekend');
+        
+        // Add new weekend schedules
+        templates[weekendKey].schedules.forEach(templateSchedule => {
+            // Convert temperature if needed (templates are stored in Celsius)
+            let adjustedTemp = templateSchedule.temperature;
+            if (currentUnit === 'F') {
+                adjustedTemp = Math.round(convertCtoF(adjustedTemp) * 10) / 10;
+            }
             
+            const schedule = {
+                type: templateSchedule.type,
+                time: templateSchedule.time,
+                temperature: adjustedTemp,
+                unit: currentUnit,
+                description: templateSchedule.description
+            };
+            schedules.push(schedule);
+            count++;
+        });
+    }
+    
+    // Update the UI
+    renderScheduleList();
+    
+    if (count > 0) {
+        showStatus(`Applied templates: added ${count} schedules`);
+    } else {
+        showStatus('No templates selected', true);
+    }
+});  
             // Validate time format (24h)
             scheduleTimeInput.addEventListener('input', validateScheduleTime);
             scheduleTimeInput.addEventListener('blur', validateScheduleTime);
             
             function validateScheduleTime() {
-                const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-                const isValid = timePattern.test(scheduleTimeInput.value);
-                
-                // Show/hide error message
-                timeError.classList.toggle('visible', !isValid);
-                scheduleTimeInput.classList.toggle('invalid', !isValid);
-                
-                return isValid;
-            }
-            
-            // Validate temperature based on selected unit
-            scheduleTemperatureInput.addEventListener('input', validateTemperature);
-            scheduleTemperatureInput.addEventListener('blur', validateTemperature);
-            unitSelect.addEventListener('change', updateTemperatureValidation);
-            
-            function validateTemperature() {
-                const temp = parseFloat(scheduleTemperatureInput.value);
-                const unit = unitSelect.value;
-                
-                let isValid = true;
-                let errorMsg = '';
-                
-                if (isNaN(temp)) {
-                    isValid = false;
-                    errorMsg = 'Please enter a valid number';
-                } else if (unit === 'C' && (temp < 13 || temp > 46)) {
-                    isValid = false;
-                    errorMsg = 'Temperature must be between 13-46°C';
-                } else if (unit === 'F' && (temp < 55 || temp > 115)) {
-                    isValid = false;
-                    errorMsg = 'Temperature must be between 55-115°F';
-                }
-                
-                // Show/hide error message
-                tempError.textContent = errorMsg;
-                tempError.classList.toggle('visible', !isValid);
-                scheduleTemperatureInput.classList.toggle('invalid', !isValid);
-                
-                return isValid;
-            }
-            
+    const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    const value = scheduleTimeInput.value.trim();
+    
+    if (!value) {
+        timeError.textContent = "Time is required";
+        timeError.classList.add('visible');
+        scheduleTimeInput.classList.add('invalid');
+        return false;
+    }
+    
+    const isValid = timePattern.test(value);
+    
+    // Show/hide error message
+    timeError.textContent = isValid ? "" : "Please enter a valid 24-hour time (HH:MM)";
+    timeError.classList.toggle('visible', !isValid);
+    scheduleTimeInput.classList.toggle('invalid', !isValid);
+    
+    return isValid;
+}
+
+function validateTemperature() {
+    const value = scheduleTemperatureInput.value.trim();
+    const temp = parseFloat(value);
+    const unit = unitSelect.value;
+    
+    if (!value) {
+        tempError.textContent = "Temperature is required";
+        tempError.classList.add('visible');
+        scheduleTemperatureInput.classList.add('invalid');
+        return false;
+    }
+    
+    let isValid = true;
+    let errorMsg = '';
+    
+    if (isNaN(temp)) {
+        isValid = false;
+        errorMsg = 'Please enter a valid number';
+    } else if (unit === 'C' && (temp < 13 || temp > 46)) {
+        isValid = false;
+        errorMsg = 'Temperature must be between 13-46°C';
+    } else if (unit === 'F' && (temp < 55 || temp > 115)) {
+        isValid = false;
+        errorMsg = 'Temperature must be between 55-115°F';
+    }
+    
+    // Show/hide error message
+    tempError.textContent = errorMsg;
+    tempError.classList.toggle('visible', !isValid);
+    scheduleTemperatureInput.classList.toggle('invalid', !isValid);
+    
+    return isValid;
+}
             function updateTemperatureValidation() {
                 const unit = unitSelect.value;
                 // Update min/max attributes based on unit
@@ -936,53 +986,68 @@ testConnectionBtn.addEventListener('click', async () => {
                 return (fahrenheit - 32) * 5/9;
             }
             
-            // Function to enter edit mode for a schedule
-            function editSchedule(index) {
-                // Set editing state
-                isEditing = true;
-                editingScheduleIndex = index;
-                
-                // Get the schedule to edit
-                const schedule = schedules[index];
-                
-                // Set form values
-                scheduleTypeSelect.value = schedule.type;
-                
-                // Show day select container if needed
-                if (schedule.type === 'Specific Day') {
-                    daySelectContainer.classList.remove('hidden');
-                    daySelect.value = schedule.day;
-                } else {
-                    daySelectContainer.classList.add('hidden');
-                }
-                
-                // Show warm hug info if needed
-                warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
-                
-                // Set time
-                scheduleTimeInput.value = schedule.time;
-                
-                // Handle temperature based on unit conversion if needed
-                const currentUnit = unitSelect.value;
-                let displayTemp = schedule.temperature;
-                
-                // If temperature is stored in Celsius but we're displaying Fahrenheit
-                if (schedule.unit === 'C' && currentUnit === 'F') {
-                    displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
-                } 
-                // If temperature is stored in Fahrenheit but we're displaying Celsius
-                else if (schedule.unit === 'F' && currentUnit === 'C') {
-                    displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
-                }
-                
-                scheduleTemperatureInput.value = displayTemp;
-                
-                // Change button text
-                addScheduleBtn.textContent = 'Update Schedule';
-                
-                // Show cancel button
-                cancelEditBtn.classList.remove('hidden');
-            }
+        // Function to enter edit mode for a schedule
+function editSchedule(index) {
+    // Validate index is within bounds
+    if (index < 0 || index >= schedules.length) {
+        console.error('Invalid schedule index:', index);
+        showStatus('Error: Could not edit schedule (invalid index)', true);
+        return;
+    }
+
+    // Set editing state
+    isEditing = true;
+    editingScheduleIndex = index;
+    
+    // Get the schedule to edit
+    const schedule = schedules[index];
+    
+    // Set form values
+    scheduleTypeSelect.value = schedule.type || 'Everyday';
+    
+    // Show day select container if needed
+    if (schedule.type === 'Specific Day') {
+        daySelectContainer.classList.remove('hidden');
+        daySelect.value = schedule.day || '0';
+    } else {
+        daySelectContainer.classList.add('hidden');
+    }
+    
+    // Show warm hug info if needed
+    warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
+    
+    // Set time with validation
+    scheduleTimeInput.value = schedule.time || '21:30';
+    validateScheduleTime();
+    
+    // Handle temperature based on unit conversion if needed
+    const currentUnit = unitSelect.value;
+    let displayTemp = schedule.temperature;
+    
+    try {
+        // If temperature is stored in Celsius but we're displaying Fahrenheit
+        if (schedule.unit === 'C' && currentUnit === 'F') {
+            displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+        } 
+        // If temperature is stored in Fahrenheit but we're displaying Celsius
+        else if (schedule.unit === 'F' && currentUnit === 'C') {
+            displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
+        }
+    } catch (error) {
+        console.error('Error converting temperature during edit:', error);
+        // Use original value if conversion fails
+    }
+    
+    // Set temperature with validation
+    scheduleTemperatureInput.value = displayTemp || 23;
+    validateTemperature();
+    
+    // Change button text
+    addScheduleBtn.textContent = 'Update Schedule';
+    
+    // Show cancel button
+    cancelEditBtn.classList.remove('hidden');
+}    
             
             // Function to exit edit mode
             function exitEditMode() {
@@ -1009,251 +1074,303 @@ testConnectionBtn.addEventListener('click', async () => {
             // Cancel edit button handler
             cancelEditBtn.addEventListener('click', exitEditMode);
             
-            // Improved render schedule list with enhanced ordering and grouping
-            function renderScheduleList() {
-                scheduleList.innerHTML = '';
-                
-                if (schedules.length === 0) {
-                    scheduleList.innerHTML = '<p>No schedules configured.</p>';
-                    return;
+          // Improved render schedule list with enhanced ordering and grouping
+function renderScheduleList() {
+    // Clear previous content
+    scheduleList.innerHTML = '';
+    
+    // Display message if no schedules exist
+    if (schedules.length === 0) {
+        scheduleList.innerHTML = '<p>No schedules configured.</p>';
+        return;
+    }
+    
+    // Group schedules by type for better organization
+    const groupedSchedules = {};
+    
+    // Populate groups
+    schedules.forEach(schedule => {
+        // Create group if it doesn't exist
+        if (!groupedSchedules[schedule.type]) {
+            groupedSchedules[schedule.type] = [];
+        }
+        groupedSchedules[schedule.type].push(schedule);
+    });
+    
+    // Define sleep cycle phases for better categorization
+    const phases = {
+        COOL_DOWN: { name: 'Cool Down', weight: 10, class: 'phase-cooldown' },
+        DEEP_SLEEP: { name: 'Deep Sleep', weight: 20, class: 'phase-deep' },
+        REM: { name: 'REM Support', weight: 30, class: 'phase-rem' },
+        WAKE_UP: { name: 'Wake-up', weight: 40, class: 'phase-wakeup' }
+    };
+    
+    // Helper function to determine schedule phase by description and temperature
+    function getSchedulePhase(schedule) {
+        // Default to Cool Down if no description or temperature
+        if (!schedule) return phases.COOL_DOWN;
+        
+        const desc = (schedule.description || '').toLowerCase();
+        const temp = schedule.temperature;
+        const unit = schedule.unit || 'C';
+        
+        // Normalize temperature to Celsius for consistent comparison
+        const tempC = unit === 'C' ? temp : convertFtoC(temp);
+        
+        // Determine phase based on description keywords and temperature
+        if (desc.includes('wake') || desc.includes('hug') || tempC > 30) {
+            return phases.WAKE_UP;
+        } else if (desc.includes('rem') || (tempC > 22 && tempC < 30)) {
+            return phases.REM;
+        } else if (desc.includes('deep') || tempC < 20) {
+            return phases.DEEP_SLEEP;
+        } else {
+            return phases.COOL_DOWN;
+        }
+    }
+    
+    // Extract hour from time string for sorting
+    function getTimeHour(timeStr) {
+        if (!timeStr || typeof timeStr !== 'string') return 0;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0], 10) || 0; // Return 0 if parsing fails
+    }
+    
+    // Time period classification functions
+    function isEveningTime(timeStr) {
+        const hour = getTimeHour(timeStr);
+        return hour >= 18 && hour <= 23;
+    }
+    
+    function isEarlyMorningTime(timeStr) {
+        const hour = getTimeHour(timeStr);
+        return hour >= 0 && hour < 6;
+    }
+    
+    function isMorningTime(timeStr) {
+        const hour = getTimeHour(timeStr);
+        return hour >= 6 && hour < 12;
+    }
+    
+    // Process each group of schedules
+    Object.keys(groupedSchedules).forEach(type => {
+        // Create a group container
+        const groupContainer = document.createElement('div');
+        groupContainer.className = 'schedule-group';
+        
+        // Add group title
+        const groupTitle = document.createElement('div');
+        groupTitle.className = 'schedule-group-title';
+        groupTitle.textContent = type;
+        groupContainer.appendChild(groupTitle);
+        
+        // Group schedules by logical time periods
+        const eveningSchedules = groupedSchedules[type].filter(s => isEveningTime(s.time));
+        const earlyMorningSchedules = groupedSchedules[type].filter(s => isEarlyMorningTime(s.time));
+        const morningSchedules = groupedSchedules[type].filter(s => isMorningTime(s.time));
+        const otherSchedules = groupedSchedules[type].filter(s => 
+            !isEveningTime(s.time) && !isEarlyMorningTime(s.time) && !isMorningTime(s.time));
+        
+        // Sort by time within each period
+        const sortByTime = (a, b) => (a.time || '').localeCompare(b.time || '');
+        eveningSchedules.sort(sortByTime);
+        earlyMorningSchedules.sort(sortByTime);
+        morningSchedules.sort(sortByTime);
+        otherSchedules.sort(sortByTime);
+        
+        // Combine in natural sleep cycle order: evening (bedtime), early morning (deep sleep/REM), morning (wake up)
+        const sortedSchedules = [
+            ...eveningSchedules,
+            ...earlyMorningSchedules,
+            ...morningSchedules,
+            ...otherSchedules
+        ];
+        
+        // Create elements for each schedule
+        sortedSchedules.forEach(schedule => {
+            const scheduleItem = document.createElement('div');
+            scheduleItem.className = 'schedule-item';
+            
+            // Determine the schedule phase for display formatting
+            const phase = getSchedulePhase(schedule);
+            
+            // Format display info
+            let displayInfo = '';
+            
+            // Add day name for specific day schedules
+            if (schedule.type === 'Specific Day') {
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const dayIndex = parseInt(schedule.day, 10);
+                if (dayIndex >= 0 && dayIndex < days.length) {
+                    displayInfo += `${days[dayIndex]} `;
                 }
-                
-                // Group schedules by type for better organization
-                const groupedSchedules = {};
-                
-                schedules.forEach(schedule => {
-                    if (!groupedSchedules[schedule.type]) {
-                        groupedSchedules[schedule.type] = [];
-                    }
-                    groupedSchedules[schedule.type].push(schedule);
-                });
-                
-                // Define sleep cycle phases for better categorization
-                const phases = {
-                    COOL_DOWN: { name: 'Cool Down', weight: 10, class: 'phase-cooldown' },
-                    DEEP_SLEEP: { name: 'Deep Sleep', weight: 20, class: 'phase-deep' },
-                    REM: { name: 'REM Support', weight: 30, class: 'phase-rem' },
-                    WAKE_UP: { name: 'Wake-up', weight: 40, class: 'phase-wakeup' }
-                };
-                
-                // Helper function to determine schedule phase by description and temperature
-                function getSchedulePhase(schedule) {
-                    const desc = (schedule.description || '').toLowerCase();
-                    const temp = schedule.temperature;
-                    const unit = schedule.unit || 'C';
-                    
-                    // Normalize temperature to Celsius for consistent comparison
-                    const tempC = unit === 'C' ? temp : convertFtoC(temp);
-                    
-                    if (desc.includes('wake') || desc.includes('hug') || tempC > 30) {
-                        return phases.WAKE_UP;
-                    } else if (desc.includes('rem') || (tempC > 22 && tempC < 30)) {
-                        return phases.REM;
-                    } else if (desc.includes('deep') || tempC < 20) {
-                        return phases.DEEP_SLEEP;
-                    } else {
-                        return phases.COOL_DOWN;
-                    }
-                }
-                
-                // Extract hour from time string for sorting
-                function getTimeHour(timeStr) {
-                    const parts = timeStr.split(':');
-                    return parseInt(parts[0], 10);
-                }
-                
-                // Determine if a time is in the evening (6 PM - midnight)
-                function isEveningTime(timeStr) {
-                    const hour = getTimeHour(timeStr);
-                    return hour >= 18 && hour <= 23;
-                }
-                
-                // Determine if a time is in the early morning (midnight - 6 AM)
-                function isEarlyMorningTime(timeStr) {
-                    const hour = getTimeHour(timeStr);
-                    return hour >= 0 && hour < 6;
-                }
-                
-                // Determine if a time is in the morning (6 AM - noon)
-                function isMorningTime(timeStr) {
-                    const hour = getTimeHour(timeStr);
-                    return hour >= 6 && hour < 12;
-                }
-                
-                // Sort schedules within each group by sleep cycle order
-                Object.keys(groupedSchedules).forEach(type => {
-                    // Create a group container
-                    const groupContainer = document.createElement('div');
-                    groupContainer.className = 'schedule-group';
-                    
-                    const groupTitle = document.createElement('div');
-                    groupTitle.className = 'schedule-group-title';
-                    groupTitle.textContent = type;
-                    groupContainer.appendChild(groupTitle);
-                    
-                    // Group schedules by logical time periods
-                    const eveningSchedules = groupedSchedules[type].filter(s => isEveningTime(s.time));
-                    const earlyMorningSchedules = groupedSchedules[type].filter(s => isEarlyMorningTime(s.time));
-                    const morningSchedules = groupedSchedules[type].filter(s => isMorningTime(s.time));
-                    const otherSchedules = groupedSchedules[type].filter(s => 
-                        !isEveningTime(s.time) && !isEarlyMorningTime(s.time) && !isMorningTime(s.time));
-                    
-                    // Sort by time within each period
-                    const sortByTime = (a, b) => a.time.localeCompare(b.time);
-                    eveningSchedules.sort(sortByTime);
-                    earlyMorningSchedules.sort(sortByTime);
-                    morningSchedules.sort(sortByTime);
-                    otherSchedules.sort(sortByTime);
-                    
-                    // Combine in natural sleep cycle order: evening (bedtime), early morning (deep sleep/REM), morning (wake up)
-                    const sortedSchedules = [
-                        ...eveningSchedules,
-                        ...earlyMorningSchedules,
-                        ...morningSchedules,
-                        ...otherSchedules
-                    ];
-                    
-                    sortedSchedules.forEach(schedule => {
-                        const scheduleItem = document.createElement('div');
-                        scheduleItem.className = 'schedule-item';
-                        
-                        // Determine the schedule phase for display formatting
-                        const phase = getSchedulePhase(schedule);
-                        
-                        // Format display info
-                        let displayInfo = '';
-                        
-                        if (schedule.type === 'Specific Day') {
-                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                            displayInfo += `${days[schedule.day]} `;
-                        }
-                        
-                        // Format temperature based on current selected unit
-                        let displayTemp = schedule.temperature;
-                        const currentUnit = unitSelect.value;
-                        
-                        // If temperature is stored in Celsius but we're displaying Fahrenheit
-                        if (schedule.unit === 'C' && currentUnit === 'F') {
-                            displayTemp = Math.round(convertCtoF(schedule.temperature) * 10) / 10;
-                        } 
-                        // If temperature is stored in Fahrenheit but we're displaying Celsius
-                        else if (schedule.unit === 'F' && currentUnit === 'C') {
-                            displayTemp = Math.round(convertFtoC(schedule.temperature) * 10) / 10;
-                        }
-                        
-                        displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
-                        
-                        // Add phase label if not explicitly in description
-                        const hasPhaseInDesc = schedule.description && 
-                            (schedule.description.toLowerCase().includes(phase.name.toLowerCase()) || 
-                             (phase.name === 'Wake-up' && schedule.description.toLowerCase().includes('hug')));
-                        
-                        // Create phase label
-                        const phaseLabel = document.createElement('span');
-                        phaseLabel.className = `schedule-phase ${phase.class}`;
-                        phaseLabel.textContent = hasPhaseInDesc ? 
-                            schedule.description : 
-                            (schedule.description || phase.name);
-                        
-                        // Store the global index for this schedule
-                        const globalIndex = schedules.indexOf(schedule);
-                        
-                        // Create schedule item elements
-                        const infoDiv = document.createElement('div');
-                        infoDiv.className = 'schedule-item-info';
-                        infoDiv.textContent = displayInfo + ' ';
-                        infoDiv.appendChild(phaseLabel);
-                        
-                        const actionsDiv = document.createElement('div');
-                        actionsDiv.className = 'schedule-item-actions';
-                        
-                        const editBtn = document.createElement('button');
-                        editBtn.className = 'edit';
-                        editBtn.textContent = 'Edit';
-                        editBtn.dataset.index = globalIndex;
-                        
-                        const removeBtn = document.createElement('button');
-                        removeBtn.className = 'danger';
-                        removeBtn.textContent = 'Remove';
-                        removeBtn.dataset.index = globalIndex;
-                        
-                        actionsDiv.appendChild(editBtn);
-                        actionsDiv.appendChild(removeBtn);
-                        
-                        scheduleItem.appendChild(infoDiv);
-                        scheduleItem.appendChild(actionsDiv);
-                        
-                        // Add event listeners
-                        editBtn.addEventListener('click', (event) => {
-                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                            editSchedule(idx);
-                        });
-                        
-                        removeBtn.addEventListener('click', (event) => {
-                            const idx = parseInt(event.target.getAttribute('data-index'), 10);
-                            schedules.splice(idx, 1);
-                            renderScheduleList();
-                        });
-                        
-                        groupContainer.appendChild(scheduleItem);
-                    });
-                    
-                    scheduleList.appendChild(groupContainer);
-                });
             }
             
-            // Add/Update schedule
-            addScheduleBtn.addEventListener('click', () => {
-                // Validate inputs first
-                const isTimeValid = validateScheduleTime();
-                const isTempValid = validateTemperature();
-                
-                if (!isTimeValid || !isTempValid) {
-                    showStatus('Please correct the errors in the schedule form', true);
-                    return;
+            // Format temperature based on current selected unit
+            let displayTemp = schedule.temperature;
+            const currentUnit = unitSelect.value;
+            
+            try {
+                // Handle unit conversion if needed
+                if (schedule.unit === 'C' && currentUnit === 'F') {
+                    displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+                } else if (schedule.unit === 'F' && currentUnit === 'C') {
+                    displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
                 }
                 
-                const type = scheduleTypeSelect.value;
-                const time = scheduleTimeInput.value;
-                const temperature = parseFloat(scheduleTemperatureInput.value);
-                const unit = unitSelect.value;
-                
-                // Create schedule object
-                const schedule = {
-                    type,
-                    time,
-                    temperature,
-                    unit
-                };
-                
-                // Add day for specific day schedules
-                if (type === 'Specific Day') {
-                    schedule.day = parseInt(document.getElementById('scheduleDay').value, 10);
+                // Ensure displayTemp is a valid number
+                if (isNaN(displayTemp)) {
+                    displayTemp = schedule.temperature || 0;
                 }
-                
-                if (isEditing) {
-                    // Update existing schedule
-                    schedules[editingScheduleIndex] = schedule;
-                    showStatus('Schedule updated');
-                    exitEditMode();
-                } else {
-                    // Add new schedule
-                    schedules.push(schedule);
-                    
-                    // Reset form fields to default values
-                    scheduleTimeInput.value = '21:30';
-                    scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
-                    
-                    showStatus('Schedule added');
+            } catch (error) {
+                console.error('Error converting temperature:', error);
+                displayTemp = schedule.temperature || 0;
+            }
+            
+            // Format the time and temperature display
+            displayInfo += `${schedule.time || '00:00'}: ${displayTemp}°${currentUnit}`;
+            
+            // Add phase label if not explicitly in description
+            const hasPhaseInDesc = schedule.description && 
+                (schedule.description.toLowerCase().includes(phase.name.toLowerCase()) || 
+                 (phase.name === 'Wake-up' && schedule.description.toLowerCase().includes('hug')));
+            
+            // Create phase label
+            const phaseLabel = document.createElement('span');
+            phaseLabel.className = `schedule-phase ${phase.class}`;
+            phaseLabel.textContent = hasPhaseInDesc ? 
+                schedule.description : 
+                (schedule.description || phase.name);
+            
+            // Store the global index for this schedule in the schedules array
+            const globalIndex = schedules.indexOf(schedule);
+            
+            // Create schedule item elements
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'schedule-item-info';
+            infoDiv.textContent = displayInfo + ' ';
+            infoDiv.appendChild(phaseLabel);
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'schedule-item-actions';
+            
+            // Create edit button
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit';
+            editBtn.textContent = 'Edit';
+            editBtn.dataset.index = String(globalIndex);
+            
+            // Create remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.dataset.index = String(globalIndex);
+            
+            // Add buttons to actions div
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(removeBtn);
+            
+            // Add elements to schedule item
+            scheduleItem.appendChild(infoDiv);
+            scheduleItem.appendChild(actionsDiv);
+            
+            // Add event listeners for buttons
+            editBtn.addEventListener('click', (event) => {
+                const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                if (!isNaN(idx) && idx >= 0 && idx < schedules.length) {
+                    editSchedule(idx);
                 }
-                
-                // Update UI
-                renderScheduleList();
             });
             
-            // Load initial configuration
-            await loadConfig();
+            removeBtn.addEventListener('click', (event) => {
+                const idx = parseInt(event.target.getAttribute('data-index'), 10);
+                if (!isNaN(idx) && idx >= 0 && idx < schedules.length) {
+                    // Confirm before removing
+                    if (confirm('Are you sure you want to remove this schedule?')) {
+                        schedules.splice(idx, 1);
+                        renderScheduleList();
+                    }
+                }
+            });
+            
+            // Add schedule item to group container
+            groupContainer.appendChild(scheduleItem);
         });
+        
+        // Add group container to schedule list
+        scheduleList.appendChild(groupContainer);
+    });
+}  // Add/Update schedule button handler
+addScheduleBtn.addEventListener('click', () => {
+    // Validate inputs first
+    const isTimeValid = validateScheduleTime();
+    const isTempValid = validateTemperature();
+    
+    if (!isTimeValid || !isTempValid) {
+        showStatus('Please correct the errors in the schedule form', true);
+        return;
+    }
+    
+    const type = scheduleTypeSelect.value;
+    const time = scheduleTimeInput.value;
+    const temperature = parseFloat(scheduleTemperatureInput.value);
+    const unit = unitSelect.value;
+    
+    // Validate required fields have values
+    if (!type || !time || isNaN(temperature)) {
+        showStatus('All schedule fields are required', true);
+        return;
+    }
+    
+    // Create schedule object
+    const schedule = {
+        type,
+        time,
+        temperature,
+        unit
+    };
+    
+    // Add day for specific day schedules
+    if (type === 'Specific Day') {
+        schedule.day = parseInt(document.getElementById('scheduleDay').value, 10);
+    }
+    
+    // Add description for warm hug
+    if (type === 'Warm Hug') {
+        schedule.description = 'Warm Hug Wake-up';
+    }
+    
+    try {
+        if (isEditing) {
+            // Validate editing index
+            if (editingScheduleIndex < 0 || editingScheduleIndex >= schedules.length) {
+                throw new Error('Invalid editing index');
+            }
+            
+            // Update existing schedule
+            schedules[editingScheduleIndex] = schedule;
+            showStatus('Schedule updated');
+            exitEditMode();
+        } else {
+            // Add new schedule
+            schedules.push(schedule);
+            
+            // Reset form fields to default values
+            scheduleTimeInput.value = '21:30';
+            scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
+            
+            showStatus('Schedule added');
+        }
+        
+        // Update UI
+        renderScheduleList();
+    } catch (error) {
+        console.error('Error saving schedule:', error);
+        showStatus('Error saving schedule: ' + error.message, true);
+    }
+});
+            
+         
     </script>
 </body>
 </html>

@@ -49,14 +49,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Retrieving plugin configuration');
       
-      // Use the built-in method to get plugin config
-      const config = await this.getPluginConfig();
+      // Get the plugin configuration using the built-in method
+      const pluginConfig = await this.readPluginConfig();
       
-      this.log(`Configuration retrieved: ${JSON.stringify(config)}`);
+      this.log(`Configuration retrieved: ${JSON.stringify(pluginConfig)}`);
       
       return {
         success: true,
-        config: config || {}
+        config: pluginConfig || {}
       };
     } catch (error) {
       this.log(`Error retrieving configuration: ${error.message}`, 'error');
@@ -93,20 +93,17 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
 
       // Validate schedules
-if (config.enableSchedules && !Array.isArray(config.schedules)) {
-  config.schedules = [];
-} else if (!config.enableSchedules) {
-  // Explicitly remove schedules when disabled
-  delete config.schedules;
-}
+      if (config.enableSchedules && !Array.isArray(config.schedules)) {
+        config.schedules = [];
+      } else if (!config.enableSchedules) {
+        // Explicitly remove schedules when disabled
+        delete config.schedules;
+      }
       
       // Use the built-in method to save plugin configuration
       await this.updatePluginConfig(config);
       
       this.log('Configuration saved successfully');
-      
-      // Emit a configuration updated event
-      this.emit('config-updated', config);
       
       return {
         success: true,
