@@ -1341,7 +1341,8 @@ testConnectionBtn.addEventListener('click', async () => {
  * @param {number} index - Index of the schedule to edit
  */
  function editSchedule(index) {
-  console.log("editSchedule called with index:", index);
+  // Show toast for debugging
+  showToast('info', 'Starting edit for schedule #' + (index + 1), 'Edit Process');
   
   // Validate index is within bounds
   if (index < 0 || index >= schedules.length) {
@@ -1355,7 +1356,6 @@ testConnectionBtn.addEventListener('click', async () => {
   
   // Get the schedule to edit
   const schedule = schedules[index];
-  console.log("Editing schedule:", schedule);
   
   // Set form values
   scheduleTypeSelect.value = schedule.type || 'Everyday';
@@ -1400,34 +1400,8 @@ testConnectionBtn.addEventListener('click', async () => {
   addScheduleBtn.scrollIntoView({ behavior: 'smooth' });
   
   // Show toast notification
-  showToast('info', 'Editing schedule', 'Schedule Edit');
+  showToast('info', 'Ready to edit schedule - make changes and click Update Schedule', 'Edit Schedule');
 }
-
-    
-    // Function to exit edit mode
-    function exitEditMode() {
-        isEditing = false;
-        editingScheduleIndex = -1;
-        
-        // Reset form
-        scheduleTypeSelect.value = 'Everyday';
-        daySelectContainer.classList.add('hidden');
-        warmHugInfo.classList.add('hidden');
-        scheduleTimeInput.value = '21:30';
-        
-        // Set default temperature based on current unit
-        const unit = unitSelect.value;
-        scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
-        
-        // Reset button text
-        addScheduleBtn.textContent = 'Add Schedule';
-        
-        // Hide cancel button
-        cancelEditBtn.classList.add('hidden');
-        
-        // Show toast notification
-        showToast('info', 'Cancelled editing', 'Edit Cancelled');
-    }
     
     // Cancel edit button handler
     cancelEditBtn.addEventListener('click', exitEditMode);
@@ -1450,7 +1424,10 @@ testConnectionBtn.addEventListener('click', async () => {
   const groupedSchedules = {};
   
   // Populate groups
-  schedules.forEach(schedule => {
+  schedules.forEach((schedule, index) => {
+    // Store original index for reference
+    schedule._originalIndex = index;
+    
     // Create group if it doesn't exist
     if (!groupedSchedules[schedule.type]) {
       groupedSchedules[schedule.type] = [];
@@ -1476,13 +1453,9 @@ testConnectionBtn.addEventListener('click', async () => {
     });
     
     // Create elements for each schedule
-    sortedSchedules.forEach((schedule, localIndex) => {
-      // Find the global index in the main schedules array
-      // This is crucial for edit/remove functionality
-      const globalIndex = schedules.findIndex(s => 
-        s.type === schedule.type && 
-        s.time === schedule.time && 
-        s.temperature === schedule.temperature);
+    sortedSchedules.forEach((schedule) => {
+      // Use the stored original index
+      const globalIndex = schedule._originalIndex;
       
       const scheduleItem = document.createElement('div');
       scheduleItem.className = 'schedule-item';
@@ -1554,43 +1527,23 @@ testConnectionBtn.addEventListener('click', async () => {
       scheduleItem.appendChild(infoDiv);
       scheduleItem.appendChild(actionsDiv);
       
-      // Add event listeners directly to the buttons
-      // This is critical for functionality
-      editBtn.addEventListener('click', function(event) {
-        // Prevent event bubbling
-        event.stopPropagation();
-        
-        // Get index directly from the button's data attribute
+      // Add event listeners directly to the buttons using inline functions
+      editBtn.onclick = function() {
         const idx = parseInt(this.getAttribute('data-index'), 10);
-        console.log("Edit button clicked for index:", idx);
-        
-        if (idx >= 0 && idx < schedules.length) {
-          editSchedule(idx);
-        } else {
-          console.error("Invalid schedule index:", idx);
-          showToast('error', 'Error editing schedule: Invalid index', 'Edit Error');
-        }
-      });
+        showToast('info', 'Editing schedule at position ' + (idx + 1), 'Edit');
+        editSchedule(idx);
+      };
       
-      removeBtn.addEventListener('click', function(event) {
-        // Prevent event bubbling
-        event.stopPropagation();
-        
-        // Get index directly from the button's data attribute
+      removeBtn.onclick = function() {
         const idx = parseInt(this.getAttribute('data-index'), 10);
-        console.log("Remove button clicked for index:", idx);
+        showToast('warning', 'Removing schedule at position ' + (idx + 1), 'Remove');
         
-        if (idx >= 0 && idx < schedules.length) {
-          if (confirm('Are you sure you want to remove this schedule?')) {
-            schedules.splice(idx, 1);
-            renderScheduleList();
-            showToast('success', 'Schedule removed successfully', 'Schedule Removed');
-          }
-        } else {
-          console.error("Invalid schedule index:", idx);
-          showToast('error', 'Error removing schedule: Invalid index', 'Remove Error');
+        if (confirm('Are you sure you want to remove this schedule?')) {
+          schedules.splice(idx, 1);
+          showToast('success', 'Schedule removed successfully', 'Schedule Removed');
+          renderScheduleList();
         }
-      });
+      };
       
       // Add schedule item to group container
       groupContainer.appendChild(scheduleItem);
