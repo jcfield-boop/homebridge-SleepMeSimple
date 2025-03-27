@@ -586,10 +586,19 @@ homebridge.addEventListener('event', async (data) => {
                 warmHugInfo.classList.toggle('hidden', scheduleType !== 'Warm Hug');
             });
             
-      // Toggle schedule section visibility with debug
+// Toggle schedule section visibility and reset schedules when disabled
 enableSchedulesCheckbox.addEventListener('change', () => {
     console.log('Enable schedules checkbox changed:', enableSchedulesCheckbox.checked);
+    
+    // Toggle visibility of schedules container
     schedulesContainer.classList.toggle('hidden', !enableSchedulesCheckbox.checked);
+    
+    // If schedules are being disabled, clear the schedules array
+    if (!enableSchedulesCheckbox.checked) {
+        // Clear schedules when disabled to ensure clean state
+        schedules = [];
+        renderScheduleList(); // Update UI to reflect empty schedules
+    }
 });
             
             // Update template descriptions when a template is selected
@@ -662,14 +671,19 @@ async function loadConfig() {
         document.getElementById('pollingInterval').value = config.pollingInterval || 90;
         document.getElementById('logLevel').value = config.logLevel || 'normal';
         
-        // Handle schedules
-        const enableSchedules = !!config.enableSchedules;
-        document.getElementById('enableSchedules').checked = enableSchedules;
-        schedulesContainer.classList.toggle('hidden', !enableSchedules);
-        
-        // Load schedules
-        schedules = Array.isArray(config.schedules) ? [...config.schedules] : [];
-        renderScheduleList();
+// Handle schedules
+const enableSchedules = !!config.enableSchedules;
+document.getElementById('enableSchedules').checked = enableSchedules;
+schedulesContainer.classList.toggle('hidden', !enableSchedules);
+
+// Load schedules only if enabled
+if (enableSchedules && Array.isArray(config.schedules)) {
+    schedules = [...config.schedules];
+} else {
+    // Clear schedules array if disabled or not present
+    schedules = [];
+}
+renderScheduleList();
         
         // Update temperature validation based on unit
         updateTemperatureValidation();
@@ -698,21 +712,24 @@ configForm.addEventListener('submit', async (event) => {
         const formData = new FormData(configForm);
         console.log('Form data collected, enable schedules:', formData.get('enableSchedules'));
         
-        // Build configuration object
-        const config = {
-            platform: "SleepMeSimple",
-            name: 'SleepMe Simple',
-            apiToken: formData.get('apiToken'),
-            unit: formData.get('unit'),
-            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
-            logLevel: formData.get('logLevel'),
-            enableSchedules: formData.get('enableSchedules') === 'on'
-        };
-        
-        // Add schedules if enabled
-        if (config.enableSchedules && schedules.length > 0) {
-            config.schedules = schedules;
-        }
+// Build configuration object
+const config = {
+    platform: "SleepMeSimple",
+    name: 'SleepMe Simple',
+    apiToken: formData.get('apiToken'),
+    unit: formData.get('unit'),
+    pollingInterval: parseInt(formData.get('pollingInterval'), 10),
+    logLevel: formData.get('logLevel'),
+    enableSchedules: formData.get('enableSchedules') === 'on'
+};
+
+// Add schedules if enabled, otherwise explicitly remove them
+if (config.enableSchedules && schedules.length > 0) {
+    config.schedules = schedules;
+} else {
+    // Explicitly remove schedules when disabled to ensure clean state
+    delete config.schedules; // This is cleaner than setting to [] for config.json
+}
         
         console.log('Saving config with token:', 
             config.apiToken ? config.apiToken.substring(0, 4) + '...' : 'none');
