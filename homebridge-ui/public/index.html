@@ -758,29 +758,28 @@ createLogsSection();
          * @param {string} message - Message to display
          * @param {string} title - Optional title for the toast
          */
-        function showToast(type, message, title = '') {
-            // Check if homebridge toast is available
-            if (typeof homebridge !== 'undefined' && homebridge.toast && typeof homebridge.toast[type] === 'function') {
-                homebridge.toast[type](message, title);
-            } else {
-                // Fallback to legacy status if toast not available
-                showStatusLegacy(message, type === 'error');
-            }
-        }
+         function showToast(type, message, title = '', confirmCallback = null) {
+    if (typeof homebridge !== 'undefined' && homebridge.toast && typeof homebridge.toast[type] === 'function') {
+        homebridge.toast[type](message, title);
         
-        /**
-         * Show a loading spinner and notification
-         * @param {string} message - Loading message
-         */
-        function showLoading(message = 'Loading...') {
-            if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
-                homebridge.showSpinner();
-                showToast('info', message, 'Loading');
-            } else {
-                // Fallback if spinner not available
-                showStatusLegacy(message, false);
+        if (confirmCallback) {
+            const confirmResult = window.confirm(message);
+            if (confirmResult) {
+                confirmCallback();
             }
         }
+        return;
+    }
+    
+    if (confirmCallback) {
+        const confirmResult = window.confirm(message);
+        if (confirmResult) {
+            confirmCallback();
+        }
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
         
         /**
          * Hide the loading spinner
@@ -1335,224 +1334,180 @@ testConnectionBtn.addEventListener('click', async () => {
     function convertFtoC(fahrenheit) {
         return (fahrenheit - 32) * 5/9;
     }
+    function editSchedule(index) {
+    if (index < 0 || index >= schedules.length) {
+        showToast('error', 'Invalid schedule index', 'Edit Error');
+        return;
+    }
 
-/**
- * Edit a schedule by its index
- * @param {number} index - Index of the schedule to edit
- */
- function editSchedule(index) {
-  // Show toast for debugging
-  showToast('info', 'Starting edit for schedule #' + (index + 1), 'Edit Process');
-  
-  // Validate index is within bounds
-  if (index < 0 || index >= schedules.length) {
-    showToast('error', 'Could not edit schedule (invalid index)', 'Edit Error');
-    return;
-  }
-
-  // Set editing state
-  isEditing = true;
-  editingScheduleIndex = index;
-  
-  // Get the schedule to edit
-  const schedule = schedules[index];
-  
-  // Set form values
-  scheduleTypeSelect.value = schedule.type || 'Everyday';
-  
-  // Handle specific day selection
-  if (schedule.type === 'Specific Day') {
-    daySelectContainer.classList.remove('hidden');
-    daySelect.value = schedule.day !== undefined ? schedule.day.toString() : '0';
-  } else {
-    daySelectContainer.classList.add('hidden');
-  }
-  
-  // Show warm hug info if needed
-  warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
-  
-  // Set time with validation
-  scheduleTimeInput.value = schedule.time || '21:30';
-  validateScheduleTime();
-  
-  // Handle temperature based on unit conversion if needed
-  const currentUnit = unitSelect.value;
-  let displayTemp = schedule.temperature;
-  
-  // Convert temperature if needed
-  if (schedule.unit === 'C' && currentUnit === 'F') {
-    displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
-  } else if (schedule.unit === 'F' && currentUnit === 'C') {
-    displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
-  }
-  
-  // Set temperature with validation
-  scheduleTemperatureInput.value = displayTemp.toString();
-  validateTemperature();
-  
-  // Change button text
-  addScheduleBtn.textContent = 'Update Schedule';
-  
-  // Show cancel button
-  cancelEditBtn.classList.remove('hidden');
-  
-  // Scroll to form
-  addScheduleBtn.scrollIntoView({ behavior: 'smooth' });
-  
-  // Show toast notification
-  showToast('info', 'Ready to edit schedule - make changes and click Update Schedule', 'Edit Schedule');
-}
+    const schedule = schedules[index];
     
+    if (!schedule) {
+        showToast('error', 'Schedule not found', 'Edit Error');
+        return;
+    }
+
+    isEditing = true;
+    editingScheduleIndex = index;
+    
+    scheduleTypeSelect.value = schedule.type || 'Everyday';
+    
+    if (schedule.type === 'Specific Day') {
+        daySelectContainer.classList.remove('hidden');
+        daySelect.value = schedule.day !== undefined ? schedule.day.toString() : '0';
+    } else {
+        daySelectContainer.classList.add('hidden');
+    }
+    
+    warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
+    
+    scheduleTimeInput.value = schedule.time || '21:30';
+    validateScheduleTime();
+    
+    const currentUnit = unitSelect.value;
+    let displayTemp = schedule.temperature;
+    
+    if (schedule.unit === 'C' && currentUnit === 'F') {
+        displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+    } else if (schedule.unit === 'F' && currentUnit === 'C') {
+        displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
+    }
+    
+    scheduleTemperatureInput.value = displayTemp.toString();
+    validateTemperature();
+    
+    addScheduleBtn.textContent = 'Update Schedule';
+    cancelEditBtn.classList.remove('hidden');
+    
+    addScheduleBtn.scrollIntoView({ behavior: 'smooth' });
+    
+    showToast('info', 'Ready to edit schedule', 'Edit Schedule');
+}
+function renderScheduleList() {
+    try {
+        scheduleList.innerHTML = '';
+        
+        if (schedules.length === 0) {
+            scheduleList.innerHTML = '<p>No schedules configured.</p>';
+            showToast('warning', 'No schedules found', 'Empty List');
+            return;
+        }
+        
+        const groupedSchedules = {};
+        
+        schedules.forEach((schedule, index) => {
+            if (!groupedSchedules[schedule.type]) {
+                groupedSchedules[schedule.type] = [];
+            }
+            groupedSchedules[schedule.type].push({...schedule, originalIndex: index});
+        });
+        
+        Object.keys(groupedSchedules).forEach(type => {
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'schedule-group';
+            
+            const groupTitle = document.createElement('div');
+            groupTitle.className = 'schedule-group-title';
+            groupTitle.textContent = type;
+            groupContainer.appendChild(groupTitle);
+            
+            groupedSchedules[type].forEach(schedule => {
+                const scheduleItem = document.createElement('div');
+                scheduleItem.className = 'schedule-item';
+                
+                let displayInfo = '';
+                if (schedule.type === 'Specific Day') {
+                    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const dayIndex = parseInt(schedule.day, 10);
+                    if (dayIndex >= 0 && dayIndex < days.length) {
+                        displayInfo += `${days[dayIndex]} `;
+                    }
+                }
+                
+                let displayTemp = schedule.temperature;
+                const currentUnit = unitSelect.value;
+                
+                try {
+                    if (schedule.unit === 'C' && currentUnit === 'F') {
+                        displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+                    } else if (schedule.unit === 'F' && currentUnit === 'C') {
+                        displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
+                    }
+                } catch (error) {
+                    showToast('error', 'Temperature conversion failed', 'Conversion Error');
+                }
+                
+                displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
+                
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'schedule-item-info';
+                infoDiv.textContent = displayInfo;
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'schedule-item-actions';
+                
+                const editBtn = document.createElement('button');
+                editBtn.className = 'edit';
+                editBtn.textContent = 'Edit';
+                editBtn.setAttribute('data-index', schedule.originalIndex);
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'danger';
+                removeBtn.textContent = 'Remove';
+                removeBtn.setAttribute('data-index', schedule.originalIndex);
+                
+                // Edit button handler
+                editBtn.addEventListener('click', () => {
+                    const index = parseInt(editBtn.getAttribute('data-index'), 10);
+                    
+                    if (!isNaN(index) && index >= 0 && index < schedules.length) {
+                        try {
+                            editSchedule(index);
+                        } catch (editError) {
+                            showToast('error', `Edit failed: ${editError.message}`, 'Edit Error');
+                        }
+                    } else {
+                        showToast('error', `Invalid schedule index: ${index}`, 'Edit Error');
+                    }
+                });
+                
+                // Remove button handler
+                removeBtn.addEventListener('click', () => {
+                    const index = parseInt(removeBtn.getAttribute('data-index'), 10);
+                    
+                    if (!isNaN(index) && index >= 0 && index < schedules.length) {
+                        showToast('warning', 'Confirm schedule removal', 'Remove Schedule', () => {
+                            try {
+                                schedules.splice(index, 1);
+                                renderScheduleList();
+                                showToast('success', 'Schedule removed successfully', 'Schedule Removed');
+                            } catch (removeError) {
+                                showToast('error', `Remove failed: ${removeError.message}`, 'Remove Error');
+                            }
+                        });
+                    } else {
+                        showToast('error', `Invalid schedule index: ${index}`, 'Remove Error');
+                    }
+                });
+                
+                actionsDiv.appendChild(editBtn);
+                actionsDiv.appendChild(removeBtn);
+                
+                scheduleItem.appendChild(infoDiv);
+                scheduleItem.appendChild(actionsDiv);
+                
+                groupContainer.appendChild(scheduleItem);
+            });
+            
+            scheduleList.appendChild(groupContainer);
+        });
+    } catch (error) {
+        showToast('error', `Rendering failed: ${error.message}`, 'Render Error');
+    }
+}
     // Cancel edit button handler
     cancelEditBtn.addEventListener('click', exitEditMode);
-      
-/**
- * Renders the schedule list in the UI
- * Groups schedules by type for better organization
- */
- function renderScheduleList() {
-  // Clear previous content
-  scheduleList.innerHTML = '';
-  
-  // Display message if no schedules exist
-  if (schedules.length === 0) {
-    scheduleList.innerHTML = '<p>No schedules configured.</p>';
-    return;
-  }
-  
-  // Group schedules by type
-  const groupedSchedules = {};
-  
-  // Populate groups
-  schedules.forEach((schedule, index) => {
-    // Store original index for reference
-    schedule._originalIndex = index;
-    
-    // Create group if it doesn't exist
-    if (!groupedSchedules[schedule.type]) {
-      groupedSchedules[schedule.type] = [];
-    }
-    groupedSchedules[schedule.type].push(schedule);
-  });
-  
-  // Process each group of schedules
-  Object.keys(groupedSchedules).forEach(type => {
-    // Create a group container
-    const groupContainer = document.createElement('div');
-    groupContainer.className = 'schedule-group';
-    
-    // Add group title
-    const groupTitle = document.createElement('div');
-    groupTitle.className = 'schedule-group-title';
-    groupTitle.textContent = type;
-    groupContainer.appendChild(groupTitle);
-    
-    // Sort schedules by time
-    const sortedSchedules = groupedSchedules[type].sort((a, b) => {
-      return a.time.localeCompare(b.time);
-    });
-    
-    // Create elements for each schedule
-    sortedSchedules.forEach((schedule) => {
-      // Use the stored original index
-      const globalIndex = schedule._originalIndex;
-      
-      const scheduleItem = document.createElement('div');
-      scheduleItem.className = 'schedule-item';
-      
-      // Format display info
-      let displayInfo = '';
-      
-      // Add day name for specific day schedules
-      if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayIndex = parseInt(schedule.day, 10);
-        if (dayIndex >= 0 && dayIndex < days.length) {
-          displayInfo += `${days[dayIndex]} `;
-        }
-      }
-      
-      // Format temperature based on current selected unit
-      let displayTemp = schedule.temperature;
-      const currentUnit = unitSelect.value;
-      
-      try {
-        // Handle unit conversion if needed
-        if (schedule.unit === 'C' && currentUnit === 'F') {
-          displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
-        } else if (schedule.unit === 'F' && currentUnit === 'C') {
-          displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
-        }
-      } catch (error) {
-        // Fallback to original temperature
-        displayTemp = schedule.temperature;
-      }
-      
-      // Format the time and temperature display
-      displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit} `;
-      
-      // If there's a description, add it after a space
-      if (schedule.description) {
-        displayInfo += schedule.description;
-      }
-      
-      // Create info div
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'schedule-item-info';
-      infoDiv.textContent = displayInfo;
-      
-      // Create actions div
-      const actionsDiv = document.createElement('div');
-      actionsDiv.className = 'schedule-item-actions';
-      
-      // Create edit button
-      const editBtn = document.createElement('button');
-      editBtn.className = 'edit';
-      editBtn.textContent = 'Edit';
-      // Store the index directly on the button for access in event handler
-      editBtn.setAttribute('data-index', globalIndex);
-      
-      // Create remove button
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'danger';
-      removeBtn.textContent = 'Remove';
-      // Store the index directly on the button for access in event handler
-      removeBtn.setAttribute('data-index', globalIndex);
-      
-      // Add buttons to actions div
-      actionsDiv.appendChild(editBtn);
-      actionsDiv.appendChild(removeBtn);
-      
-      // Add elements to schedule item
-      scheduleItem.appendChild(infoDiv);
-      scheduleItem.appendChild(actionsDiv);
-      
-      // Add event listeners directly to the buttons using inline functions
-      editBtn.onclick = function() {
-        const idx = parseInt(this.getAttribute('data-index'), 10);
-        showToast('info', 'Editing schedule at position ' + (idx + 1), 'Edit');
-        editSchedule(idx);
-      };
-      
-      removeBtn.onclick = function() {
-        const idx = parseInt(this.getAttribute('data-index'), 10);
-        showToast('warning', 'Removing schedule at position ' + (idx + 1), 'Remove');
-        
-        if (confirm('Are you sure you want to remove this schedule?')) {
-          schedules.splice(idx, 1);
-          showToast('success', 'Schedule removed successfully', 'Schedule Removed');
-          renderScheduleList();
-        }
-      };
-      
-      // Add schedule item to group container
-      groupContainer.appendChild(scheduleItem);
-    });
-    
-    // Add group container to schedule list
-    scheduleList.appendChild(groupContainer);
-  });
-}
+
         
         // Helper function to determine schedule phase by description and temperature
         function getSchedulePhase(schedule) {
