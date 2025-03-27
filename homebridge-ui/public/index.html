@@ -1703,7 +1703,7 @@ testConnectionBtn.addEventListener('click', async () => {
             showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
         }
     });
-    // Add a helper button to the form to view logs
+   // Add a helper button to the form to view logs
 const addDebugButton = () => {
     const configForm = document.getElementById('configForm');
     if (!configForm || document.getElementById('viewLogs')) return;
@@ -1717,12 +1717,27 @@ const addDebugButton = () => {
         viewLogsBtn.textContent = 'View Logs';
         viewLogsBtn.style.marginRight = '5px';
         
-        // Add event listener
+        // Add event listener with error handling
         viewLogsBtn.addEventListener('click', () => {
-            fetchServerLogs();
-            const logsContainer = document.getElementById('logsContainer');
-            if (logsContainer) {
-                logsContainer.scrollIntoView({ behavior: 'smooth' });
+            try {
+                // Show loading indicator while fetching logs
+                showToast('info', 'Fetching logs...', 'Logs');
+                
+                // Call fetchServerLogs with proper error handling
+                fetchServerLogs().catch(error => {
+                    showToast('error', `Error fetching logs: ${error.message}`, 'Logs Error');
+                });
+                
+                // Scroll to logs container
+                setTimeout(() => {
+                    const logsContainer = document.getElementById('logsContainer');
+                    if (logsContainer) {
+                        logsContainer.classList.remove('hidden');
+                        logsContainer.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }, 100);
+            } catch (error) {
+                showToast('error', `Error with logs button: ${error.message}`, 'UI Error');
             }
         });
         

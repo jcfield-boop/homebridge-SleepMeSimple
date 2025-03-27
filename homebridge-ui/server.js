@@ -1,13 +1,8 @@
 // homebridge-ui/server.js
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
-import axios from 'axios';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-
-// Get current file path (ESM replacement for __dirname)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
+const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 
 // API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
@@ -121,8 +116,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Getting plugin configuration');
       
-      // Get the path to config.json
-      const configPath = this.api.user.configPath();
+      // Get the path to config.json - FIXED: use homebridgeConfigPath instead of api.user.configPath
+      const configPath = this.homebridgeConfigPath;
       
       if (!configPath || !fs.existsSync(configPath)) {
         throw new Error(`Config file not found at path: ${configPath}`);
@@ -167,7 +162,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       };
     }
   }
-
   /**
    * Save the plugin configuration
    * @param {Object} payload - Configuration payload
@@ -208,8 +202,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('Polling interval must be between 60 and 300 seconds');
       }
       
-      // Get the path to config.json
-      const configPath = this.api.user.configPath();
+      // Get the path to config.json - FIXED: use homebridgeConfigPath instead of api.user.configPath
+      const configPath = this.homebridgeConfigPath;
       
       if (!configPath || !fs.existsSync(configPath)) {
         throw new Error(`Config file not found at path: ${configPath}`);
@@ -274,7 +268,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       };
     }
   }
-
   /**
    * Test the SleepMe API connection
    * @param {Object} payload - Connection test payload
@@ -397,7 +390,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const uiLogs = [...this.recentLogs];
       
       // Get the path to the Homebridge storage directory
-      const storagePath = this.api.user.storagePath();
+      const storagePath = this.homebridgeStoragePath;
       
       // Path to the log file
       const logPath = path.join(storagePath, 'logs', 'homebridge.log');
@@ -495,5 +488,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Export the server instance
-export default new SleepMeUiServer();
+// Create and export a new instance
+(() => {
+  return new SleepMeUiServer();
+})();
