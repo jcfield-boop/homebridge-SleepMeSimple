@@ -431,126 +431,113 @@
         </div>
     </div>
     <script>
-    // Wait for DOM to be fully loaded
-    document.addEventListener('DOMContentLoaded', async () => {
-        // Create a centralized error handler for better error tracking
-        window.onerror = function(message, source, lineno, colno, error) {
-            console.error(`UI Error: ${message} at ${source}:${lineno}:${colno}`, error);
-            showToast('error', 'An error occurred in the UI. See console for details.', 'UI Error');
-            return false;
-        };
-
-        // Track initialization state
-        let initialized = false;
-        
-        // Check if the homebridge object is available (required for communication)
-        if (typeof homebridge === 'undefined') {
-            console.error('Homebridge UI object not available!');
-            showStatusLegacy('Error: Homebridge UI framework not detected. Please reload the page.', true);
-            return;
-        }
-        
-        try {
-            // Add a timeout to detect initialization problems
-            const initTimeout = setTimeout(() => {
-                if (!initialized) {
-                    console.error('UI initialization timed out');
-                    showToast('error', 'UI initialization timeout. Try refreshing the page.', 'Initialization Error');
-                }
-            }, 15000); // 15 second timeout
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Create a centralized error handler for better error tracking
+            window.onerror = function(message, source, lineno, colno, error) {
+                showToast('error', 'An error occurred in the UI. Check browser console for details.', 'UI Error');
+                return false;
+            };
+    
+            // Track initialization state
+            let initialized = false;
             
-            // Listen for plugin events with proper error handling
-            homebridge.addEventListener('event', async (data) => {
-                try {
-                    console.log('Plugin event received:', data);
-                    if (data && data.event === 'config-updated') {
-                        console.log('Config updated event received');
-                        // Reload config on update event
-                        await loadConfig();
+            // Check if the homebridge object is available (required for communication)
+            if (typeof homebridge === 'undefined') {
+                showStatusLegacy('Error: Homebridge UI framework not detected. Please reload the page.', true);
+                return;
+            }
+            
+            try {
+                // Add a timeout to detect initialization problems
+                const initTimeout = setTimeout(() => {
+                    if (!initialized) {
+                        showToast('error', 'UI initialization timeout. Try refreshing the page.', 'Initialization Error');
                     }
-                } catch (error) {
-                    console.error('Error handling plugin event:', error);
-                    showToast('error', 'Error processing server event: ' + error.message, 'Event Error');
-                }
-            });
-            
-            console.log('SleepMe UI initialized');
-            
-            // Load initial configuration
-            await loadConfig();
-            
-            // Mark as initialized and clear timeout
-            initialized = true;
-            clearTimeout(initTimeout);
-            
-        } catch (error) {
-            console.error('Error initializing UI:', error);
-            showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
-        }
-    });
-    
-    /**
-     * Legacy status display function (fallback)
-     * @param {string} message - The message to display
-     * @param {boolean} isError - Whether this is an error message
-     */
-    function showStatusLegacy(message, isError = false) {
-        const statusElement = document.getElementById('status');
-        if (!statusElement) return;
+                }, 15000); // 15 second timeout
+                
+                // Listen for plugin events with proper error handling
+                homebridge.addEventListener('event', async (data) => {
+                    try {
+                        if (data && data.event === 'config-updated') {
+                            // Reload config on update event
+                            await loadConfig();
+                        }
+                    } catch (error) {
+                        showToast('error', 'Error processing server event: ' + error.message, 'Event Error');
+                    }
+                });
+                
+                // Load initial configuration
+                await loadConfig();
+                
+                // Mark as initialized and clear timeout
+                initialized = true;
+                clearTimeout(initTimeout);
+                
+            } catch (error) {
+                showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
+            }
+        });
         
-        statusElement.textContent = message;
-        statusElement.className = isError ? 'status error' : 'status success';
-        statusElement.classList.remove('hidden');
-        
-        // Auto-hide after delay
-        setTimeout(() => {
-            statusElement.classList.add('hidden');
-        }, 5000);
-    }
-    
-    /**
-     * Display a toast notification using Homebridge UI utilities
-     * @param {string} type - Type of toast: 'success', 'error', 'warning', 'info'
-     * @param {string} message - Message to display
-     * @param {string} title - Optional title for the toast
-     */
-    function showToast(type, message, title = '') {
-        // Log to console for debugging
-        console.log(`[${type.toUpperCase()}] ${title ? title + ': ' : ''}${message}`);
-        
-        // Check if homebridge toast is available
-        if (typeof homebridge !== 'undefined' && homebridge.toast && typeof homebridge.toast[type] === 'function') {
-            homebridge.toast[type](message, title);
-        } else {
-            // Fallback to legacy status if toast not available
-            showStatusLegacy(message, type === 'error');
-        }
-    }
-    
-    /**
-     * Show a loading spinner and notification
-     * @param {string} message - Loading message
-     */
-    function showLoading(message = 'Loading...') {
-        if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
-            homebridge.showSpinner();
-            showToast('info', message, 'Loading');
-        } else {
-            // Fallback if spinner not available
-            showStatusLegacy(message, false);
-        }
-    }
-    
-    /**
-     * Hide the loading spinner
-     */
-    function hideLoading() {
-        if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
-            homebridge.hideSpinner();
-        }
-    }
+        /**
+         * Legacy status display function (fallback)
+         * @param {string} message - The message to display
+         * @param {boolean} isError - Whether this is an error message
+         */
+        function showStatusLegacy(message, isError = false) {
+            const statusElement = document.getElementById('status');
+            if (!statusElement) return;
             
-    // Get references to form elements
+            statusElement.textContent = message;
+            statusElement.className = isError ? 'status error' : 'status success';
+            statusElement.classList.remove('hidden');
+            
+            // Auto-hide after delay
+            setTimeout(() => {
+                statusElement.classList.add('hidden');
+            }, 5000);
+        }
+        
+        /**
+         * Display a toast notification using Homebridge UI utilities
+         * @param {string} type - Type of toast: 'success', 'error', 'warning', 'info'
+         * @param {string} message - Message to display
+         * @param {string} title - Optional title for the toast
+         */
+        function showToast(type, message, title = '') {
+            // Check if homebridge toast is available
+            if (typeof homebridge !== 'undefined' && homebridge.toast && typeof homebridge.toast[type] === 'function') {
+                homebridge.toast[type](message, title);
+            } else {
+                // Fallback to legacy status if toast not available
+                showStatusLegacy(message, type === 'error');
+            }
+        }
+        
+        /**
+         * Show a loading spinner and notification
+         * @param {string} message - Loading message
+         */
+        function showLoading(message = 'Loading...') {
+            if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
+                homebridge.showSpinner();
+                showToast('info', message, 'Loading');
+            } else {
+                // Fallback if spinner not available
+                showStatusLegacy(message, false);
+            }
+        }
+        
+        /**
+         * Hide the loading spinner
+         */
+        function hideLoading() {
+            if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+                homebridge.hideSpinner();
+            }
+        }
+       // Get references to form elements
     const configForm = document.getElementById('configForm');
     const statusElement = document.getElementById('status');
     const testConnectionBtn = document.getElementById('testConnection');
@@ -668,8 +655,6 @@
     
     // Toggle schedule section visibility and reset schedules when disabled
     enableSchedulesCheckbox.addEventListener('change', () => {
-        console.log('Enable schedules checkbox changed:', enableSchedulesCheckbox.checked);
-        
         // Toggle visibility of schedules container
         schedulesContainer.classList.toggle('hidden', !enableSchedulesCheckbox.checked);
         
@@ -704,11 +689,8 @@
             weekendTemplateDesc.textContent = '';
         }
     });
-    
     async function loadConfig() {
         try {
-            console.log('Attempting to load configuration...');
-            
             // Show loading indicator
             showLoading('Loading configuration...');
             
@@ -724,20 +706,15 @@
                     )
                 ]);
                 
-                console.log('Config response:', response);
-                
                 if (response && response.success && response.config) {
                     config = response.config;
-                    console.log('Loaded config:', config);
                     
                     // Show success toast
                     showToast('success', 'Configuration loaded successfully', 'Configuration');
                 } else {
-                    console.warn('Could not load config from server:', response);
                     showToast('warning', 'Using default configuration (could not load saved values)', 'Configuration');
                 }
             } catch (loadError) {
-                console.error('Error loading config:', loadError);
                 showToast('error', 'Error loading configuration, using defaults', 'Configuration Error');
             }
             
@@ -761,11 +738,9 @@
             if (enableSchedules && Array.isArray(config.schedules)) {
                 // Create a fresh copy of schedules from the config
                 schedules = JSON.parse(JSON.stringify(config.schedules));
-                console.log('Loaded schedules from config:', schedules);
             } else {
                 // Clear schedules array if disabled or not present
                 schedules = [];
-                console.log('No schedules in config or schedules disabled');
             }
             
             // Render schedules in UI
@@ -775,7 +750,6 @@
             updateTemperatureValidation();
             
         } catch (error) {
-            console.error('Error in loadConfig:', error);
             showToast('error', 'Error loading configuration: ' + error.message, 'Configuration Error');
         } finally {
             // Always hide loading indicator
@@ -786,7 +760,6 @@
     // Handle form submission
     configForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-        console.log('Form submission started');
         
         // Validate required fields
         const apiToken = document.getElementById('apiToken').value.trim();
@@ -829,18 +802,13 @@
             if (config.enableSchedules && schedules.length > 0) {
                 // Create a deep copy of the schedules array to avoid reference issues
                 config.schedules = JSON.parse(JSON.stringify(schedules));
-                console.log('Including schedules in config:', config.schedules);
             } else if (config.enableSchedules) {
                 // If enabled but no schedules, include empty array
                 config.schedules = [];
-                console.log('Including empty schedules array in config');
             }
             // If schedules are disabled, don't include them in the config at all
-            
-            console.log('Final config object to save:', config);
-            
-            // Send to server with timeout protection
-            const response = await Promise.race([
+           // Send to server with timeout protection
+           const response = await Promise.race([
                 homebridge.request('/saveConfig', { 
                     method: 'POST',
                     body: { config: config } // Ensure config is wrapped in an object
@@ -850,19 +818,15 @@
                 )
             ]);
             
-            console.log('Save config response:', response);
-            
             if (response && response.success) {
                 showToast('success', 'Configuration saved successfully!', 'Save Complete');
             } else {
                 showToast('error', 'Failed to save configuration: ' + (response?.error || 'Unknown error'), 'Save Failed');
             }
         } catch (error) {
-            console.error('Form submission error:', error);
             showToast('error', 'Error during save: ' + error.message, 'Save Error');
         } finally {
             // Re-enable form elements
-            console.log('Re-enabling form elements');
             for (let i = 0; i < formElements.length; i++) {
                 formElements[i].disabled = false;
             }
@@ -887,7 +851,6 @@
         showLoading('Testing connection to SleepMe API...');
         
         try {
-            console.log('Sending test connection request...');
             const response = await Promise.race([
                 homebridge.request('/device/test', {
                     method: 'POST',
@@ -897,8 +860,6 @@
                     setTimeout(() => reject(new Error('Request timeout')), 15000)
                 )
             ]);
-            
-            console.log('Test connection response:', response);
             
             if (response && response.success) {
                 const deviceCount = response.devices || 0;
@@ -913,7 +874,6 @@
                 );
             }
         } catch (error) {
-            console.error('Test connection error:', error);
             showToast('error', `Connection test failed: ${error.message}`, 'Connection Error');
         } finally {
             // Restore button state
@@ -923,9 +883,8 @@
             hideLoading();
         }
     });
-    
-    // Apply templates
-    applyTemplatesBtn.addEventListener('click', () => {
+  // Apply templates
+  applyTemplatesBtn.addEventListener('click', () => {
         const weekdayKey = weekdayTemplateSelect.value;
         const weekendKey = weekendTemplateSelect.value;
         const currentUnit = unitSelect.value;
@@ -1085,12 +1044,10 @@
     function convertFtoC(fahrenheit) {
         return (fahrenheit - 32) * 5/9;
     }
-    
-    // Function to enter edit mode for a schedule
-    function editSchedule(index) {
+   // Function to enter edit mode for a schedule
+   function editSchedule(index) {
         // Validate index is within bounds
         if (index < 0 || index >= schedules.length) {
-            console.error('Invalid schedule index:', index);
             showToast('error', 'Could not edit schedule (invalid index)', 'Edit Error');
             return;
         }
@@ -1134,7 +1091,6 @@
                 displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
             }
         } catch (error) {
-            console.error('Error converting temperature during edit:', error);
             // Use original value if conversion fails
         }
         
@@ -1179,8 +1135,7 @@
     
     // Cancel edit button handler
     cancelEditBtn.addEventListener('click', exitEditMode);
-    
-    // Improved render schedule list with enhanced ordering and grouping
+       // Improved render schedule list with enhanced ordering and grouping
     function renderScheduleList() {
         // Clear previous content
         scheduleList.innerHTML = '';
@@ -1291,9 +1246,8 @@
                 ...morningSchedules,
                 ...otherSchedules
             ];
-            
-            // Create elements for each schedule
-            sortedSchedules.forEach(schedule => {
+           // Create elements for each schedule
+           sortedSchedules.forEach(schedule => {
                 const scheduleItem = document.createElement('div');
                 scheduleItem.className = 'schedule-item';
                 
@@ -1329,7 +1283,6 @@
                         displayTemp = schedule.temperature || 0;
                     }
                 } catch (error) {
-                    console.error('Error converting temperature:', error);
                     displayTemp = schedule.temperature || 0;
                 }
                 
@@ -1475,10 +1428,9 @@
             // Update UI
             renderScheduleList();
         } catch (error) {
-            console.error('Error saving schedule:', error);
             showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
         }
     });
     </script>
 </body>
-</html>
+</html> 
