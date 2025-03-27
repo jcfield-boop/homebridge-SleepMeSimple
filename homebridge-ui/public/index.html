@@ -1316,69 +1316,68 @@ testConnectionBtn.addEventListener('click', async () => {
     function convertFtoC(fahrenheit) {
         return (fahrenheit - 32) * 5/9;
     }
-   // Function to enter edit mode for a schedule
-   function editSchedule(index) {
-        // Validate index is within bounds
-        if (index < 0 || index >= schedules.length) {
-            showToast('error', 'Could not edit schedule (invalid index)', 'Edit Error');
-            return;
-        }
+    function editSchedule(index) {
+    // Validate index is within bounds
+    if (index < 0 || index >= schedules.length) {
+        showToast('error', 'Could not edit schedule (invalid index)', 'Edit Error');
+        return;
+    }
+
+    // Set editing state
+    isEditing = true;
+    editingScheduleIndex = index;
     
-        // Set editing state
-        isEditing = true;
-        editingScheduleIndex = index;
-        
-        // Get the schedule to edit
-        const schedule = schedules[index];
-        
-        // Set form values
-        scheduleTypeSelect.value = schedule.type || 'Everyday';
-        
-        // Show day select container if needed
-        if (schedule.type === 'Specific Day') {
-            daySelectContainer.classList.remove('hidden');
-            daySelect.value = schedule.day || '0';
-        } else {
-            daySelectContainer.classList.add('hidden');
+    // Get the schedule to edit
+    const schedule = schedules[index];
+    
+    // Set form values
+    scheduleTypeSelect.value = schedule.type || 'Everyday';
+    
+    // Show day select container if needed
+    if (schedule.type === 'Specific Day') {
+        daySelectContainer.classList.remove('hidden');
+        daySelect.value = schedule.day || '0';
+    } else {
+        daySelectContainer.classList.add('hidden');
+    }
+    
+    // Show warm hug info if needed
+    warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
+    
+    // Set time with validation
+    scheduleTimeInput.value = schedule.time || '21:30';
+    validateScheduleTime();
+    
+    // Handle temperature based on unit conversion if needed
+    const currentUnit = unitSelect.value;
+    let displayTemp = schedule.temperature;
+    
+    try {
+        // If temperature is stored in Celsius but we're displaying Fahrenheit
+        if (schedule.unit === 'C' && currentUnit === 'F') {
+            displayTemp = Math.round((displayTemp * 9/5) + 32);
+        } 
+        // If temperature is stored in Fahrenheit but we're displaying Celsius
+        else if (schedule.unit === 'F' && currentUnit === 'C') {
+            displayTemp = Math.round((displayTemp - 32) * 5/9);
         }
-        
-        // Show warm hug info if needed
-        warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
-        
-        // Set time with validation
-        scheduleTimeInput.value = schedule.time || '21:30';
-        validateScheduleTime();
-        
-        // Handle temperature based on unit conversion if needed
-        const currentUnit = unitSelect.value;
-        let displayTemp = schedule.temperature;
-        
-        try {
-            // If temperature is stored in Celsius but we're displaying Fahrenheit
-            if (schedule.unit === 'C' && currentUnit === 'F') {
-                displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
-            } 
-            // If temperature is stored in Fahrenheit but we're displaying Celsius
-            else if (schedule.unit === 'F' && currentUnit === 'C') {
-                displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
-            }
-        } catch (error) {
-            // Use original value if conversion fails
-        }
-        
-        // Set temperature with validation
-        scheduleTemperatureInput.value = displayTemp || 23;
-        validateTemperature();
-        
-        // Change button text
-        addScheduleBtn.textContent = 'Update Schedule';
-        
-        // Show cancel button
-        cancelEditBtn.classList.remove('hidden');
-        
-        // Show toast notification
-        showToast('info', 'Editing schedule', 'Schedule Edit');
-    }    
+    } catch (error) {
+        // Use original value if conversion fails
+    }
+    
+    // Set temperature with validation
+    scheduleTemperatureInput.value = displayTemp || 23;
+    validateTemperature();
+    
+    // Change button text
+    addScheduleBtn.textContent = 'Update Schedule';
+    
+    // Show cancel button
+    cancelEditBtn.classList.remove('hidden');
+    
+    // Show toast notification
+    showToast('info', 'Editing schedule', 'Schedule Edit');
+}
     
     // Function to exit edit mode
     function exitEditMode() {
@@ -1407,36 +1406,143 @@ testConnectionBtn.addEventListener('click', async () => {
     
     // Cancel edit button handler
     cancelEditBtn.addEventListener('click', exitEditMode);
-       // Improved render schedule list with enhanced ordering and grouping
+      
+    
     function renderScheduleList() {
-        // Clear previous content
-        scheduleList.innerHTML = '';
-        
-        // Display message if no schedules exist
-        if (schedules.length === 0) {
-            scheduleList.innerHTML = '<p>No schedules configured.</p>';
-            return;
+    // Clear previous content
+    scheduleList.innerHTML = '';
+    
+    // Display message if no schedules exist
+    if (schedules.length === 0) {
+        scheduleList.innerHTML = '<p>No schedules configured.</p>';
+        return;
+    }
+    
+    // Group schedules by type for better organization
+    const groupedSchedules = {};
+    
+    // Populate groups
+    schedules.forEach(schedule => {
+        // Create group if it doesn't exist
+        if (!groupedSchedules[schedule.type]) {
+            groupedSchedules[schedule.type] = [];
         }
+        groupedSchedules[schedule.type].push(schedule);
+    });
+    
+    // Process each group of schedules
+    Object.keys(groupedSchedules).forEach(type => {
+        // Create a group container
+        const groupContainer = document.createElement('div');
+        groupContainer.className = 'schedule-group';
         
-        // Group schedules by type for better organization
-        const groupedSchedules = {};
+        // Add group title
+        const groupTitle = document.createElement('div');
+        groupTitle.className = 'schedule-group-title';
+        groupTitle.textContent = type;
+        groupContainer.appendChild(groupTitle);
         
-        // Populate groups
-        schedules.forEach(schedule => {
-            // Create group if it doesn't exist
-            if (!groupedSchedules[schedule.type]) {
-                groupedSchedules[schedule.type] = [];
-            }
-            groupedSchedules[schedule.type].push(schedule);
+        // Sort schedules within the group
+        const sortedSchedules = groupedSchedules[type].sort((a, b) => {
+            return a.time.localeCompare(b.time);
         });
         
-        // Define sleep cycle phases for better categorization
-        const phases = {
-            COOL_DOWN: { name: 'Cool Down', weight: 10, class: 'phase-cooldown' },
-            DEEP_SLEEP: { name: 'Deep Sleep', weight: 20, class: 'phase-deep' },
-            REM: { name: 'REM Support', weight: 30, class: 'phase-rem' },
-            WAKE_UP: { name: 'Wake-up', weight: 40, class: 'phase-wakeup' }
-        };
+        // Create elements for each schedule
+        sortedSchedules.forEach((schedule, index) => {
+            const scheduleItem = document.createElement('div');
+            scheduleItem.className = 'schedule-item';
+            
+            // Format display info
+            let displayInfo = '';
+            
+            // Add day name for specific day schedules
+            if (schedule.type === 'Specific Day') {
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const dayIndex = parseInt(schedule.day, 10);
+                if (dayIndex >= 0 && dayIndex < days.length) {
+                    displayInfo += `${days[dayIndex]} `;
+                }
+            }
+            
+            // Format temperature based on current selected unit
+            let displayTemp = schedule.temperature;
+            const currentUnit = unitSelect.value;
+            
+            try {
+                // Handle unit conversion if needed
+                if (schedule.unit === 'C' && currentUnit === 'F') {
+                    displayTemp = Math.round((displayTemp * 9/5) + 32);
+                } else if (schedule.unit === 'F' && currentUnit === 'C') {
+                    displayTemp = Math.round((displayTemp - 32) * 5/9);
+                }
+            } catch (error) {
+                // Fallback to original temperature
+                displayTemp = schedule.temperature;
+            }
+            
+            // Format the time and temperature display
+            displayInfo += `${schedule.time}: ${displayTemp}°${currentUnit}`;
+            
+            // Create schedule item elements
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'schedule-item-info';
+            infoDiv.textContent = displayInfo;
+            
+            // Add description or phase label if available
+            if (schedule.description) {
+                const descSpan = document.createElement('span');
+                descSpan.className = 'schedule-description';
+                descSpan.textContent = schedule.description;
+                infoDiv.appendChild(descSpan);
+            }
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'schedule-item-actions';
+            
+            // Create edit button
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', () => {
+                // Find the index of the schedule to edit
+                const indexToEdit = schedules.findIndex(s => s.id === schedule.id);
+                if (indexToEdit !== -1) {
+                    editSchedule(indexToEdit);
+                }
+            });
+            
+            // Create remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to remove this schedule?')) {
+                    // Find and remove the schedule by its ID
+                    const indexToRemove = schedules.findIndex(s => s.id === schedule.id);
+                    if (indexToRemove !== -1) {
+                        schedules.splice(indexToRemove, 1);
+                        renderScheduleList();
+                        showToast('success', 'Schedule removed successfully', 'Schedule Removed');
+                    }
+                }
+            });
+            
+            // Add buttons to actions div
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(removeBtn);
+            
+            // Assemble schedule item
+            scheduleItem.appendChild(infoDiv);
+            scheduleItem.appendChild(actionsDiv);
+            
+            // Add to group container
+            groupContainer.appendChild(scheduleItem);
+        });
+        
+        // Add group container to schedule list
+        scheduleList.appendChild(groupContainer);
+    });
+}
         
         // Helper function to determine schedule phase by description and temperature
         function getSchedulePhase(schedule) {
@@ -1633,7 +1739,7 @@ testConnectionBtn.addEventListener('click', async () => {
             // Add group container to schedule list
             scheduleList.appendChild(groupContainer);
         });
-    }
+    
     
     // Add/Update schedule button handler
     addScheduleBtn.addEventListener('click', () => {
@@ -1659,6 +1765,7 @@ testConnectionBtn.addEventListener('click', async () => {
         
         // Create schedule object
         const schedule = {
+            id: Date.now().toString(), // Unique identifier
             type,
             time,
             temperature,
