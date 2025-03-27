@@ -1,10 +1,8 @@
 // homebridge-ui/server.js
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { promises as fsPromises } from 'fs';
 
 // Get current file path (ESM replacement for __dirname)
 const __filename = fileURLToPath(import.meta.url);
@@ -30,46 +28,42 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Signal that server is ready
       this.ready();
     } catch (err) {
-      console.error('ERROR INITIALIZING SLEEPME UI SERVER:', err);
+      // Just make sure we call ready even on error
       try {
         this.ready();
       } catch (readyError) {
-        console.error('Failed to signal server ready:', readyError);
+        // Cannot do much if ready fails
       }
     }
   }
 
   /**
    * Get the current plugin configuration
+   * Instead of directly accessing config.json, we'll use the plugin's config storage
    * @returns {Promise<Object>} Configuration object with success status and config data
    */
   async getConfig() {
     try {
-      // Try to get the config.json path
-      const configPath = this.homebridgeConfigPath();
-      
-      if (!configPath) {
-        return {
-          success: false,
-          error: 'Could not determine config.json path'
-        };
-      }
-      
-      // Read and parse the config.json file
-      const configFile = await fsPromises.readFile(configPath, 'utf8');
-      const config = JSON.parse(configFile);
+      // Retrieve the plugin config directly
+      // The UI utils take care of reading from Homebridge's config.json
+      const pluginConfig = await this.getPluginConfig();
       
       // Extract our platform configuration
+      // For platform plugins, config is an array of platform configs
+      // Find the config with platform = 'SleepMeSimple'
       let platformConfig = {};
       
-      if (config && typeof config === 'object' && Array.isArray(config.platforms)) {
-        // Find our platform in the platforms array
-        const platform = config.platforms.find(p => 
+      if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
+        // Find our platform in the plugins array
+        const platform = pluginConfig.find(p => 
           p && p.platform === 'SleepMeSimple'
         );
         
         if (platform) {
           platformConfig = platform;
+        } else if (pluginConfig[0]) {
+          // If no platform config found but there is at least one config, use the first one
+          platformConfig = pluginConfig[0];
         }
       }
       
@@ -80,13 +74,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     } catch (error) {
       return {
         success: false,
-        error: `Failed to retrieve configuration: ${error.message}`
+        error: `Failed to retrieve configuration: ${error.message || 'Unknown error'}`
       };
     }
   }
 
   /**
-   * Save the plugin configuration - Fixed for web environment
+   * Save the plugin configuration
+   * Instead of directly modifying config.json, we'll use the plugin's config storage
    * @param {Object} payload - Configuration payload
    * @returns {Promise<Object>} Save result
    */
@@ -117,36 +112,33 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('API token is required');
       }
 
-      // Get the config path from Homebridge
-      const configPath = this.homebridgeConfigPath();
-      if (!configPath) {
-        throw new Error('Could not determine config.json path');
-      }
+      // Get the current plugin config
+      const pluginConfig = await this.getPluginConfig();
       
-      // Read the existing config file
-      const configFileContent = await fsPromises.readFile(configPath, 'utf8');
-      const fullConfig = JSON.parse(configFileContent);
+      // Determine how to update the config based on existing configs
+      let updatedConfig = [];
       
-      // Make sure platforms array exists
-      if (!Array.isArray(fullConfig.platforms)) {
-        fullConfig.platforms = [];
-      }
-      
-      // Find existing platform config or add new one
-      const platformIndex = fullConfig.platforms.findIndex(p => 
-        p && p.platform === 'SleepMeSimple'
-      );
-      
-      if (platformIndex >= 0) {
-        // Update existing platform config
-        fullConfig.platforms[platformIndex] = config;
+      if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
+        // Find if our platform config already exists
+        const platformIndex = pluginConfig.findIndex(p => 
+          p && p.platform === 'SleepMeSimple'
+        );
+        
+        if (platformIndex >= 0) {
+          // Update existing platform config
+          updatedConfig = [...pluginConfig];
+          updatedConfig[platformIndex] = config;
+        } else {
+          // Add new platform config
+          updatedConfig = [...pluginConfig, config];
+        }
       } else {
-        // Add new platform config
-        fullConfig.platforms.push(config);
+        // No existing config, create new array with just our config
+        updatedConfig = [config];
       }
       
-      // Write the updated config back to the file
-      await fsPromises.writeFile(configPath, JSON.stringify(fullConfig, null, 4), 'utf8');
+      // Save the updated config
+      await this.updatePluginConfig(updatedConfig);
       
       // Notify UI of update
       this.pushEvent('config-updated', { timestamp: Date.now() });
@@ -158,13 +150,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     } catch (error) {
       return {
         success: false,
-        error: `Failed to save configuration: ${error.message}`
+        error: `Failed to save configuration: ${error.message || 'Unknown error'}`
       };
     }
   }
 
   /**
-   * Test the SleepMe API connection - Fixed for web environment
+   * Test the SleepMe API connection
    * @param {Object} payload - Connection test payload
    * @returns {Promise<Object>} Connection test result
    */
