@@ -431,7 +431,7 @@
         </div>
     </div>
     <script>
-        // Wait for DOM to be fully loaded
+    // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', async () => {
     // Create a centralized error handler for better error tracking
     window.onerror = function(message, source, lineno, colno, error) {
@@ -439,20 +439,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         showStatus('An error occurred in the UI. See console for details.', true);
         return false;
     };
+
+    // Track initialization state
+    let initialized = false;
     
-    // Properly set up communication with the Homebridge plugin
+    // Check if the homebridge object is available (required for communication)
+    if (typeof homebridge === 'undefined') {
+        console.error('Homebridge UI object not available!');
+        showStatus('Error: Homebridge UI framework not detected. Please reload the page.', true, false);
+        return;
+    }
+    
     try {
+        // Add a timeout to detect initialization problems
+        const initTimeout = setTimeout(() => {
+            if (!initialized) {
+                console.error('UI initialization timed out');
+                showStatus('UI initialization timeout. Try refreshing the page.', true, false);
+            }
+        }, 15000); // 15 second timeout
+        
         // Listen for plugin events with proper error handling
         homebridge.addEventListener('event', async (data) => {
             try {
                 console.log('Plugin event received:', data);
-                if (data && data.event === 'config-updated' && data.data) {
+                if (data && data.event === 'config-updated') {
                     console.log('Config updated event received');
-                    // Reload config if needed
+                    // Reload config on update event
                     await loadConfig();
                 }
             } catch (error) {
                 console.error('Error handling plugin event:', error);
+                showStatus('Error processing server event: ' + error.message, true);
             }
         });
         
@@ -460,13 +478,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Load initial configuration
         await loadConfig();
+        
+        // Mark as initialized and clear timeout
+        initialized = true;
+        clearTimeout(initTimeout);
+        
     } catch (error) {
         console.error('Error initializing UI:', error);
         showStatus('Error initializing UI: ' + error.message, true, false);
     }
 });
             
-            console.log('SleepMe UI initialized');
             
             // Get references to form elements
             const configForm = document.getElementById('configForm');
@@ -634,22 +656,28 @@ enableSchedulesCheckbox.addEventListener('change', () => {
                 }
             });
             
-// Load current configuration
-async function loadConfig() {
+            async function loadConfig() {
     try {
         console.log('Attempting to load configuration...');
         
         // Show loading indicator
+        const statusElement = document.getElementById('status');
         statusElement.textContent = 'Loading configuration...';
         statusElement.className = 'status';
         statusElement.classList.remove('hidden');
         
-        // Get configuration from Homebridge
+        // Get configuration from Homebridge with timeout protection
         let config = {};
         
         try {
-            // Make request to server to get config
-            const response = await homebridge.request('/config');
+            // Make request to server with timeout
+            const response = await Promise.race([
+                homebridge.request('/config'),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout')), 10000)
+                )
+            ]);
+            
             console.log('Config response:', response);
             
             if (response && response.success && response.config) {
@@ -661,7 +689,7 @@ async function loadConfig() {
             } else {
                 console.warn('Could not load config from server:', response);
                 statusElement.textContent = 'Using default configuration (could not load saved values)';
-                statusElement.className = 'status error';
+                statusElement.className = 'status warning';
                 // Still hide after a delay
                 setTimeout(() => {
                     statusElement.classList.add('hidden');
@@ -686,7 +714,10 @@ async function loadConfig() {
         // Handle schedules
         const enableSchedules = !!config.enableSchedules;
         document.getElementById('enableSchedules').checked = enableSchedules;
-        schedulesContainer.classList.toggle('hidden', !enableSchedules);
+        const schedulesContainer = document.getElementById('schedulesContainer');
+        if (schedulesContainer) {
+            schedulesContainer.classList.toggle('hidden', !enableSchedules);
+        }
 
         // Load schedules only if enabled
         if (enableSchedules && Array.isArray(config.schedules)) {
@@ -695,15 +726,20 @@ async function loadConfig() {
             // Clear schedules array if disabled or not present
             schedules = [];
         }
-        renderScheduleList();
         
-        // Update temperature validation based on unit
-        updateTemperatureValidation();
+        // Call renderScheduleList only if the function exists
+        if (typeof renderScheduleList === 'function') {
+            renderScheduleList();
+        }
+        
+        // Call updateTemperatureValidation only if the function exists
+        if (typeof updateTemperatureValidation === 'function') {
+            updateTemperatureValidation();
+        }
         
     } catch (error) {
         console.error('Error in loadConfig:', error);
-        statusElement.textContent = 'Error loading configuration';
-        statusElement.className = 'status error';
+        showStatus('Error loading configuration', true);
     }
 }
 // Handle form submission

@@ -1,12 +1,21 @@
 // homebridge-ui/server.js
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get current file path (ESM replacement for __dirname)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Fallback API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
+/**
+ * SleepMe UI Server class
+ * Handles server-side operations for the plugin's custom UI
+ */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
@@ -15,15 +24,25 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Check if required assets exist
       this.checkRequiredAssets();
       
-      // Register request handlers with more comprehensive error handling
+      // Register request handlers with improved error handling
       this.onRequest('/config', this.getConfig.bind(this));
       this.onRequest('/saveConfig', this.saveConfig.bind(this));
       this.onRequest('/device/test', this.testDeviceConnection.bind(this));
       
       this.log('SleepMe UI Server initialized');
+      
+      // Signal that server is ready - CRITICAL for UI loading
       this.ready();
     } catch (err) {
-      console.error('ERROR INITIALIZING SERVER:', err);
+      // Better error logging
+      console.error('ERROR INITIALIZING SLEEPME UI SERVER:', err);
+      
+      // Still attempt to signal ready to avoid hanging UI
+      try {
+        this.ready();
+      } catch (readyError) {
+        console.error('Failed to signal server ready:', readyError);
+      }
     }
   }
 
@@ -31,16 +50,25 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    * Check if required UI assets exist
    */
   checkRequiredAssets() {
-    const iconPath = path.resolve(__dirname, 'public/icons/sleepmebasic.png');
+    // Use path.join for cross-platform compatibility
+    const iconPath = path.join(__dirname, 'public', 'icons', 'sleepmebasic.png');
     
     try {
+      // Check if icon exists and log appropriately
       if (fs.existsSync(iconPath)) {
-        this.log('Icon found at: ' + iconPath);
+        this.log(`Icon found at: ${iconPath}`);
       } else {
-        this.log('WARNING: Icon missing at: ' + iconPath, 'warn');
+        this.log(`WARNING: Icon missing at: ${iconPath}`, 'warn');
+        
+        // Try to create the directory structure if it doesn't exist
+        const iconDir = path.dirname(iconPath);
+        if (!fs.existsSync(iconDir)) {
+          fs.mkdirSync(iconDir, { recursive: true });
+          this.log(`Created icons directory: ${iconDir}`);
+        }
       }
     } catch (err) {
-      this.log('Error checking for UI assets: ' + err.message, 'error');
+      this.log(`Error checking for UI assets: ${err.message}`, 'error');
     }
   }
 
@@ -129,6 +157,9 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       this.log('Configuration saved successfully');
       
+      // Push event to UI to notify of config change
+      this.pushEvent('config-updated', { timestamp: Date.now() });
+      
       return {
         success: true,
         message: 'Configuration saved successfully'
@@ -195,4 +226,4 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 }
 
 // Export the server instance
-module.exports = new SleepMeUiServer();
+export default new SleepMeUiServer();

@@ -28,7 +28,8 @@
     "lint": "eslint ./src --ext .ts",
     "clean": "rimraf ./dist/",
     "prepublishOnly": "npm run clean && npm run build",
-    "check-publish": "node scripts/pre-publish-check.js"
+    "check-publish": "node scripts/pre-publish-check.js",
+    "postinstall": "node -e \"try { require('fs').mkdirSync('./homebridge-ui/public/icons', { recursive: true }); } catch (e) {}\""
   },
   "dependencies": {
     "@homebridge/plugin-ui-utils": "^2.0.1",
