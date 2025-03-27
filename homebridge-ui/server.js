@@ -1,8 +1,8 @@
-// homebridge-ui/server.js - Fixed version
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
-const axios = require('axios');
-const path = require('path');
-const fs = require('fs');
+// homebridge-ui/server.js
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
+import axios from 'axios';
+import path from 'path';
+import fs from 'fs';
 
 // API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
