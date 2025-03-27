@@ -513,13 +513,25 @@ const createLogsSection = () => {
 // Function to fetch logs from the server
 const fetchServerLogs = async () => {
     try {
+        const logsContent = document.getElementById('logsContent');
+        if (!logsContent) return;
+        
+        // Show loading state
+        logsContent.innerHTML = '<p>Loading logs...</p>';
+        document.getElementById('logsContainer').classList.remove('hidden');
+        
         const response = await homebridge.request('/logs');
         if (response && response.success && Array.isArray(response.logs)) {
             displayLogs(response.logs);
         } else {
+            logsContent.innerHTML = `<p>Failed to retrieve logs: ${response?.error || 'Unknown error'}</p>`;
             showToast('error', 'Failed to retrieve logs', 'Logs Error');
         }
     } catch (error) {
+        const logsContent = document.getElementById('logsContent');
+        if (logsContent) {
+            logsContent.innerHTML = `<p>Error fetching logs: ${error.message}</p>`;
+        }
         showToast('error', `Error fetching logs: ${error.message}`, 'Logs Error');
     }
 };

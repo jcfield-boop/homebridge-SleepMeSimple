@@ -3,6 +3,7 @@ import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 // Get current file path (ESM replacement for __dirname)
 const __filename = fileURLToPath(import.meta.url);
@@ -29,6 +30,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Signal that server is ready
       this.ready();
     } catch (err) {
+      console.error('Error in constructor:', err);
       // Just make sure we call ready even on error
       try {
         this.ready();
@@ -40,31 +42,30 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Get the current plugin configuration
-   * Instead of directly accessing config.json, we'll use the plugin's config storage
    * @returns {Promise<Object>} Configuration object with success status and config data
    */
   async getConfig() {
     try {
-      // Retrieve the plugin config directly
-      // The UI utils take care of reading from Homebridge's config.json
-      const pluginConfig = await this.getPluginConfig();
+      // Get the path to config.json
+      const configPath = this.api.user.configPath();
       
-      // Extract our platform configuration
-      // For platform plugins, config is an array of platform configs
-      // Find the config with platform = 'SleepMeSimple'
+      if (!configPath || !fs.existsSync(configPath)) {
+        throw new Error(`Config file not found at path: ${configPath}`);
+      }
+      
+      // Read and parse the config file
+      const configData = fs.readFileSync(configPath, 'utf8');
+      const homebridgeConfig = JSON.parse(configData);
+      
+      // Find our platform configuration
       let platformConfig = {};
-      
-      if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
-        // Find our platform in the plugins array
-        const platform = pluginConfig.find(p => 
+      if (homebridgeConfig && Array.isArray(homebridgeConfig.platforms)) {
+        const platform = homebridgeConfig.platforms.find(p => 
           p && p.platform === 'SleepMeSimple'
         );
         
         if (platform) {
           platformConfig = platform;
-        } else if (pluginConfig[0]) {
-          // If no platform config found but there is at least one config, use the first one
-          platformConfig = pluginConfig[0];
         }
       }
       
@@ -73,6 +74,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         config: platformConfig
       };
     } catch (error) {
+      console.error('Error getting config:', error);
       return {
         success: false,
         error: `Failed to retrieve configuration: ${error.message || 'Unknown error'}`
@@ -82,7 +84,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Save the plugin configuration
-   * Instead of directly modifying config.json, we'll use the plugin's config storage
    * @param {Object} payload - Configuration payload
    * @returns {Promise<Object>} Save result
    */
@@ -113,33 +114,37 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('API token is required');
       }
 
-      // Get the current plugin config
-      const pluginConfig = await this.getPluginConfig();
+      // Get the path to config.json
+      const configPath = this.api.user.configPath();
       
-      // Determine how to update the config based on existing configs
-      let updatedConfig = [];
-      
-      if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
-        // Find if our platform config already exists
-        const platformIndex = pluginConfig.findIndex(p => 
-          p && p.platform === 'SleepMeSimple'
-        );
-        
-        if (platformIndex >= 0) {
-          // Update existing platform config
-          updatedConfig = [...pluginConfig];
-          updatedConfig[platformIndex] = config;
-        } else {
-          // Add new platform config
-          updatedConfig = [...pluginConfig, config];
-        }
-      } else {
-        // No existing config, create new array with just our config
-        updatedConfig = [config];
+      if (!configPath || !fs.existsSync(configPath)) {
+        throw new Error(`Config file not found at path: ${configPath}`);
       }
       
-      // Save the updated config
-      await this.updatePluginConfig(updatedConfig);
+      // Read and parse the config file
+      const configData = fs.readFileSync(configPath, 'utf8');
+      const homebridgeConfig = JSON.parse(configData);
+      
+      // Ensure platforms array exists
+      if (!homebridgeConfig.platforms) {
+        homebridgeConfig.platforms = [];
+      }
+      
+      // Find our platform configuration
+      const platformIndex = homebridgeConfig.platforms.findIndex(p => 
+        p && p.platform === 'SleepMeSimple'
+      );
+      
+      if (platformIndex >= 0) {
+        // Update existing platform config
+        homebridgeConfig.platforms[platformIndex] = config;
+      } else {
+        // Add new platform config
+        homebridgeConfig.platforms.push(config);
+      }
+      
+      // Write the updated config back to file
+      fs.writeFileSync(configPath, JSON.stringify(homebridgeConfig, null, 4), 'utf8');
       
       // Notify UI of update
       this.pushEvent('config-updated', { timestamp: Date.now() });
@@ -149,6 +154,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         message: 'Configuration saved successfully'
       };
     } catch (error) {
+      console.error('Error saving config:', error);
       return {
         success: false,
         error: `Failed to save configuration: ${error.message || 'Unknown error'}`
@@ -223,26 +229,65 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    */
   async getServerLogs() {
     try {
-      // Get logs from Homebridge
-      const logs = await this.getLogsTail(100); // Get last 100 log lines
+      // Get the path to the Homebridge storage directory
+      const storagePath = this.api.user.storagePath();
       
-      // Format logs for display
-      const formattedLogs = logs.map(log => {
-        const timestamp = new Date(log.timestamp).toLocaleString();
-        return {
-          timestamp,
-          context: log.context || 'homebridge',
-          message: log.message || '',
-          stack: log.stack || '',
-          level: log.level || 'info'
-        };
-      });
+      // Path to the log file
+      const logPath = path.join(storagePath, 'logs', 'homebridge.log');
+      
+      let logs = [];
+      
+      if (fs.existsSync(logPath)) {
+        // Read the log file
+        const logData = fs.readFileSync(logPath, 'utf8');
+        
+        // Split into lines and take the last 100
+        const allLines = logData.split('\n').filter(line => line.trim());
+        const recentLines = allLines.slice(Math.max(0, allLines.length - 100));
+        
+        // Parse log lines
+        logs = recentLines.map(line => {
+          // Try to extract timestamp and message
+          const timestamp = new Date().toLocaleString(); // Default if parsing fails
+          let message = line;
+          let context = 'homebridge';
+          
+          // Try to extract timestamp in standard format [2023-03-27 10:15:30]
+          const timestampMatch = line.match(/\[(.*?)\]/);
+          if (timestampMatch && timestampMatch[1]) {
+            try {
+              const parsedTimestamp = new Date(timestampMatch[1]);
+              if (!isNaN(parsedTimestamp.getTime())) {
+                message = line.substring(timestampMatch[0].length).trim();
+              }
+            } catch (e) {
+              // Parsing failed, use defaults
+            }
+          }
+          
+          // Try to extract context like [SleepMeSimple]
+          const contextMatch = message.match(/\[(.*?)\]/);
+          if (contextMatch && contextMatch[1]) {
+            context = contextMatch[1];
+            message = message.substring(contextMatch[0].length).trim();
+          }
+          
+          return {
+            timestamp,
+            context,
+            message,
+            level: line.includes('ERROR') ? 'error' : 
+                  line.includes('WARN') ? 'warn' : 'info'
+          };
+        });
+      }
       
       return {
         success: true,
-        logs: formattedLogs
+        logs
       };
     } catch (error) {
+      console.error('Error getting logs:', error);
       return {
         success: false,
         error: `Failed to retrieve logs: ${error.message || 'Unknown error'}`
