@@ -536,7 +536,7 @@ const fetchServerLogs = async () => {
     }
 };
 
-// Function to display logs in the UI
+// Function to display logs in the UI - updated for new log format
 const displayLogs = (logs) => {
     const logsContent = document.getElementById('logsContent');
     if (!logsContent) return;
@@ -544,44 +544,101 @@ const displayLogs = (logs) => {
     // Clear previous logs
     logsContent.innerHTML = '';
     
-    if (logs.length === 0) {
+    if (!logs || logs.length === 0) {
         logsContent.innerHTML = '<p>No logs available.</p>';
         return;
     }
     
-    // Create log entries
+    // Create log entries with enhanced styling based on level
     logs.forEach(log => {
         const logEntry = document.createElement('div');
-        logEntry.className = 'log-entry';
+        logEntry.className = `log-entry log-${log.level || 'info'}`;
         logEntry.style.marginBottom = '10px';
         logEntry.style.borderBottom = '1px solid #ddd';
         logEntry.style.paddingBottom = '5px';
+        
+        // Format timestamp
+        let displayTimestamp;
+        try {
+            // Convert ISO timestamp to local date/time format
+            const date = new Date(log.timestamp);
+            displayTimestamp = isNaN(date.getTime()) ? 
+                log.timestamp : 
+                date.toLocaleString();
+        } catch(e) {
+            displayTimestamp = log.timestamp || 'Unknown time';
+        }
         
         const timestamp = document.createElement('div');
         timestamp.className = 'log-timestamp';
         timestamp.style.color = '#666';
         timestamp.style.fontSize = '10px';
-        timestamp.textContent = log.timestamp;
+        timestamp.textContent = displayTimestamp;
         logEntry.appendChild(timestamp);
         
-        const context = document.createElement('div');
+        // Create context badge with color coding
+        const context = document.createElement('span');
         context.className = 'log-context';
         context.style.fontWeight = 'bold';
+        context.style.padding = '1px 5px';
+        context.style.borderRadius = '3px';
+        context.style.fontSize = '11px';
+        context.style.marginRight = '5px';
+        
+        // Color code by context
+        if (log.context.includes('SleepMe')) {
+            context.style.backgroundColor = '#0070c9';
+            context.style.color = 'white';
+        } else {
+            context.style.backgroundColor = '#f8f9fa';
+            context.style.color = '#333';
+        }
+        
         context.textContent = log.context;
+        
+        // Add level indicator if relevant
+        if (log.level === 'error') {
+            const level = document.createElement('span');
+            level.style.backgroundColor = '#dc3545';
+            level.style.color = 'white';
+            level.style.padding = '1px 5px';
+            level.style.borderRadius = '3px';
+            level.style.fontSize = '11px';
+            level.style.marginRight = '5px';
+            level.textContent = 'ERROR';
+            logEntry.appendChild(level);
+        } else if (log.level === 'warn') {
+            const level = document.createElement('span');
+            level.style.backgroundColor = '#ffc107';
+            level.style.color = 'black';
+            level.style.padding = '1px 5px';
+            level.style.borderRadius = '3px';
+            level.style.fontSize = '11px';
+            level.style.marginRight = '5px';
+            level.textContent = 'WARN';
+            logEntry.appendChild(level);
+        }
+        
         logEntry.appendChild(context);
         
+        // Message content
         const message = document.createElement('div');
         message.className = 'log-message';
         message.textContent = log.message;
         logEntry.appendChild(message);
         
+        // Add stack trace for errors if available
         if (log.stack) {
-            const stack = document.createElement('div');
+            const stack = document.createElement('pre');
             stack.className = 'log-stack';
             stack.style.color = '#dc3545';
             stack.style.fontSize = '10px';
             stack.style.whiteSpace = 'pre-wrap';
             stack.style.marginTop = '5px';
+            stack.style.padding = '5px';
+            stack.style.backgroundColor = '#f8f9fa';
+            stack.style.border = '1px solid #eee';
+            stack.style.borderRadius = '3px';
             stack.textContent = log.stack;
             logEntry.appendChild(stack);
         }
@@ -592,7 +649,6 @@ const displayLogs = (logs) => {
     // Make logs container visible
     document.getElementById('logsContainer').classList.remove('hidden');
 };
-
             // Check if the homebridge object is available (required for communication)
             if (typeof homebridge === 'undefined') {
                 showStatusLegacy('Error: Homebridge UI framework not detected. Please reload the page.', true);
@@ -607,24 +663,51 @@ const displayLogs = (logs) => {
                     }
                 }, 15000); // 15 second timeout
                 
-  
 // Listen for plugin events with proper error handling
-homebridge.addEventListener('event', async (data) => {
+homebridge.addEventListener('event', async (event) => {
     try {
-        if (data && data.event === 'config-updated') {
+        if (!event || !event.data) return;
+        
+        const data = event.data;
+        
+        if (data.event === 'config-updated') {
             // Reload config on update event
             await loadConfig();
-        } else if (data && data.event === 'server-error') {
+        } else if (data.event === 'server-error') {
             // Auto-fetch logs when an error occurs
             fetchServerLogs();
             
-            // Show a toast notification
+            // Show a toast notification with more details
+            const errorTime = data.time ? new Date(data.time).toLocaleString() : 'recent';
+            
             showToast(
                 'error', 
-                `Server error: ${data.message || 'Unknown error'}`, 
+                `Server error at ${errorTime}: ${data.message || 'Unknown error'}. Check the logs section for details.`, 
                 'Server Error'
             );
-        } else if (data && data.event === 'debug-info') {
+            
+            // Highlight the log button
+            const viewLogsBtn = document.getElementById('viewLogs');
+            if (viewLogsBtn) {
+                viewLogsBtn.style.animationName = 'pulse';
+                viewLogsBtn.style.animationDuration = '2s';
+                viewLogsBtn.style.animationIterationCount = '3';
+                
+                // Add the animation style if it doesn't exist
+                if (!document.getElementById('log-btn-animation')) {
+                    const style = document.createElement('style');
+                    style.id = 'log-btn-animation';
+                    style.textContent = `
+                        @keyframes pulse {
+                            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+                            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+                            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+        } else if (data.event === 'debug-info') {
             // Display debug info in the console
             console.log('Debug info:', data);
         }
@@ -1004,54 +1087,74 @@ createLogsSection();
         }
     });
     
-    // Handle test connection button
-    testConnectionBtn.addEventListener('click', async () => {
-        const apiToken = document.getElementById('apiToken').value.trim();
+    // Handle test connection button with improved device info display
+testConnectionBtn.addEventListener('click', async () => {
+    const apiToken = document.getElementById('apiToken').value.trim();
+    
+    if (!apiToken) {
+        showToast('error', 'API token is required', 'Validation Error');
+        document.getElementById('apiToken').focus();
+        return;
+    }
+    
+    // Update button state and show status
+    testConnectionBtn.disabled = true;
+    testConnectionBtn.textContent = 'Testing...';
+    showLoading('Testing connection to SleepMe API...');
+    
+    try {
+        const response = await Promise.race([
+            homebridge.request('/device/test', {
+                method: 'POST',
+                body: { apiToken }
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout')), 15000)
+            )
+        ]);
         
-        if (!apiToken) {
-            showToast('error', 'API token is required', 'Validation Error');
-            document.getElementById('apiToken').focus();
-            return;
-        }
-        
-        // Update button state and show status
-        testConnectionBtn.disabled = true;
-        testConnectionBtn.textContent = 'Testing...';
-        showLoading('Testing connection to SleepMe API...');
-        
-        try {
-            const response = await Promise.race([
-                homebridge.request('/device/test', {
-                    method: 'POST',
-                    body: { apiToken }
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Request timeout')), 15000)
-                )
-            ]);
+        if (response && response.success) {
+            const deviceCount = response.devices || 0;
+            let successMessage = `Connection successful! Found ${deviceCount} device${deviceCount !== 1 ? 's' : ''}.`;
             
-            if (response && response.success) {
-                const deviceCount = response.devices || 0;
-                showToast('success', 
-                    `Connection successful! Found ${deviceCount} device${deviceCount !== 1 ? 's' : ''}.`, 
-                    'Connection Test'
-                );
+            // Add device information if available
+            if (response.deviceInfo && response.deviceInfo.length > 0) {
+                successMessage += ' Devices found:';
+                const deviceList = document.createElement('ul');
+                deviceList.style.marginTop = '10px';
+                
+                response.deviceInfo.forEach(device => {
+                    const deviceItem = document.createElement('li');
+                    deviceItem.textContent = `${device.name} (${device.type})`;
+                    deviceList.appendChild(deviceItem);
+                });
+                
+                // Create a custom toast with the device list
+                const customToast = document.createElement('div');
+                customToast.innerHTML = `<p>${successMessage}</p>`;
+                customToast.appendChild(deviceList);
+                
+                showToast('success', customToast.innerHTML, 'Connection Test');
             } else {
-                showToast('error',
-                    response?.error || 'Connection failed for unknown reason', 
-                    'Connection Failed'
-                );
+                showToast('success', successMessage, 'Connection Test');
             }
-        } catch (error) {
-            showToast('error', `Connection test failed: ${error.message}`, 'Connection Error');
-        } finally {
-            // Restore button state
-            testConnectionBtn.disabled = false;
-            testConnectionBtn.textContent = 'Test Connection';
-            // Ensure spinner is hidden
-            hideLoading();
+        } else {
+            showToast('error',
+                response?.error || 'Connection failed for unknown reason', 
+                'Connection Failed'
+            );
         }
-    });
+    } catch (error) {
+        showToast('error', `Connection test failed: ${error.message}`, 'Connection Error');
+    } finally {
+        // Restore button state
+        testConnectionBtn.disabled = false;
+        testConnectionBtn.textContent = 'Test Connection';
+        // Ensure spinner is hidden
+        hideLoading();
+    }
+});
+
   // Apply templates
   applyTemplatesBtn.addEventListener('click', () => {
         const weekdayKey = weekdayTemplateSelect.value;
