@@ -268,6 +268,37 @@
         .phase-wakeup {
             background-color: #f0ad4e;
         }
+        .logs-content {
+    max-height: 300px;
+    overflow: auto;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.log-entry {
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
+
+.log-timestamp {
+    color: #666;
+    font-size: 10px;
+}
+
+.log-context {
+    font-weight: bold;
+}
+
+.log-stack {
+    color: #dc3545;
+    font-size: 10px;
+    white-space: pre-wrap;
+    margin-top: 5px;
+}
     </style>
 </head>
 <body>
@@ -442,6 +473,114 @@
             // Track initialization state
             let initialized = false;
             
+// Create a logs container for server-side errors
+const createLogsSection = () => {
+    const logsContainer = document.createElement('div');
+    logsContainer.className = 'container hidden';
+    logsContainer.id = 'logsContainer';
+    
+    const logsHeader = document.createElement('h2');
+    logsHeader.textContent = 'Server Logs';
+    logsContainer.appendChild(logsHeader);
+    
+    const logsContent = document.createElement('div');
+    logsContent.className = 'logs-content';
+    logsContent.style.maxHeight = '300px';
+    logsContent.style.overflow = 'auto';
+    logsContent.style.backgroundColor = '#f8f9fa';
+    logsContent.style.padding = '10px';
+    logsContent.style.borderRadius = '4px';
+    logsContent.style.fontFamily = 'monospace';
+    logsContent.style.fontSize = '12px';
+    logsContent.id = 'logsContent';
+    logsContainer.appendChild(logsContent);
+    
+    const refreshButton = document.createElement('button');
+    refreshButton.textContent = 'Refresh Logs';
+    refreshButton.className = 'secondary';
+    refreshButton.style.marginTop = '10px';
+    refreshButton.id = 'refreshLogs';
+    logsContainer.appendChild(refreshButton);
+    
+    // Add the logs container after the schedules container
+    const schedulesContainer = document.getElementById('schedulesContainer');
+    schedulesContainer.parentNode.insertBefore(logsContainer, schedulesContainer.nextSibling);
+    
+    // Add event listener for the refresh button
+    refreshButton.addEventListener('click', fetchServerLogs);
+};
+
+// Function to fetch logs from the server
+const fetchServerLogs = async () => {
+    try {
+        const response = await homebridge.request('/logs');
+        if (response && response.success && Array.isArray(response.logs)) {
+            displayLogs(response.logs);
+        } else {
+            showToast('error', 'Failed to retrieve logs', 'Logs Error');
+        }
+    } catch (error) {
+        showToast('error', `Error fetching logs: ${error.message}`, 'Logs Error');
+    }
+};
+
+// Function to display logs in the UI
+const displayLogs = (logs) => {
+    const logsContent = document.getElementById('logsContent');
+    if (!logsContent) return;
+    
+    // Clear previous logs
+    logsContent.innerHTML = '';
+    
+    if (logs.length === 0) {
+        logsContent.innerHTML = '<p>No logs available.</p>';
+        return;
+    }
+    
+    // Create log entries
+    logs.forEach(log => {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.style.marginBottom = '10px';
+        logEntry.style.borderBottom = '1px solid #ddd';
+        logEntry.style.paddingBottom = '5px';
+        
+        const timestamp = document.createElement('div');
+        timestamp.className = 'log-timestamp';
+        timestamp.style.color = '#666';
+        timestamp.style.fontSize = '10px';
+        timestamp.textContent = log.timestamp;
+        logEntry.appendChild(timestamp);
+        
+        const context = document.createElement('div');
+        context.className = 'log-context';
+        context.style.fontWeight = 'bold';
+        context.textContent = log.context;
+        logEntry.appendChild(context);
+        
+        const message = document.createElement('div');
+        message.className = 'log-message';
+        message.textContent = log.message;
+        logEntry.appendChild(message);
+        
+        if (log.stack) {
+            const stack = document.createElement('div');
+            stack.className = 'log-stack';
+            stack.style.color = '#dc3545';
+            stack.style.fontSize = '10px';
+            stack.style.whiteSpace = 'pre-wrap';
+            stack.style.marginTop = '5px';
+            stack.textContent = log.stack;
+            logEntry.appendChild(stack);
+        }
+        
+        logsContent.appendChild(logEntry);
+    });
+    
+    // Make logs container visible
+    document.getElementById('logsContainer').classList.remove('hidden');
+};
+
             // Check if the homebridge object is available (required for communication)
             if (typeof homebridge === 'undefined') {
                 showStatusLegacy('Error: Homebridge UI framework not detected. Please reload the page.', true);
@@ -456,17 +595,32 @@
                     }
                 }, 15000); // 15 second timeout
                 
-                // Listen for plugin events with proper error handling
-                homebridge.addEventListener('event', async (data) => {
-                    try {
-                        if (data && data.event === 'config-updated') {
-                            // Reload config on update event
-                            await loadConfig();
-                        }
-                    } catch (error) {
-                        showToast('error', 'Error processing server event: ' + error.message, 'Event Error');
-                    }
-                });
+  
+// Listen for plugin events with proper error handling
+homebridge.addEventListener('event', async (data) => {
+    try {
+        if (data && data.event === 'config-updated') {
+            // Reload config on update event
+            await loadConfig();
+        } else if (data && data.event === 'server-error') {
+            // Auto-fetch logs when an error occurs
+            fetchServerLogs();
+            
+            // Show a toast notification
+            showToast(
+                'error', 
+                `Server error: ${data.message || 'Unknown error'}`, 
+                'Server Error'
+            );
+        } else if (data && data.event === 'debug-info') {
+            // Display debug info in the console
+            console.log('Debug info:', data);
+        }
+    } catch (error) {
+        showToast('error', 'Error processing server event: ' + error.message, 'Event Error');
+    }
+});
+
                 
                 // Load initial configuration
                 await loadConfig();
@@ -474,7 +628,10 @@
                 // Mark as initialized and clear timeout
                 initialized = true;
                 clearTimeout(initTimeout);
-                
+             
+                // Create logs section during initialization
+createLogsSection();
+
             } catch (error) {
                 showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
             }
@@ -1431,6 +1588,36 @@
             showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
         }
     });
+    // Add a helper button to the form to view logs
+const addDebugButton = () => {
+    const configForm = document.getElementById('configForm');
+    if (!configForm || document.getElementById('viewLogs')) return;
+    
+    const buttonGroup = configForm.querySelector('.button-group');
+    if (buttonGroup) {
+        const viewLogsBtn = document.createElement('button');
+        viewLogsBtn.id = 'viewLogs';
+        viewLogsBtn.type = 'button';
+        viewLogsBtn.className = 'secondary';
+        viewLogsBtn.textContent = 'View Logs';
+        viewLogsBtn.style.marginRight = '5px';
+        
+        // Add event listener
+        viewLogsBtn.addEventListener('click', () => {
+            fetchServerLogs();
+            const logsContainer = document.getElementById('logsContainer');
+            if (logsContainer) {
+                logsContainer.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+        
+        // Insert at beginning of button group
+        buttonGroup.insertBefore(viewLogsBtn, buttonGroup.firstChild);
+    }
+};
+
+// Call during initialization
+addDebugButton();
     </script>
 </body>
 </html> 

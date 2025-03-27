@@ -24,30 +24,30 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       this.onRequest('/config', this.getConfig.bind(this));
       this.onRequest('/saveConfig', this.saveConfig.bind(this));
       this.onRequest('/device/test', this.testDeviceConnection.bind(this));
+      this.onRequest('/logs', this.getServerLogs.bind(this));
       
       // Signal that server is ready
       this.ready();
     } catch (err) {
-      console.error('Error initializing server:', err);
       // Just make sure we call ready even on error
       try {
         this.ready();
       } catch (readyError) {
         // Cannot do much if ready fails
-        console.error('Error calling ready:', readyError);
       }
     }
   }
 
   /**
    * Get the current plugin configuration
-   * This method fetches the config using the API provided by HomebridgePluginUiServer
+   * Instead of directly accessing config.json, we'll use the plugin's config storage
    * @returns {Promise<Object>} Configuration object with success status and config data
    */
   async getConfig() {
     try {
-      // Use the homebridgeApi property to access the API methods
-      const pluginConfig = await this.homebridgeApi.getPluginConfig();
+      // Retrieve the plugin config directly
+      // The UI utils take care of reading from Homebridge's config.json
+      const pluginConfig = await this.getPluginConfig();
       
       // Extract our platform configuration
       // For platform plugins, config is an array of platform configs
@@ -73,7 +73,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         config: platformConfig
       };
     } catch (error) {
-      console.error('Error getting config:', error);
       return {
         success: false,
         error: `Failed to retrieve configuration: ${error.message || 'Unknown error'}`
@@ -83,7 +82,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Save the plugin configuration
-   * This method uses the API provided by HomebridgePluginUiServer to update the config
+   * Instead of directly modifying config.json, we'll use the plugin's config storage
    * @param {Object} payload - Configuration payload
    * @returns {Promise<Object>} Save result
    */
@@ -114,8 +113,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('API token is required');
       }
 
-      // Get the current plugin config using the homebridgeApi
-      const pluginConfig = await this.homebridgeApi.getPluginConfig();
+      // Get the current plugin config
+      const pluginConfig = await this.getPluginConfig();
       
       // Determine how to update the config based on existing configs
       let updatedConfig = [];
@@ -139,12 +138,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         updatedConfig = [config];
       }
       
-      // Save the updated config using the homebridgeApi
-      await this.homebridgeApi.updatePluginConfig(updatedConfig);
-      
-      // Trigger a save to config.json if needed
-      // Only use this when necessary as it triggers file writes
-      await this.homebridgeApi.savePluginConfig();
+      // Save the updated config
+      await this.updatePluginConfig(updatedConfig);
       
       // Notify UI of update
       this.pushEvent('config-updated', { timestamp: Date.now() });
@@ -154,7 +149,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         message: 'Configuration saved successfully'
       };
     } catch (error) {
-      console.error('Error saving config:', error);
       return {
         success: false,
         error: `Failed to save configuration: ${error.message || 'Unknown error'}`
@@ -219,6 +213,39 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       return {
         success: false,
         error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Get server logs
+   * @returns {Promise<Object>} Logs data
+   */
+  async getServerLogs() {
+    try {
+      // Get logs from Homebridge
+      const logs = await this.getLogsTail(100); // Get last 100 log lines
+      
+      // Format logs for display
+      const formattedLogs = logs.map(log => {
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        return {
+          timestamp,
+          context: log.context || 'homebridge',
+          message: log.message || '',
+          stack: log.stack || '',
+          level: log.level || 'info'
+        };
+      });
+      
+      return {
+        success: true,
+        logs: formattedLogs
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to retrieve logs: ${error.message || 'Unknown error'}`
       };
     }
   }
