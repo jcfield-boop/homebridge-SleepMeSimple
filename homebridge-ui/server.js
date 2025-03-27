@@ -221,99 +221,95 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    * @param {Object} payload - Configuration payload
    * @returns {Promise<Object>} Save result
    */
-
-/**
- * Save the plugin configuration
- * @param {Object} payload - Configuration payload
- * @returns {Promise<Object>} Save result
- */
-/**
- * Save the plugin configuration
- * @param {Object} payload - Configuration payload
- * @returns {Promise<Object>} Save result
- */
-async saveConfig(payload) {
-  try {
-    this.log('Saving plugin configuration');
-    
-    // Enhanced debugging
-    this.log(`Raw payload type: ${typeof payload}`);
-    this.log(`Payload structure: ${JSON.stringify(payload, null, 2)}`);
-    
-    // Extract config (handle different possible payload structures)
-    let config;
-    if (payload && payload.config) {
-      config = payload.config;
-    } else if (payload && payload.body && payload.body.config) {
-      config = payload.body.config;
-    } else if (payload && payload.platform === 'SleepMeSimple') {
-      config = payload;
-    } else {
-      throw new Error('Missing or invalid payload');
-    }
-    
-    // Process and validate the config
-    this.log(`Processing config: ${JSON.stringify(config, null, 2)}`);
-    
-    // Ensure required platform properties are set
-    config.platform = config.platform || 'SleepMeSimple';
-    config.name = config.name || 'SleepMe Simple';
-    
-    // Validate API token
-    if (!config.apiToken) {
-      throw new Error('API token is required');
-    }
-
-    // Convert enableSchedules to proper boolean if it's a string
-    if (typeof config.enableSchedules === 'string') {
-      config.enableSchedules = config.enableSchedules === 'true';
-    }
-
-    // Validate schedules
-    if (config.enableSchedules === true) {
-      if (!Array.isArray(config.schedules)) {
-        config.schedules = [];
+  async saveConfig(payload) {
+    try {
+      this.log('Saving plugin configuration');
+      
+      // Enhanced debugging with safely handled payload
+      const sanitizedPayload = payload ? JSON.parse(JSON.stringify(payload)) : undefined;
+      if (sanitizedPayload && sanitizedPayload.config && sanitizedPayload.config.apiToken) {
+        sanitizedPayload.config.apiToken = '[REDACTED]';
+      }
+      this.log(`Payload structure: ${sanitizedPayload ? JSON.stringify(sanitizedPayload, null, 2) : 'undefined'}`);
+      
+      // Extract config (handle different possible payload structures)
+      let config;
+      if (payload && payload.config) {
+        config = payload.config;
+      } else if (payload && payload.body && payload.body.config) {
+        config = payload.body.config;
+      } else if (payload && payload.platform === 'SleepMeSimple') {
+        config = payload;
+      } else {
+        throw new Error('Missing or invalid payload');
       }
       
-      // Clean and validate each schedule
-      config.schedules = config.schedules.map(schedule => ({
-        type: String(schedule.type || 'Everyday'),
-        time: String(schedule.time || '00:00'),
-        temperature: Number(schedule.temperature || 21),
-        unit: String(schedule.unit || 'C'),
-        ...(schedule.type === 'Specific Day' ? { day: Number(schedule.day) } : {}),
-        ...(schedule.description ? { description: String(schedule.description) } : {})
-      }));
-    } else if (config.enableSchedules === false) {
-      // Explicitly remove schedules when disabled
-      delete config.schedules;
+      // Process and validate the config
+      this.log(`Processing config...`);
+      
+      // Ensure required platform properties are set
+      config.platform = config.platform || 'SleepMeSimple';
+      config.name = config.name || 'SleepMe Simple';
+      
+      // Validate API token
+      if (!config.apiToken) {
+        throw new Error('API token is required');
+      }
+
+      // Convert enableSchedules to proper boolean if it's a string
+      if (typeof config.enableSchedules === 'string') {
+        config.enableSchedules = config.enableSchedules === 'true';
+      }
+
+      // Validate schedules
+      if (config.enableSchedules === true) {
+        if (!Array.isArray(config.schedules)) {
+          config.schedules = [];
+        }
+        
+        // Clean and validate each schedule
+        config.schedules = config.schedules.map(schedule => ({
+          type: String(schedule.type || 'Everyday'),
+          time: String(schedule.time || '00:00'),
+          temperature: Number(schedule.temperature || 21),
+          unit: String(schedule.unit || 'C'),
+          ...(schedule.type === 'Specific Day' ? { day: Number(schedule.day) } : {}),
+          ...(schedule.description ? { description: String(schedule.description) } : {})
+        }));
+      } else if (config.enableSchedules === false) {
+        // Explicitly remove schedules when disabled
+        delete config.schedules;
+      }
+      
+      // Ensure pollingInterval is a number
+      if (config.pollingInterval) {
+        config.pollingInterval = parseInt(String(config.pollingInterval), 10);
+      }
+      
+      // Using the official Homebridge method to update config
+      await this.updateConfig([config]);
+      
+      this.log('Configuration updated successfully');
+      
+      // Push event to UI to notify of config change
+      this.pushEvent('config-updated', { timestamp: Date.now() });
+      
+      return {
+        success: true,
+        message: 'Configuration saved successfully'
+      };
+    } catch (error) {
+      this.log(`Error saving configuration: ${error.message}`, 'error');
+      if (error.stack) {
+        this.log(`Stack trace: ${error.stack}`, 'error');
+      }
+      return {
+        success: false,
+        error: `Failed to save configuration: ${error.message}`
+      };
     }
-    
-    // Ensure pollingInterval is a number
-    if (config.pollingInterval) {
-      config.pollingInterval = parseInt(String(config.pollingInterval), 10);
-    }
-    
-    // Using the official Homebridge method to update config
-    await this.updatePluginConfig([config]);
-    
-    this.log('Configuration updated successfully');
-    
-    // Push event to UI to notify of config change
-    this.pushEvent('config-updated', { timestamp: Date.now() });
-    
-    return {
-      success: true,
-      message: 'Configuration saved successfully'
-    };
-  } catch (error) {
-    this.log(`Error saving configuration: ${error.message}`, 'error');
-    return {
-      success: false,
-      error: `Failed to save configuration: ${error.message}`
-    };
   }
-}
+
   /**
    * Test the SleepMe API connection
    * @param {Object} payload - Connection test payload
