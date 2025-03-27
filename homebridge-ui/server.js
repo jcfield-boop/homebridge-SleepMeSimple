@@ -1,5 +1,5 @@
-// homebridge-ui/server.js
-const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
+// homebridge-ui/server.js - Fixed version
+const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
@@ -13,43 +13,29 @@ const API_BASE_URL = 'https://api.developer.sleep.me/v1';
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
+    // Must call super first to initialize the parent class
     super();
     
-    // Store recent logs for UI display
+    // Initialize storage
     this.recentLogs = [];
     this.maxLogEntries = 100;
     
-    try {
-      // Register request handlers
-      this.onRequest('/config', this.getConfig.bind(this));
-      this.onRequest('/saveConfig', this.saveConfig.bind(this));
-      this.onRequest('/device/test', this.testDeviceConnection.bind(this));
-      this.onRequest('/logs', this.getServerLogs.bind(this));
-      
-      // Log successful initialization
-      this.log('SleepMe UI Server initialized successfully');
-      
-      // Signal that server is ready
-      this.ready();
-    } catch (err) {
-      this.logError('Error initializing UI server', err);
-      // Make sure we call ready even on error
-      try {
-        this.ready();
-      } catch (readyError) {
-        // Cannot do much if ready fails
-        console.error('Failed to signal server ready state:', readyError);
-      }
-    }
+    // Register request handlers
+    this.onRequest('/config', this.getConfig.bind(this));
+    this.onRequest('/saveConfig', this.saveConfig.bind(this));
+    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
+    this.onRequest('/logs', this.getServerLogs.bind(this));
+    
+    // Log initialization
+    console.log('[SleepMeUI] SleepMe UI Server initialized');
+    
+    // IMPORTANT: Signal that the server is ready to accept requests
+    // This must be called after all request handlers are registered
+    this.ready();
   }
-
-  /**
-   * Enhanced logging method with error tracking
-   * @param {string} message - Log message
-   * @param {string} level - Log level (info, warn, error)
-   */
+  
+  // Helper logging methods
   log(message, level = 'info') {
-    // Create log entry
     const entry = {
       timestamp: new Date().toISOString(),
       context: 'SleepMeUI',
@@ -57,13 +43,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       level: level
     };
     
-    // Add to recent logs (maintaining fixed size)
     this.recentLogs.unshift(entry);
     if (this.recentLogs.length > this.maxLogEntries) {
       this.recentLogs.pop();
     }
     
-    // Output to console based on level
     if (level === 'error') {
       console.error(`[SleepMeUI] ${message}`);
     } else if (level === 'warn') {
@@ -73,13 +57,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  /**
-   * Error logging helper with stack trace
-   * @param {string} message - Error message
-   * @param {Error} error - Error object
-   */
   logError(message, error) {
-    // Create error log entry with stack trace
     const entry = {
       timestamp: new Date().toISOString(),
       context: 'SleepMeUI',
@@ -88,16 +66,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       stack: error.stack
     };
     
-    // Add to recent logs
     this.recentLogs.unshift(entry);
     if (this.recentLogs.length > this.maxLogEntries) {
       this.recentLogs.pop();
     }
     
-    // Output to console
     console.error(`[SleepMeUI] ${message}:`, error);
     
-    // Push error event to UI for immediate notification
     try {
       this.pushEvent('server-error', { 
         message: error.message,
@@ -107,16 +82,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Silent fail on push error
     }
   }
-
-  /**
-   * Get the current plugin configuration
-   * @returns {Promise<Object>} Configuration object with success status and config data
-   */
+  
+  // Get plugin configuration
   async getConfig() {
     try {
       this.log('Getting plugin configuration');
       
-      // Get the path to config.json - FIXED: use homebridgeConfigPath instead of api.user.configPath
+      // Access the config path directly from the parent class property
       const configPath = this.homebridgeConfigPath;
       
       if (!configPath || !fs.existsSync(configPath)) {
@@ -136,9 +108,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Find our platform configuration
       let platformConfig = {};
       if (homebridgeConfig && Array.isArray(homebridgeConfig.platforms)) {
-        const platform = homebridgeConfig.platforms.find(p => 
-          p && p.platform === 'SleepMeSimple'
-        );
+        const platform = homebridgeConfig.platforms.find(p => p && p.platform === 'SleepMeSimple');
         
         if (platform) {
           platformConfig = platform;
@@ -162,17 +132,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       };
     }
   }
-  /**
-   * Save the plugin configuration
-   * @param {Object} payload - Configuration payload
-   * @returns {Promise<Object>} Save result
-   */
+  
+  // Save plugin configuration
   async saveConfig(payload) {
     try {
-      // Extract config from payload - handle all common formats
+      // Extract config from payload
       let config = null;
       
-      // Try different payload structures
       if (payload && payload.body && payload.body.config) {
         config = payload.body.config;
       } else if (payload && payload.config) {
@@ -202,7 +168,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('Polling interval must be between 60 and 300 seconds');
       }
       
-      // Get the path to config.json - FIXED: use homebridgeConfigPath instead of api.user.configPath
+      // Access the config path directly from the parent class property
       const configPath = this.homebridgeConfigPath;
       
       if (!configPath || !fs.existsSync(configPath)) {
@@ -225,9 +191,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
       
       // Find our platform configuration
-      const platformIndex = homebridgeConfig.platforms.findIndex(p => 
-        p && p.platform === 'SleepMeSimple'
-      );
+      const platformIndex = homebridgeConfig.platforms.findIndex(p => p && p.platform === 'SleepMeSimple');
       
       if (platformIndex >= 0) {
         // Update existing platform config
@@ -246,7 +210,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         this.log(`Created backup of previous config at ${backupPath}`);
       } catch (backupError) {
         this.log(`Failed to create config backup: ${backupError.message}`, 'warn');
-        // Continue despite backup failure
       }
       
       // Write the updated config back to file
@@ -268,17 +231,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       };
     }
   }
-  /**
-   * Test the SleepMe API connection
-   * @param {Object} payload - Connection test payload
-   * @returns {Promise<Object>} Connection test result
-   */
+  
+  // Test API connection
   async testDeviceConnection(payload) {
     try {
-      // Extract API token with multiple fallbacks
+      // Extract API token
       let apiToken = null;
       
-      // Try different payload structures
       if (payload && typeof payload.apiToken === 'string') {
         apiToken = payload.apiToken;
       } else if (payload && payload.body && typeof payload.body.apiToken === 'string') {
@@ -318,7 +277,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         devices = response.data.devices;
       }
       
-      // Extract device info for better user feedback
+      // Extract device info
       const deviceInfo = devices.map(device => ({
         id: device.id,
         name: device.name || 'Unnamed Device',
@@ -346,11 +305,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  /**
-   * Detect device type from API response
-   * @param {Object} device - Device data from API
-   * @returns {string} Device type
-   */
+  // Helper method to detect device type
   detectDeviceType(device) {
     if (!device) return 'Unknown';
     
@@ -379,17 +334,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     
     return 'Unknown SleepMe Device';
   }
-
-  /**
-   * Get server logs
-   * @returns {Promise<Object>} Logs data
-   */
+  
+  // Get server logs
   async getServerLogs() {
     try {
       // First include our internal UI server logs
       const uiLogs = [...this.recentLogs];
       
-      // Get the path to the Homebridge storage directory
+      // Access the storage path directly from the parent class property
       const storagePath = this.homebridgeStoragePath;
       
       // Path to the log file
@@ -489,6 +441,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 }
 
 // Create and export a new instance
+// This pattern automatically creates an instance when the file is loaded
 (() => {
   return new SleepMeUiServer();
 })();
