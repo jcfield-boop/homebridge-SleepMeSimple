@@ -1,7 +1,7 @@
 // homebridge-ui/server.js
 const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
 const axios = require('axios');
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
 
 // Fallback API URL
@@ -10,14 +10,38 @@ const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
-
-    // Register request handlers with more comprehensive error handling
-    this.onRequest('/config', this.getConfig.bind(this));
-    this.onRequest('/saveConfig', this.saveConfig.bind(this));
-    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     
-    this.log('SleepMe UI Server initialized');
-    this.ready();
+    try {
+      // Check if required assets exist
+      this.checkRequiredAssets();
+      
+      // Register request handlers with more comprehensive error handling
+      this.onRequest('/config', this.getConfig.bind(this));
+      this.onRequest('/saveConfig', this.saveConfig.bind(this));
+      this.onRequest('/device/test', this.testDeviceConnection.bind(this));
+      
+      this.log('SleepMe UI Server initialized');
+      this.ready();
+    } catch (err) {
+      console.error('ERROR INITIALIZING SERVER:', err);
+    }
+  }
+
+  /**
+   * Check if required UI assets exist
+   */
+  checkRequiredAssets() {
+    const iconPath = path.resolve(__dirname, 'public/icons/sleepmebasic.png');
+    
+    try {
+      if (fs.existsSync(iconPath)) {
+        this.log('Icon found at: ' + iconPath);
+      } else {
+        this.log('WARNING: Icon missing at: ' + iconPath, 'warn');
+      }
+    } catch (err) {
+      this.log('Error checking for UI assets: ' + err.message, 'error');
+    }
   }
 
   /**
@@ -52,7 +76,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Get the plugin configuration using the built-in method
       const pluginConfig = await this.readPluginConfig();
       
-      this.log(`Configuration retrieved: ${JSON.stringify(pluginConfig)}`);
+      this.log(`Configuration retrieved successfully`);
       
       return {
         success: true,
