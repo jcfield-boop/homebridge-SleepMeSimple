@@ -28,25 +28,26 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Signal that server is ready
       this.ready();
     } catch (err) {
+      console.error('Error initializing server:', err);
       // Just make sure we call ready even on error
       try {
         this.ready();
       } catch (readyError) {
         // Cannot do much if ready fails
+        console.error('Error calling ready:', readyError);
       }
     }
   }
 
   /**
    * Get the current plugin configuration
-   * Instead of directly accessing config.json, we'll use the plugin's config storage
+   * This method fetches the config using the API provided by HomebridgePluginUiServer
    * @returns {Promise<Object>} Configuration object with success status and config data
    */
   async getConfig() {
     try {
-      // Retrieve the plugin config directly
-      // The UI utils take care of reading from Homebridge's config.json
-      const pluginConfig = await this.getPluginConfig();
+      // Use the homebridgeApi property to access the API methods
+      const pluginConfig = await this.homebridgeApi.getPluginConfig();
       
       // Extract our platform configuration
       // For platform plugins, config is an array of platform configs
@@ -72,6 +73,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         config: platformConfig
       };
     } catch (error) {
+      console.error('Error getting config:', error);
       return {
         success: false,
         error: `Failed to retrieve configuration: ${error.message || 'Unknown error'}`
@@ -81,7 +83,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
   /**
    * Save the plugin configuration
-   * Instead of directly modifying config.json, we'll use the plugin's config storage
+   * This method uses the API provided by HomebridgePluginUiServer to update the config
    * @param {Object} payload - Configuration payload
    * @returns {Promise<Object>} Save result
    */
@@ -112,8 +114,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('API token is required');
       }
 
-      // Get the current plugin config
-      const pluginConfig = await this.getPluginConfig();
+      // Get the current plugin config using the homebridgeApi
+      const pluginConfig = await this.homebridgeApi.getPluginConfig();
       
       // Determine how to update the config based on existing configs
       let updatedConfig = [];
@@ -137,8 +139,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         updatedConfig = [config];
       }
       
-      // Save the updated config
-      await this.updatePluginConfig(updatedConfig);
+      // Save the updated config using the homebridgeApi
+      await this.homebridgeApi.updatePluginConfig(updatedConfig);
+      
+      // Trigger a save to config.json if needed
+      // Only use this when necessary as it triggers file writes
+      await this.homebridgeApi.savePluginConfig();
       
       // Notify UI of update
       this.pushEvent('config-updated', { timestamp: Date.now() });
@@ -148,6 +154,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         message: 'Configuration saved successfully'
       };
     } catch (error) {
+      console.error('Error saving config:', error);
       return {
         success: false,
         error: `Failed to save configuration: ${error.message || 'Unknown error'}`
