@@ -227,42 +227,56 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
  * @param {Object} payload - Configuration payload
  * @returns {Promise<Object>} Save result
  */
+/**
+ * Save the plugin configuration
+ * @param {Object} payload - Configuration payload
+ * @returns {Promise<Object>} Save result
+ */
 async saveConfig(payload) {
   try {
     this.log('Saving plugin configuration');
     
-    // Validate payload
-    if (!payload || !payload.config) {
+    // Enhanced debugging
+    this.log(`Raw payload type: ${typeof payload}`);
+    this.log(`Payload structure: ${JSON.stringify(payload, null, 2)}`);
+    
+    // Extract config (handle different possible payload structures)
+    let config;
+    if (payload && payload.config) {
+      config = payload.config;
+    } else if (payload && payload.body && payload.body.config) {
+      config = payload.body.config;
+    } else if (payload && payload.platform === 'SleepMeSimple') {
+      config = payload;
+    } else {
       throw new Error('Missing or invalid payload');
     }
     
-    // Get the new config from the payload
-    const newConfig = payload.config;
-    
-    this.log(`Received config to save: ${JSON.stringify(newConfig, null, 2)}`, 'info');
+    // Process and validate the config
+    this.log(`Processing config: ${JSON.stringify(config, null, 2)}`);
     
     // Ensure required platform properties are set
-    newConfig.platform = newConfig.platform || 'SleepMeSimple';
-    newConfig.name = newConfig.name || 'SleepMe Simple';
+    config.platform = config.platform || 'SleepMeSimple';
+    config.name = config.name || 'SleepMe Simple';
     
     // Validate API token
-    if (!newConfig.apiToken) {
+    if (!config.apiToken) {
       throw new Error('API token is required');
     }
 
     // Convert enableSchedules to proper boolean if it's a string
-    if (typeof newConfig.enableSchedules === 'string') {
-      newConfig.enableSchedules = newConfig.enableSchedules === 'true';
+    if (typeof config.enableSchedules === 'string') {
+      config.enableSchedules = config.enableSchedules === 'true';
     }
 
     // Validate schedules
-    if (newConfig.enableSchedules === true) {
-      if (!Array.isArray(newConfig.schedules)) {
-        newConfig.schedules = [];
+    if (config.enableSchedules === true) {
+      if (!Array.isArray(config.schedules)) {
+        config.schedules = [];
       }
       
       // Clean and validate each schedule
-      newConfig.schedules = newConfig.schedules.map(schedule => ({
+      config.schedules = config.schedules.map(schedule => ({
         type: String(schedule.type || 'Everyday'),
         time: String(schedule.time || '00:00'),
         temperature: Number(schedule.temperature || 21),
@@ -270,55 +284,20 @@ async saveConfig(payload) {
         ...(schedule.type === 'Specific Day' ? { day: Number(schedule.day) } : {}),
         ...(schedule.description ? { description: String(schedule.description) } : {})
       }));
-    } else if (newConfig.enableSchedules === false) {
+    } else if (config.enableSchedules === false) {
       // Explicitly remove schedules when disabled
-      delete newConfig.schedules;
+      delete config.schedules;
     }
     
     // Ensure pollingInterval is a number
-    if (newConfig.pollingInterval) {
-      newConfig.pollingInterval = parseInt(String(newConfig.pollingInterval), 10);
+    if (config.pollingInterval) {
+      config.pollingInterval = parseInt(String(config.pollingInterval), 10);
     }
     
-    // Get the current Homebridge config.json path
-    // Use the official Homebridge method provided by the plugin-ui-utils
-    const configPath = this.homebridgeConfigPath;
+    // Using the official Homebridge method to update config
+    await this.updatePluginConfig([config]);
     
-    if (!configPath) {
-      throw new Error('Could not determine config.json path');
-    }
-    
-    this.log(`Reading current config from: ${configPath}`);
-    
-    // Read and parse the config.json file
-    const configFile = await fsPromises.readFile(configPath, 'utf8');
-    let homebridgeConfig = JSON.parse(configFile);
-    
-    // Ensure platforms array exists
-    if (!Array.isArray(homebridgeConfig.platforms)) {
-      homebridgeConfig.platforms = [];
-    }
-    
-    // Find the index of our platform in the config
-    const platformIndex = homebridgeConfig.platforms.findIndex(
-      p => p && p.platform === 'SleepMeSimple'
-    );
-    
-    if (platformIndex >= 0) {
-      // Update existing platform configuration
-      this.log(`Updating existing platform at index ${platformIndex}`);
-      homebridgeConfig.platforms[platformIndex] = newConfig;
-    } else {
-      // Add new platform configuration
-      this.log('Adding new platform configuration');
-      homebridgeConfig.platforms.push(newConfig);
-    }
-    
-    // Write updated config back to file
-    this.log('Writing updated config to file');
-    await fsPromises.writeFile(configPath, JSON.stringify(homebridgeConfig, null, 4), 'utf8');
-    
-    this.log('Configuration saved successfully');
+    this.log('Configuration updated successfully');
     
     // Push event to UI to notify of config change
     this.pushEvent('config-updated', { timestamp: Date.now() });
@@ -329,9 +308,6 @@ async saveConfig(payload) {
     };
   } catch (error) {
     this.log(`Error saving configuration: ${error.message}`, 'error');
-    if (error.stack) {
-      this.log(`Stack trace: ${error.stack}`, 'error');
-    }
     return {
       success: false,
       error: `Failed to save configuration: ${error.message}`
