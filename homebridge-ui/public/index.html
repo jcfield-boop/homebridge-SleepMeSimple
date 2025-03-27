@@ -743,7 +743,7 @@ enableSchedulesCheckbox.addEventListener('change', () => {
     }
 }
 
- // Handle form submission
+// Handle form submission
 configForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     console.log('Form submission started');
@@ -788,13 +788,18 @@ configForm.addEventListener('submit', async (event) => {
             config.schedules = schedules;
         }
         
-        console.log('Sending config:', JSON.stringify(config));
+        console.log('Config object ready:', config);
+        
+        // Create the body object with config property
+        const requestBody = { config: config };
+        
+        console.log('Request body:', requestBody);
         
         // Send to server with timeout protection
         const response = await Promise.race([
             homebridge.request('/saveConfig', { 
                 method: 'POST',
-                body: { config }
+                body: requestBody  // Make sure body has config property
             }),
             new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Request timeout')), 15000)
@@ -818,7 +823,8 @@ configForm.addEventListener('submit', async (event) => {
             formElements[i].disabled = false;
         }
     }
-});           
+});
+            
 // Handle test connection button
 testConnectionBtn.addEventListener('click', async () => {
     const apiToken = document.getElementById('apiToken').value.trim();
