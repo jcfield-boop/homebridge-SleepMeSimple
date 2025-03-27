@@ -742,7 +742,8 @@ enableSchedulesCheckbox.addEventListener('change', () => {
         showStatus('Error loading configuration', true);
     }
 }
-// Handle form submission
+
+ // Handle form submission
 configForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     console.log('Form submission started');
@@ -771,30 +772,23 @@ configForm.addEventListener('submit', async (event) => {
         // Show saving indicator
         showStatus('Saving configuration...', false, false);
         
-        const formData = new FormData(configForm);
-        console.log('Form data collected, enable schedules:', formData.get('enableSchedules'));
-        
         // Build configuration object
         const config = {
             platform: "SleepMeSimple",
             name: 'SleepMe Simple',
-            apiToken: formData.get('apiToken'),
-            unit: formData.get('unit'),
-            pollingInterval: parseInt(formData.get('pollingInterval'), 10),
-            logLevel: formData.get('logLevel'),
-            enableSchedules: formData.get('enableSchedules') === 'on'
+            apiToken: apiToken,
+            unit: document.getElementById('unit').value,
+            pollingInterval: pollingInterval,
+            logLevel: document.getElementById('logLevel').value,
+            enableSchedules: document.getElementById('enableSchedules').checked
         };
 
-        // Add schedules if enabled, otherwise explicitly remove them
+        // Add schedules if enabled
         if (config.enableSchedules && schedules.length > 0) {
             config.schedules = schedules;
-        } else {
-            // Explicitly remove schedules when disabled to ensure clean state
-            delete config.schedules; // This is cleaner than setting to [] for config.json
         }
         
-        console.log('Saving config with token length:', 
-            config.apiToken ? config.apiToken.length : 0);
+        console.log('Sending config:', JSON.stringify(config));
         
         // Send to server with timeout protection
         const response = await Promise.race([
@@ -824,8 +818,7 @@ configForm.addEventListener('submit', async (event) => {
             formElements[i].disabled = false;
         }
     }
-});
-            
+});           
 // Handle test connection button
 testConnectionBtn.addEventListener('click', async () => {
     const apiToken = document.getElementById('apiToken').value.trim();
