@@ -2,9 +2,9 @@
  * Schedule handling functions for SleepMe Simple UI
  * Handles adding, editing, and rendering schedules
  */
-
 /**
- * Show a confirmation modal dialog with guaranteed visibility
+ * Show confirmation modal with guaranteed visibility
+ * Uses direct DOM manipulation instead of CSS classes
  * @param {string} title - Modal title
  * @param {string} message - Modal message
  * @param {Function} callback - Function to call if confirmed
@@ -12,7 +12,7 @@
 window.showConfirmModal = function(title, message, callback) {
   console.log('Showing confirmation modal:', title);
   
-  // Get modal elements with error handling
+  // Get modal elements
   const modal = document.getElementById('confirmModal');
   const titleElement = document.getElementById('confirmTitle');
   const messageElement = document.getElementById('confirmMessage');
@@ -20,57 +20,42 @@ window.showConfirmModal = function(title, message, callback) {
   const cancelButton = document.getElementById('confirmCancel');
   
   if (!modal || !titleElement || !messageElement || !okButton || !cancelButton) {
-    console.error('Modal elements not found in DOM - using native confirm instead');
-    // Fall back to native confirm if modal elements are missing
+    console.error('Modal elements not found - using native confirm');
     if (window.confirm(message)) {
-      if (typeof callback === 'function') {
-        callback();
-      }
+      if (typeof callback === 'function') callback();
     }
     return;
   }
   
   // Set modal content
   titleElement.textContent = title || 'Confirm Action';
-  messageElement.textContent = message || 'Are you sure you want to perform this action?';
+  messageElement.textContent = message || 'Are you sure?';
   
-  // Make sure existing event listeners are removed
+  // Remove existing event listeners by cloning
   const newOkButton = okButton.cloneNode(true);
   const newCancelButton = cancelButton.cloneNode(true);
-  
   okButton.parentNode.replaceChild(newOkButton, okButton);
   cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
   
   // Add new event listeners
   newOkButton.addEventListener('click', () => {
-    console.log('Confirm button clicked');
-    // Hide the modal - both class and style
+    // Hide modal using both methods
     modal.classList.add('hidden');
     modal.style.display = 'none';
-    
-    // Call the callback function
-    if (typeof callback === 'function') {
-      callback();
-    }
+    if (typeof callback === 'function') callback();
   });
   
   newCancelButton.addEventListener('click', () => {
-    console.log('Cancel button clicked');
-    // Hide the modal - both class and style
+    // Hide modal using both methods
     modal.classList.add('hidden');
     modal.style.display = 'none';
   });
   
-  // CRUCIAL FIX: Make modal visible with multiple techniques
-  console.log('Making modal visible');
-  
-  // Remove hidden class
+  // Show modal using both methods for reliability
   modal.classList.remove('hidden');
-  
-  // Force display style directly
   modal.style.display = 'flex';
   
-  // Force visibility with timeout as backup
+  // Force visibility check with timeout as backup
   setTimeout(() => {
     if (modal.classList.contains('hidden') || modal.style.display !== 'flex') {
       console.log('Backup visibility fix applied to modal');
@@ -78,10 +63,7 @@ window.showConfirmModal = function(title, message, callback) {
       modal.style.display = 'flex';
     }
   }, 50);
-  
-  console.log('Confirmation modal displayed');
 };
-
 /**
  * Exit edit mode and reset form fields
  */

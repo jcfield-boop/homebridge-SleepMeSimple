@@ -16,10 +16,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Must call super first to initialize the parent class
     super();
     
-    // Initialize storage - only for console logging, not for UI
-    this.recentLogs = [];
-    this.maxLogEntries = 100;
-    
     // Register request handlers
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
@@ -37,6 +33,57 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // IMPORTANT: Signal that the server is ready to accept requests
     // This must be called after all request handlers are registered
     this.ready();
+  }
+  
+  /**
+   * Override the pushEvent method to prevent unwanted toast notifications
+   * @param {string} event - Event name
+   * @param {any} data - Event data
+   */
+  pushEvent(event, data) {
+    // Block these event types that might trigger unwanted toasts
+    const blockedEvents = [
+      'log', 'logs', 'error', 'ready', 'config', 
+      'server-logs', 'log-update', 'server-error'
+    ];
+    
+    // Skip sending blocked event types to the UI
+    if (blockedEvents.some(blocked => event.includes(blocked))) {
+      console.log(`[Blocked Event] ${event}`);
+      return; // Don't send to UI
+    }
+    
+    // Allow other events to proceed normally
+    super.pushEvent(event, data);
+  }
+  
+  /**
+   * Server-side logging that never triggers UI notifications
+   * @param {string} message - Log message
+   * @param {string} level - Log level
+   */
+  log(message, level = 'info') {
+    // Log to console only - no events pushed to UI
+    if (level === 'error') {
+      console.error(`[SleepMeUI] ${message}`);
+    } else if (level === 'warn') {
+      console.warn(`[SleepMeUI] ${message}`);
+    } else {
+      console.log(`[SleepMeUI] ${message}`);
+    }
+    
+    // IMPORTANT: No pushEvent calls that would trigger UI notifications
+  }
+  
+  /**
+   * Server-side error logging that never triggers UI notifications
+   * @param {string} message - Error message
+   * @param {Error} error - Error object
+   */
+  logError(message, error) {
+    console.error(`[SleepMeUI Error] ${message}:`, error);
+    
+    // IMPORTANT: No pushEvent calls that would trigger UI notifications
   }
   
   /**
@@ -241,50 +288,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
     
     return 'Unknown SleepMe Device';
-  }
-  
-  // Helper logging methods - console only, no toast notifications
-  log(message, level = 'info') {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      context: 'SleepMeUI',
-      message: message,
-      level: level
-    };
-    
-    this.recentLogs.unshift(entry);
-    if (this.recentLogs.length > this.maxLogEntries) {
-      this.recentLogs.pop();
-    }
-    
-    if (level === 'error') {
-      console.error(`[SleepMeUI] ${message}`);
-    } else if (level === 'warn') {
-      console.warn(`[SleepMeUI] ${message}`);
-    } else {
-      console.log(`[SleepMeUI] ${message}`);
-    }
-    
-    // IMPORTANT: Do NOT push events to the UI for logs - this creates toast notifications
-  }
-  
-  logError(message, error) {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      context: 'SleepMeUI',
-      message: `${message}: ${error.message}`,
-      level: 'error',
-      stack: error.stack
-    };
-    
-    this.recentLogs.unshift(entry);
-    if (this.recentLogs.length > this.maxLogEntries) {
-      this.recentLogs.pop();
-    }
-    
-    console.error(`[SleepMeUI] ${message}:`, error);
-    
-    // IMPORTANT: Do NOT push error events to UI - this creates toast notifications
   }
 }
 

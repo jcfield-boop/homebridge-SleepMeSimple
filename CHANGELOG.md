@@ -1,5 +1,19 @@
 # Changelog
-## 4.1.0 (Latest)
+
+##  (Latest)
+- **Complete Console-Only Logging System**: Eliminated all toast notifications
+- **Key Improvements:**
+  - Replaced all toast notifications with console-only logging
+  - Implemented toast function overrides at the source
+  - Fixed confirmation modal with direct DOM manipulation
+  - Removed all log-fetching operations
+  - Blocked server-side events that trigger unwanted notifications
+  - Enhanced error handling with better console logging
+  - Simplified codebase by standardizing on one logging approach
+  - Improved developer experience with formatted console logs
+  - Added reliability fixes to modal confirmation dialog
+## 4.1.0 
+
 - **Complete Block of Unwanted Toast Notifications**: Implemented ultra-strict filtering system
 - **Fixed Confirmation Modal Issues**: Ensured modal appears properly when removing schedules
 - **Key Improvements:**

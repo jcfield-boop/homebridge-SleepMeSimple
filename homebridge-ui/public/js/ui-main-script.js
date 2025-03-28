@@ -80,6 +80,39 @@ window.templates = {
 };
 
 /**
+ * Complete toast suppression system
+ * Redirects all toast notifications to console logs
+ */
+function installCompleteToastSuppression() {
+  // Skip if homebridge not available
+  if (typeof homebridge === 'undefined' || !homebridge.toast) {
+    console.warn('Toast suppression: Homebridge toast API not available');
+    return;
+  }
+  
+  console.log('Installing complete toast suppression system');
+  
+  // Replace all toast methods with console-only versions
+  homebridge.toast.success = (message, title) => {
+    console.log(`✅ [SUCCESS] ${title ? title + ': ' : ''}${message}`);
+  };
+  
+  homebridge.toast.error = (message, title) => {
+    console.error(`❌ [ERROR] ${title ? title + ': ' : ''}${message}`);
+  };
+  
+  homebridge.toast.warning = (message, title) => {
+    console.warn(`⚠️ [WARNING] ${title ? title + ': ' : ''}${message}`);
+  };
+  
+  homebridge.toast.info = (message, title) => {
+    console.info(`ℹ️ [INFO] ${title ? title + ': ' : ''}${message}`);
+  };
+  
+  console.log('Complete toast suppression installed successfully');
+}
+
+/**
  * Helper function to safely get a DOM element with error handling
  * @param {string} id - The element ID to find
  * @param {boolean} required - Whether the element is required
@@ -144,6 +177,86 @@ function initializeDOMReferences() {
     return false;
   }
 }
+
+/**
+ * Console-only logging function that replaces all showToast calls
+ * @param {string} type - Log type: 'success', 'error', 'warning', 'info'
+ * @param {string} message - Log message
+ * @param {string} title - Optional log title
+ */
+window.showToast = function(type, message, title = '') {
+  // Always log to console with appropriate formatting
+  if (type === 'error') {
+    console.error(`❌ ${title ? title + ': ' : ''}${message}`);
+  } else if (type === 'warning') {
+    console.warn(`⚠️ ${title ? title + ': ' : ''}${message}`);
+  } else if (type === 'success') {
+    console.log(`✅ ${title ? title + ': ' : ''}${message}`);
+  } else {
+    console.info(`ℹ️ ${title ? title + ': ' : ''}${message}`);
+  }
+  
+  // No toast notifications are actually shown
+};
+
+/**
+ * Show loading indicator with message (console only)
+ * @param {string} message - Message to display
+ */
+window.showLoading = function(message) {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
+    homebridge.showSpinner();
+  }
+  // Log to console but don't show toast for loading messages
+  console.log(`⏳ Loading: ${message}`);
+};
+
+/**
+ * Hide loading indicator
+ */
+window.hideLoading = function() {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+    homebridge.hideSpinner();
+  }
+  console.log('⏳ Loading complete');
+};
+
+/**
+ * Test connection to the SleepMe API
+ * @returns {Promise<void>}
+ */
+window.testConnection = async function() {
+  try {
+    const apiTokenInput = safeGetElement('apiToken', true);
+    if (!apiTokenInput) {
+      window.showToast('error', 'API token input field not found', 'Test Error');
+      return;
+    }
+    
+    const apiToken = apiTokenInput.value.trim();
+    if (!apiToken) {
+      window.showToast('error', 'Please enter your API token', 'Validation Error');
+      return;
+    }
+    
+    window.showLoading('Testing API connection...');
+    
+    const response = await homebridge.request('/device/test', { apiToken });
+    
+    window.hideLoading();
+    
+    if (response.success) {
+      window.showToast('success', 
+        `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`, 
+        'API Test');
+    } else {
+      window.showToast('error', response.error || 'Unknown error testing connection', 'API Test Failed');
+    }
+  } catch (error) {
+    window.hideLoading();
+    window.showToast('error', 'Error testing connection: ' + error.message, 'API Test Error');
+  }
+};
 
 /**
  * Initialize event listeners for UI elements with proper error handling
@@ -273,251 +386,6 @@ function initializeEventListeners() {
 }
 
 /**
- * CRUCIAL FIX: Intercept and completely block ALL toast notifications 
- * except those explicitly allowed
- */
-function installToastOverrides() {
-  // Skip if homebridge not available
-  if (typeof homebridge === 'undefined' || !homebridge.toast) {
-    console.warn('Cannot install toast overrides - homebridge.toast not available');
-    return;
-  }
-  
-  console.log('Installing complete toast notification blocking system');
-  
-  // Keep reference to original toast methods
-  const originalToasts = {
-    success: homebridge.toast.success,
-    error: homebridge.toast.error,
-    warning: homebridge.toast.warning,
-    info: homebridge.toast.info
-  };
-  
-  // Extended list of messages that should NEVER be shown as toasts
-  const blockToastContents = [
-    'Config Check', 
-    'Config Found',
-    'Ready',
-    'SleepMe Simple UI',
-    'Loading',
-    'Config loaded',
-    'Fetching',
-    'Config saved',
-    'Server log',
-    'Log',
-    'API token',
-    'Error fetching logs',
-    'Logs not found',
-    'Server logs',
-    'initialized',
-    'File',
-    'Path',
-    'Directory',
-    'Storage'
-  ];
-  
-  // Only these specific titles are allowed to show toasts
-  const allowedToastTitles = [
-    'Save Complete',
-    'API Test',
-    'Templates Applied',
-    'Schedule Removed',
-    'Validation Error',
-    'API Test Failed',
-    'API Test Error',
-    'Save Error',
-    'Connection Error'
-  ];
-  
-  // Replacement function that applies ultra-strict filtering
-  function createFilteredToast(type) {
-    return function(message, title = '') {
-      // Always log to console for debugging
-      if (type === 'error') {
-        console.error(`[Toast ${type}] ${title}: ${message}`);
-      } else if (type === 'warning') {
-        console.warn(`[Toast ${type}] ${title}: ${message}`);
-      } else {
-        console.log(`[Toast ${type}] ${title}: ${message}`);
-      }
-      
-      // Block by default - only specifically allowed toasts will show
-      let shouldShow = false;
-      
-      // 1. Block any toast containing blocked terms
-      const shouldBlock = blockToastContents.some(term => 
-        (message && message.toLowerCase().includes(term.toLowerCase())) || 
-        (title && title.toLowerCase().includes(term.toLowerCase()))
-      );
-      
-      if (shouldBlock) {
-        return; // Skip toast display completely
-      }
-      
-      // 2. Only allow explicitly approved toast titles - exact match required
-      const isAllowedTitle = allowedToastTitles.some(allowedTitle => 
-        title === allowedTitle // Exact match required
-      );
-      
-      // Only show toasts with explicitly allowed titles
-      if (isAllowedTitle) {
-        originalToasts[type](message, title);
-      }
-    };
-  }
-  
-  // Replace all toast methods with filtered versions
-  homebridge.toast.success = createFilteredToast('success');
-  homebridge.toast.error = createFilteredToast('error');
-  homebridge.toast.warning = createFilteredToast('warning');
-  homebridge.toast.info = createFilteredToast('info');
-  
-  console.log('Complete toast notification blocking system installed');
-}
-
-/**
- * Show a toast notification with STRICT filtering to reduce verbosity
- * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
- * @param {string} message - Toast message
- * @param {string} title - Toast title (optional)
- */
-window.showToast = function(type, message, title = '') {
-  // Always log to console for debugging purposes
-  if (type === 'error') {
-    console.error(`${title}: ${message}`);
-  } else if (type === 'warning') {
-    console.warn(`${title}: ${message}`);
-  } else {
-    console.log(`${title}: ${message}`);
-  }
-  
-  // Global blocklist for message content that should NEVER trigger toasts
-  const blockedContentPatterns = [
-    'Fetching Server logs',
-    'Server logs unavailable',
-    'Log directory not found',
-    'Loading configuration',
-    'Logs not found',
-    'API token loaded',
-    'Temperature unit set',
-    'Config loaded',
-    'Config Check',
-    'Config Found',
-    'Ready',
-    'SleepMe Simple UI',
-    'Initialized'
-  ];
-  
-  // Check if message contains any blocked pattern
-  if (blockedContentPatterns.some(pattern => 
-    (message && message.includes(pattern)) || (title && title.includes(pattern))
-  )) {
-    return; // Skip toast for blocked content
-  }
-  
-  // Very strict allowlist approach - ONLY show these specific toast combinations
-  const allowedToasts = [
-    // Critical user actions that need feedback
-    { type: 'success', title: 'Save Complete' },
-    { type: 'success', title: 'API Test', titleMatch: 'exact' },
-    { type: 'success', title: 'Templates Applied', titleMatch: 'exact' },
-    { type: 'success', title: 'Schedule Removed', titleMatch: 'exact' },
-    
-    // Critical errors that require user attention
-    { type: 'error', title: 'Validation Error' },
-    { type: 'error', title: 'API Test Failed' },
-    { type: 'error', title: 'API Test Error' },
-    { type: 'error', title: 'Save Error' },
-    { type: 'error', title: 'Connection Error' }
-  ];
-  
-  // Check if this toast should be shown based on the allowlist
-  const shouldShow = allowedToasts.some(allowed => {
-    // Type must match
-    if (allowed.type !== type) return false;
-    
-    // Title matching based on the matching strategy
-    if (allowed.titleMatch === 'exact') {
-      return allowed.title === title;
-    } else {
-      return title.includes(allowed.title);
-    }
-  });
-  
-  // Exit early if this toast shouldn't be shown
-  if (!shouldShow) {
-    return;
-  }
-  
-  // Display toast if homebridge is available and it passed all filters
-  if (typeof homebridge !== 'undefined' && homebridge.toast) {
-    if (homebridge.toast[type]) {
-      homebridge.toast[type](message, title);
-    } else {
-      homebridge.toast.info(message, title);
-    }
-  }
-};
-
-/**
- * Show loading indicator with message
- * @param {string} message - Message to display
- */
-window.showLoading = function(message) {
-  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
-    homebridge.showSpinner();
-  }
-  // Log to console but don't show toast for loading messages
-  console.log(`Loading: ${message}`);
-};
-
-/**
- * Hide loading indicator
- */
-window.hideLoading = function() {
-  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
-    homebridge.hideSpinner();
-  }
-};
-
-/**
- * Test connection to the SleepMe API
- * @returns {Promise<void>}
- */
-window.testConnection = async function() {
-  try {
-    const apiTokenInput = safeGetElement('apiToken', true);
-    if (!apiTokenInput) {
-      window.showToast('error', 'API token input field not found', 'Test Error');
-      return;
-    }
-    
-    const apiToken = apiTokenInput.value.trim();
-    if (!apiToken) {
-      window.showToast('error', 'Please enter your API token', 'Validation Error');
-      return;
-    }
-    
-    window.showLoading('Testing API connection...');
-    
-    const response = await homebridge.request('/device/test', { apiToken });
-    
-    window.hideLoading();
-    
-    if (response.success) {
-      window.showToast('success', 
-        `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`, 
-        'API Test');
-    } else {
-      window.showToast('error', response.error || 'Unknown error testing connection', 'API Test Failed');
-    }
-  } catch (error) {
-    window.hideLoading();
-    window.showToast('error', 'Error testing connection: ' + error.message, 'API Test Error');
-  }
-};
-
-/**
  * Wait for Homebridge to be fully ready with improved error handling
  * @returns {Promise<void>}
  */
@@ -570,8 +438,8 @@ async function initApp() {
     // Skip toast for initialization - just log to console
     console.log('Initializing SleepMe Simple UI...');
     
-    // Step 0: Install toast overrides as early as possible
-    installToastOverrides();
+    // Step 0: Install toast suppression system as early as possible
+    installCompleteToastSuppression();
     
     // Step 1: Ensure Homebridge API is ready
     try {
