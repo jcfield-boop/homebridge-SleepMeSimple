@@ -35,56 +35,25 @@ async function loadConfig() {
     }
     
     // Get the plugin config using the Homebridge API
-    let retries = 0;
-    let pluginConfig = null;
-    let retryDelay = 1000;
+    console.log('Getting plugin config from Homebridge API...');
+    const pluginConfig = await homebridge.getPluginConfig();
+    console.log('Raw plugin config:', JSON.stringify(pluginConfig));
     
-    // Try up to 3 times to load the config with increasing delay
-    while (retries < 3 && !pluginConfig) {
-      try {
-        console.log(`Attempt ${retries + 1}/3 to get plugin config...`);
-        pluginConfig = await homebridge.getPluginConfig();
-        
-        console.log('Raw plugin config:', JSON.stringify(pluginConfig));
-        showToast('success', 'Configuration retrieved successfully', 'Config Loaded');
-      } catch (configError) {
-        retries++;
-        console.error(`Config load attempt ${retries} failed:`, configError);
-        showToast('warning', `Config load attempt ${retries} failed: ${configError.message}`, 'Retry');
-        
-        if (retries < 3) {
-          // Wait before retrying with exponential backoff
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          retryDelay *= 2; // Double the delay for each retry
-        } else {
-          throw new Error(`Failed to load config after ${retries} attempts: ${configError.message}`);
-        }
-      }
-    }
-    
-    // Find our platform configuration with more forgiving matching
+    // Find our platform configuration
     let config = {};
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
-      // Try to find by exact platform name
-      let platformConfig = pluginConfig.find(cfg => 
-        cfg && cfg.platform && cfg.platform.toLowerCase() === 'sleepmebasic');
+      // Try to find by exact platform name first
+      const platformConfig = pluginConfig.find(cfg => 
+        cfg && cfg.platform === 'SleepMeSimple');
       
-      // If not found, try the alternative name
-      if (!platformConfig) {
-        platformConfig = pluginConfig.find(cfg => 
-          cfg && cfg.platform && cfg.platform.toLowerCase() === 'sleepme' || 
-          cfg.platform === 'SleepMeSimple');
+      if (platformConfig) {
+        config = platformConfig;
+        console.log('Found SleepMeSimple platform config:', config);
+        showToast('success', 'Found configuration in API response', 'Config Found');
+      } else {
+        console.warn('No SleepMeSimple platform found in config');
+        showToast('info', 'No existing configuration found, using defaults', 'New Config');
       }
-      
-      // If still not found, take the first platform config
-      if (!platformConfig && pluginConfig.length > 0) {
-        platformConfig = pluginConfig.find(cfg => cfg && cfg.platform) || pluginConfig[0];
-      }
-      
-      config = platformConfig || {};
-      
-      console.log('Found platform config:', config);
-      showToast('success', 'Found configuration in API response', 'Config Found');
     } else {
       console.warn('No plugin config found in API response');
       showToast('info', 'No existing configuration found, using defaults', 'New Config');
