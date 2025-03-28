@@ -6,6 +6,24 @@ async function loadConfig() {
   try {
     showLoading('Loading configuration...');
     
+    // Request direct config check from server
+    try {
+      showToast('info', 'Checking if server can access config.json...', 'Config Check');
+      const configCheck = await homebridge.request('/config/check');
+      if (configCheck.success) {
+        showToast('success', 'Server can access config.json directly', 'Config Check');
+        if (configCheck.platformFound) {
+          showToast('info', `Found SleepMeSimple in config.json with ${configCheck.platformConfig.scheduleCount} schedules`, 'Config File');
+        } else {
+          showToast('warning', 'SleepMeSimple platform not found in config.json', 'Config File');
+        }
+      } else {
+        showToast('warning', `Cannot access config.json directly: ${configCheck.error || 'Unknown error'}`, 'Config Check');
+      }
+    } catch (checkError) {
+      showToast('error', 'Failed to check config file: ' + checkError.message, 'Config Check');
+    }
+    
     // Make sure homebridge object is available
     if (typeof homebridge === 'undefined') {
       throw new Error('Homebridge object is not available');
@@ -16,35 +34,26 @@ async function loadConfig() {
       throw new Error('Homebridge getPluginConfig function is not available');
     }
     
-    // Use the Homebridge API to get plugin config with retry logic
-    let pluginConfig;
-    let retryCount = 0;
-    const maxRetries = 3;
+    // Use the Homebridge API to get plugin config
+    showToast('info', 'Calling homebridge.getPluginConfig()...', 'Loading Config');
     
-    while (retryCount < maxRetries) {
-      try {
-        pluginConfig = await homebridge.getPluginConfig();
-        showToast('info', 'Configuration loaded successfully', 'Config Loaded');
-        break; // Success, exit retry loop
-      } catch (retryError) {
-        retryCount++;
-        
-        if (retryCount >= maxRetries) {
-          throw new Error(`Failed to get plugin config after ${maxRetries} attempts: ${retryError.message}`);
-        }
-        
-        showToast('warning', `Retry attempt ${retryCount}...`, 'Loading Config');
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+    const pluginConfig = await homebridge.getPluginConfig();
+    
+    showToast('success', 'Successfully retrieved configuration via API', 'Config Loaded');
+    
+    // Log what we received
+    if (Array.isArray(pluginConfig)) {
+      showToast('info', `Retrieved ${pluginConfig.length} config blocks`, 'Config Count');
+    } else {
+      showToast('warning', 'Retrieved config is not an array', 'Config Format');
     }
     
     // Find our platform configuration (should be the first/only one)
     let config = {};
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
       config = pluginConfig[0] || {};
-      showToast('success', 'Found existing configuration', 'Config Found');
+      showToast('success', 'Found existing configuration in API response', 'Config Found');
+      showToast('info', `Config has API token: ${!!config.apiToken}, Unit: ${config.unit || 'not set'}`, 'Config Details');
     } else {
       showToast('info', 'No existing configuration found, using defaults', 'New Config');
     }
@@ -100,7 +109,9 @@ async function loadConfig() {
         }));
         
         // Render schedule list
-        renderScheduleList();
+        if (typeof renderScheduleList === 'function') {
+          renderScheduleList();
+        }
         
         showToast('info', `Loaded ${schedules.length} schedules from config`, 'Schedules');
       } else if (enableSchedules) {
@@ -109,7 +120,9 @@ async function loadConfig() {
     }
     
     // Apply the updated temperature validation based on the loaded unit
-    updateTemperatureValidation();
+    if (typeof updateTemperatureValidation === 'function') {
+      updateTemperatureValidation();
+    }
     
     hideLoading();
     return config;
@@ -121,14 +134,36 @@ async function loadConfig() {
 }
 
 /**
+ * Check directly if config is loaded
+ * @returns {Promise<boolean>} True if config is loaded
+ */
+async function checkDirectConfigStatus() {
+  try {
+    const response = await homebridge.request('/config/check');
+    if (response && response.success) {
+      showToast('success', 'Config file is accessible by server', 'Config Status');
+      return true;
+    } else {
+      showToast('warning', 'Config file is not accessible by server', 'Config Status');
+      return false;
+    }
+  } catch (error) {
+    showToast('error', 'Failed to check config status: ' + error.message, 'Config Error');
+    return false;
+  }
+}
+
+/**
  * Save configuration to Homebridge
  * Uses the proper Homebridge UI APIs to update plugin configuration
  */
 async function saveConfig() {
   try {
     showLoading('Saving configuration...');
+    showToast('info', 'Starting save process...', 'Save Config');
     
     // Get current config to update
+    showToast('info', 'Fetching current config...', 'Save Step 1');
     const pluginConfig = await homebridge.getPluginConfig();
     
     // Get values from form
@@ -163,6 +198,8 @@ async function saveConfig() {
       enableSchedules
     };
     
+    showToast('info', 'Config object prepared...', 'Save Step 2');
+    
     // Add schedules if enabled
     if (enableSchedules && schedules.length > 0) {
       // Clean schedules for storage
@@ -187,13 +224,11 @@ async function saveConfig() {
         return cleanSchedule;
       });
       
-      showToast('info', `Saving ${config.schedules.length} schedules`, 'Schedules');
+      showToast('info', `Added ${config.schedules.length} schedules to config`, 'Schedules');
     }
     
-    // Show saving message with config details
-    showToast('info', `Saving: ${unit}°, ${pollingInterval}s polling, ${logLevel} logging`, 'Config');
-    
     // Update config via homebridge API
+    showToast('info', 'Calling updatePluginConfig...', 'Save Step 3');
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
       // Update existing config
       await homebridge.updatePluginConfig([config]);
@@ -205,7 +240,11 @@ async function saveConfig() {
     }
     
     // Save changes to disk
+    showToast('info', 'Calling savePluginConfig...', 'Save Step 4');
     await homebridge.savePluginConfig();
+    
+    // Verify config was saved
+    await checkDirectConfigStatus();
     
     hideLoading();
     showToast('success', 'Configuration saved successfully', 'Save Complete');
@@ -317,4 +356,66 @@ async function fetchServerLogs() {
     showToast('error', 'Failed to fetch logs: ' + (error.message || 'Unknown error'), 'Logs Error');
     hideLoading();
   }
+}
+
+/**
+ * Show loading indicator with message
+ * @param {string} message - Message to display
+ */
+function showLoading(message) {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
+    homebridge.showSpinner();
+  }
+  showToast('info', message, 'Loading...');
+}
+
+/**
+ * Hide loading indicator
+ */
+function hideLoading() {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+    homebridge.hideSpinner();
+  }
+}
+
+/**
+ * Show toast notification
+ * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
+ * @param {string} message - Toast message
+ * @param {string} title - Toast title
+ * @param {Function} callback - Optional callback function
+ */
+function showToast(type, message, title, callback) {
+  if (!homebridge || !homebridge.toast) {
+    console.log(`Toast (${type}): ${title} - ${message}`);
+    return;
+  }
+
+  if (homebridge.toast[type]) {
+    homebridge.toast[type](message, title);
+  } else {
+    homebridge.toast.info(message, title);
+  }
+
+  if (typeof callback === 'function') {
+    setTimeout(callback, 2000);
+  }
+}
+
+// Add listeners for server events if not already set up
+if (typeof homebridge !== 'undefined') {
+  // Add listener for config status events from server
+  homebridge.addEventListener('config-status', (event) => {
+    const configStatus = event.data;
+    
+    if (configStatus.success) {
+      showToast('success', `Config file read: ${configStatus.path}`, 'Config Direct');
+      
+      if (configStatus.platformFound && configStatus.platformConfig) {
+        showToast('info', `Config platform details: ${JSON.stringify(configStatus.platformConfig)}`, 'Config Content');
+      }
+    } else {
+      showToast('error', `Failed to read config file: ${configStatus.error || 'Unknown error'}`, 'Config Error');
+    }
+  });
 }

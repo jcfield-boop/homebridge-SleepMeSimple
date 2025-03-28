@@ -384,3 +384,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+// Add listener for config status events from server
+homebridge.addEventListener('config-status', (event) => {
+  const configStatus = event.data;
+  
+  if (configStatus.success) {
+    showToast('success', `Config file read successfully! Found platform: ${configStatus.platformFound}`, 'Config Status');
+    
+    if (configStatus.platformFound && configStatus.platformConfig) {
+      showToast('info', `Config contains: Unit=${configStatus.platformConfig.unit}, Schedules=${configStatus.platformConfig.scheduleCount}`, 'Config Details');
+    }
+  } else {
+    showToast('error', `Unable to read config file: ${configStatus.error || 'Unknown error'}`, 'Config Error');
+  }
+});
+
+// Add listener for server errors
+homebridge.addEventListener('server-error', (event) => {
+  const errorData = event.data;
+  showToast('error', `Server error: ${errorData.message}`, 'Server Error');
+});

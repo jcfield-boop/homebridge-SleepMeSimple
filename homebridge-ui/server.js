@@ -1,6 +1,8 @@
 // homebridge-ui/server.js
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 
 // API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
@@ -21,19 +23,87 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Register request handlers
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/logs', this.getServerLogs.bind(this));
+    this.onRequest('/config/check', this.checkConfigFile.bind(this));
     
     // Log initialization
     this.log('SleepMe UI Server initialized');
     
-    // Push initialization event to the UI
-    this.pushEvent('server-ready', { 
-      timestamp: new Date().toISOString(),
-      serverPath: this.homebridgeStoragePath
-    });
+    // Immediately check the config file and send result to UI
+    this.checkConfigAndPush();
     
     // IMPORTANT: Signal that the server is ready to accept requests
     // This must be called after all request handlers are registered
     this.ready();
+  }
+  
+  /**
+   * Check the config file and push status to UI
+   * This helps verify if we can read the config.json file directly
+   */
+  async checkConfigAndPush() {
+    try {
+      const configResult = await this.checkConfigFile();
+      // Push config status to UI as an event
+      this.pushEvent('config-status', configResult);
+    } catch (error) {
+      this.logError('Failed to check config file', error);
+    }
+  }
+  
+  /**
+   * Check if we can access the config.json file
+   * @returns {Promise<Object>} Status of config file access
+   */
+  async checkConfigFile() {
+    try {
+      // Get the config path
+      const configPath = this.homebridgeConfigPath;
+      this.log(`Checking config file at: ${configPath}`);
+      
+      // Check if file exists
+      const exists = fs.existsSync(configPath);
+      
+      if (!exists) {
+        this.log('Config file not found', 'warn');
+        return {
+          success: false,
+          message: 'Config file not found',
+          path: configPath
+        };
+      }
+      
+      // Read file contents as string
+      const configContents = fs.readFileSync(configPath, 'utf8');
+      
+      // Parse JSON
+      const config = JSON.parse(configContents);
+      
+      // Check if our plugin is in the config
+      const platforms = config.platforms || [];
+      const ourPlatform = platforms.find(p => p.platform === 'SleepMeSimple');
+      
+      this.log(`Config file checked: Platform found: ${!!ourPlatform}`);
+      
+      return {
+        success: true,
+        platformFound: !!ourPlatform,
+        platformConfig: ourPlatform ? {
+          name: ourPlatform.name,
+          hasApiToken: !!ourPlatform.apiToken,
+          unit: ourPlatform.unit,
+          pollingInterval: ourPlatform.pollingInterval,
+          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
+        } : null,
+        path: configPath
+      };
+    } catch (error) {
+      this.logError(`Error checking config file: ${error.message}`, error);
+      return {
+        success: false,
+        error: error.message,
+        path: this.homebridgeConfigPath || 'unknown'
+      };
+    }
   }
   
   // Helper logging methods
@@ -149,6 +219,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const errorMessage = error.response?.data?.message || error.message;
       
       this.logError(`API connection test failed with status ${statusCode}`, error);
+      
       return {
         success: false,
         error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
@@ -206,27 +277,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       return {
         success: false,
         error: `Failed to retrieve logs: ${error.message || 'Unknown error'}`
-      };
-    }
-  }
-  
-  /**
-   * Get the config paths for debugging
-   * @returns {Promise<Object>} Object with paths information
-   */
-  async getConfigPaths() {
-    try {
-      return {
-        success: true,
-        storagePath: this.homebridgeStoragePath,
-        configPath: this.homebridgeConfigPath,
-        uiVersion: this.homebridgeUiVersion
-      };
-    } catch (error) {
-      this.logError('Error getting paths', error);
-      return {
-        success: false,
-        error: 'Failed to retrieve configuration paths'
       };
     }
   }
