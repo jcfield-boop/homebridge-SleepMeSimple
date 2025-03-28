@@ -8,9 +8,9 @@
  * Uses the Homebridge UI APIs to fetch plugin configuration
  * @returns {Promise<Object>} The loaded configuration object
  */
-async function loadConfig() {
+window.loadConfig = async function() {
   try {
-    showLoading('Loading configuration...');
+    window.showLoading('Loading configuration...');
     
     // Ensure homebridge object is fully initialized
     await ensureHomebridgeReady();
@@ -23,15 +23,15 @@ async function loadConfig() {
     try {
       const configCheck = await homebridge.request('/config/check');
       if (configCheck.success) {
-        showToast('success', 'Server can access config.json directly', 'Config Check');
+        window.showToast('success', 'Server can access config.json directly', 'Config Check');
         console.log('Server config check result:', configCheck);
       } else {
-        showToast('warning', 'Server cannot access config.json directly', 'Config Warning');
+        window.showToast('warning', 'Server cannot access config.json directly', 'Config Warning');
         console.warn('Server config check warning:', configCheck);
       }
     } catch (checkError) {
       console.error('Config check error:', checkError);
-      showToast('warning', 'Config check failed: ' + checkError.message, 'Config Warning');
+      window.showToast('warning', 'Config check failed: ' + checkError.message, 'Config Warning');
     }
     
     // Get the plugin config using the Homebridge API
@@ -49,14 +49,14 @@ async function loadConfig() {
       if (platformConfig) {
         config = platformConfig;
         console.log('Found SleepMeSimple platform config:', config);
-        showToast('success', 'Found configuration in API response', 'Config Found');
+        window.showToast('success', 'Found configuration in API response', 'Config Found');
       } else {
         console.warn('No SleepMeSimple platform found in config');
-        showToast('info', 'No existing configuration found, using defaults', 'New Config');
+        window.showToast('info', 'No existing configuration found, using defaults', 'New Config');
       }
     } else {
       console.warn('No plugin config found in API response');
-      showToast('info', 'No existing configuration found, using defaults', 'New Config');
+      window.showToast('info', 'No existing configuration found, using defaults', 'New Config');
     }
     
     // Wait for DOM elements to be available
@@ -65,15 +65,15 @@ async function loadConfig() {
     // Fill form fields with config values
     populateFormFields(config);
     
-    hideLoading();
+    window.hideLoading();
     return config;
   } catch (error) {
     console.error('Configuration loading error:', error);
-    showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
-    hideLoading();
+    window.showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
+    window.hideLoading();
     return {};
   }
-}
+};
 
 /**
  * Ensures the Homebridge API is fully initialized and ready
@@ -153,7 +153,6 @@ async function waitForDOMElements() {
     }, checkInterval);
   });
 }
-
 /**
  * Populate form fields with configuration values
  * @param {Object} config - The configuration object
@@ -188,27 +187,34 @@ function populateFormFields(config) {
   // Set API token if available
   if (apiTokenInput && config.apiToken) {
     apiTokenInput.value = config.apiToken;
-    showToast('info', 'API token loaded from config', 'Config');
+    window.showToast('info', 'API token loaded from config', 'Config');
   } else if (apiTokenInput) {
     console.warn('No API token found in config');
+    apiTokenInput.value = ''; // Ensure field is empty
   }
   
   // Set temperature unit if available
   if (unitSelect && config.unit) {
     unitSelect.value = config.unit;
-    showToast('info', `Temperature unit set to ${config.unit}`, 'Config');
+    window.showToast('info', `Temperature unit set to ${config.unit}`, 'Config');
+  } else if (unitSelect) {
+    unitSelect.value = 'C'; // Set default
   }
   
   // Set polling interval if available
   if (pollingIntervalInput && config.pollingInterval) {
     pollingIntervalInput.value = config.pollingInterval;
-    showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Config');
+    window.showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Config');
+  } else if (pollingIntervalInput) {
+    pollingIntervalInput.value = '90'; // Set default
   }
   
   // Set log level if available
   if (logLevelSelect && config.logLevel) {
     logLevelSelect.value = config.logLevel;
-    showToast('info', `Log level set to ${config.logLevel}`, 'Config');
+    window.showToast('info', `Log level set to ${config.logLevel}`, 'Config');
+  } else if (logLevelSelect) {
+    logLevelSelect.value = 'normal'; // Set default
   }
   
   // Handle schedules
@@ -229,28 +235,24 @@ function populateFormFields(config) {
       }));
       
       // Assign to global schedules variable for compatibility
-      schedules = [...window.schedules];
-      
-      // Render schedule list if the function exists
-      if (typeof renderScheduleList === 'function') {
-        console.log('Rendering schedule list with', schedules.length, 'schedules');
-        renderScheduleList();
+      if (typeof window.renderScheduleList === 'function') {
+        console.log('Rendering schedule list with', window.schedules.length, 'schedules');
+        window.renderScheduleList();
       } else {
         console.warn('renderScheduleList function not available');
       }
       
-      showToast('info', `Loaded ${schedules.length} schedules from config`, 'Schedules');
+      window.showToast('info', `Loaded ${window.schedules.length} schedules from config`, 'Schedules');
     } else if (enableSchedules) {
       console.log('No schedules found in config but schedules are enabled');
       window.schedules = [];
-      schedules = [];
-      showToast('info', 'No existing schedules found', 'Schedules');
+      window.showToast('info', 'No existing schedules found', 'Schedules');
     }
   }
   
   // Apply the updated temperature validation based on the loaded unit
-  if (typeof updateTemperatureValidation === 'function') {
-    updateTemperatureValidation();
+  if (typeof window.updateTemperatureValidation === 'function') {
+    window.updateTemperatureValidation();
   } else {
     console.warn('updateTemperatureValidation function not available');
   }
@@ -260,16 +262,16 @@ function populateFormFields(config) {
  * Save configuration to Homebridge
  * @returns {Promise<void>}
  */
-async function saveConfig() {
+window.saveConfig = async function() {
   try {
-    showLoading('Saving configuration...');
-    showToast('info', 'Starting save process...', 'Save Config');
+    window.showLoading('Saving configuration...');
+    window.showToast('info', 'Starting save process...', 'Save Config');
     
     // Verify Homebridge API is available
     await ensureHomebridgeReady();
     
     // Get current config to update
-    showToast('info', 'Fetching current config...', 'Save Step 1');
+    window.showToast('info', 'Fetching current config...', 'Save Step 1');
     const pluginConfig = await homebridge.getPluginConfig();
     console.log('Current plugin config:', pluginConfig);
     
@@ -292,15 +294,15 @@ async function saveConfig() {
     
     // Validate required fields
     if (!apiToken) {
-      showToast('error', 'API token is required', 'Validation Error');
-      hideLoading();
+      window.showToast('error', 'API token is required', 'Validation Error');
+      window.hideLoading();
       return;
     }
     
     // Validate polling interval
     if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
-      showToast('error', 'Polling interval must be between 60 and 300 seconds', 'Validation Error');
-      hideLoading();
+      window.showToast('error', 'Polling interval must be between 60 and 300 seconds', 'Validation Error');
+      window.hideLoading();
       return;
     }
     
@@ -316,7 +318,7 @@ async function saveConfig() {
     };
     
     console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
-    showToast('info', 'Config object prepared...', 'Save Step 2');
+    window.showToast('info', 'Config object prepared...', 'Save Step 2');
     
     // Add schedules if enabled
     if (enableSchedules && window.schedules && window.schedules.length > 0) {
@@ -343,12 +345,12 @@ async function saveConfig() {
       });
       
       console.log(`Adding ${config.schedules.length} schedules to config`);
-      showToast('info', `Added ${config.schedules.length} schedules to config`, 'Schedules');
+      window.showToast('info', `Added ${config.schedules.length} schedules to config`, 'Schedules');
     }
     
     // Find current config position and update
     const existingConfigIndex = Array.isArray(pluginConfig) ? 
-      pluginConfig.findIndex(cfg => cfg.platform === 'SleepMeSimple') : -1;
+      pluginConfig.findIndex(cfg => cfg && cfg.platform === 'SleepMeSimple') : -1;
 
     let updatedConfig;
     if (existingConfigIndex >= 0) {
@@ -366,84 +368,32 @@ async function saveConfig() {
       console.log('Creating new config array');
     }
     
-    // Update plugin config
-    showToast('info', 'Calling updatePluginConfig...', 'Save Step 3');
-    await homebridge.updatePluginConfig(updatedConfig);
+    // Update plugin config - IMPORTANT FIX HERE
+    window.showToast('info', 'Updating plugin config...', 'Save Step 3');
+    console.log('Calling updatePluginConfig with:', updatedConfig);
+    try {
+      const updateResult = await homebridge.updatePluginConfig(updatedConfig);
+      console.log('Update result:', updateResult);
+    } catch (updateError) {
+      console.error('Error updating config:', updateError);
+      throw new Error(`Update failed: ${updateError.message}`);
+    }
     
     // Save changes to disk
-    showToast('info', 'Calling savePluginConfig...', 'Save Step 4');
-    await homebridge.savePluginConfig();
-    
-    // Verify config was saved
+    window.showToast('info', 'Saving config to disk...', 'Save Step 4');
     try {
-      const verifyResult = await homebridge.request('/config/check');
-      console.log('Config verification result:', verifyResult);
-      
-      if (verifyResult.success && verifyResult.platformFound) {
-        showToast('success', 'Configuration verified by server', 'Config Verified');
-      } else {
-        showToast('warning', 'Server verification inconclusive', 'Verify Warning');
-      }
-    } catch (verifyError) {
-      console.error('Verification error:', verifyError);
-      showToast('warning', 'Could not verify configuration: ' + verifyError.message, 'Verify Warning');
+      await homebridge.savePluginConfig();
+      console.log('Config saved successfully');
+    } catch (saveError) {
+      console.error('Error saving config to disk:', saveError);
+      throw new Error(`Save to disk failed: ${saveError.message}`);
     }
     
-    hideLoading();
-    showToast('success', 'Configuration saved successfully', 'Save Complete');
+    window.hideLoading();
+    window.showToast('success', 'Configuration saved successfully', 'Save Complete');
   } catch (error) {
     console.error('Save configuration error:', error);
-    showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
-    hideLoading();
+    window.showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
+    window.hideLoading();
   }
-}
-
-/**
- * Show loading indicator with message
- * @param {string} message - Message to display
- */
-function showLoading(message) {
-  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
-    homebridge.showSpinner();
-  }
-  showToast('info', message, 'Loading...');
-  console.log('Loading:', message);
-}
-
-/**
- * Hide loading indicator
- */
-function hideLoading() {
-  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
-    homebridge.hideSpinner();
-  }
-  console.log('Loading complete');
-}
-
-/**
- * Show toast notification
- * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
- * @param {string} message - Toast message
- * @param {string} title - Toast title
- * @param {Function} callback - Optional callback function
- */
-function showToast(type, message, title, callback) {
-  // Log to console for debugging
-  const logMethod = type === 'error' ? console.error : 
-                   type === 'warning' ? console.warn : console.log;
-  
-  logMethod(`${title}: ${message}`);
-  
-  // Display toast if homebridge is available
-  if (homebridge && homebridge.toast) {
-    if (homebridge.toast[type]) {
-      homebridge.toast[type](message, title);
-    } else {
-      homebridge.toast.info(message, title);
-    }
-  }
-
-  if (typeof callback === 'function') {
-    setTimeout(callback, 2000);
-  }
-}
+};

@@ -60,108 +60,87 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       throw error;
     }
   }
-  
   /**
-   * Check if we can access the config.json file
-   * @returns {Promise<Object>} Status of config file access
-   */
-  async checkConfigFile() {
-    try {
-      // Get the config path
-      const configPath = this.homebridgeConfigPath;
-      this.log(`Checking config file at: ${configPath}`);
-      
-      // Check if file exists
-      if (!fs.existsSync(configPath)) {
-        this.log('Config file not found', 'warn');
-        return {
-          success: false,
-          message: 'Config file not found',
-          path: configPath
-        };
-      }
-      
-      // Read file contents as string
-      const configContents = fs.readFileSync(configPath, 'utf8');
-      
-      // Parse JSON
-      let config;
-      try {
-        config = JSON.parse(configContents);
-      } catch (jsonError) {
-        this.log(`Error parsing config JSON: ${jsonError.message}`, 'error');
-        return {
-          success: false,
-          message: `Config file exists but contains invalid JSON: ${jsonError.message}`,
-          path: configPath
-        };
-      }
-      
-      // Check if our plugin is in the config with multiple possible platform names
-      const platforms = config.platforms || [];
-      
-      // Try multiple possible platform names
-      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-      let ourPlatform = null;
-      
-      for (const name of platformNames) {
-        const found = platforms.find(p => 
-          p.platform && p.platform.toLowerCase() === name.toLowerCase());
-        
-        if (found) {
-          ourPlatform = found;
-          this.log(`Found platform with name: ${found.platform}`);
-          break;
-        }
-      }
-      
-      // Log detailed platform information
-      if (ourPlatform) {
-        this.log(`Platform config found: ${JSON.stringify({
-          name: ourPlatform.name || 'SleepMe Simple',
-          hasApiToken: !!ourPlatform.apiToken,
-          unit: ourPlatform.unit || 'C',
-          pollingInterval: ourPlatform.pollingInterval || 90,
-          logLevel: ourPlatform.logLevel || 'normal',
-          enableSchedules: !!ourPlatform.enableSchedules,
-          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
-        })}`);
-      } else {
-        this.log('Platform config not found in config.json');
-        
-        // Log all platform names to help debugging
-        if (platforms.length > 0) {
-          const platformNames = platforms.map(p => p.platform || 'unnamed').join(', ');
-          this.log(`Available platforms: ${platformNames}`);
-        } else {
-          this.log('No platforms defined in config.json');
-        }
-      }
-      
-      return {
-        success: true,
-        platformFound: !!ourPlatform,
-        platformConfig: ourPlatform ? {
-          name: ourPlatform.name || 'SleepMe Simple',
-          hasApiToken: !!ourPlatform.apiToken,
-          unit: ourPlatform.unit || 'C',
-          pollingInterval: ourPlatform.pollingInterval || 90,
-          logLevel: ourPlatform.logLevel || 'normal',
-          enableSchedules: !!ourPlatform.enableSchedules,
-          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
-        } : null,
-        allPlatforms: platforms.map(p => p.platform || 'unnamed'),
-        path: configPath
-      };
-    } catch (error) {
-      this.logError(`Error checking config file: ${error.message}`, error);
+ * Check if we can access the config.json file
+ * @returns {Promise<Object>} Status of config file access
+ */
+async checkConfigFile() {
+  try {
+    // Get the config path
+    const configPath = this.homebridgeConfigPath;
+    this.log(`Checking config file at: ${configPath}`);
+    
+    // Check if file exists
+    if (!fs.existsSync(configPath)) {
+      this.log('Config file not found', 'warn');
       return {
         success: false,
-        error: error.message,
-        path: this.homebridgeConfigPath || 'unknown'
+        message: 'Config file not found',
+        path: configPath
       };
     }
+    
+    // Read file contents as string
+    const configContents = fs.readFileSync(configPath, 'utf8');
+    
+    // Parse JSON
+    let config;
+    try {
+      config = JSON.parse(configContents);
+    } catch (jsonError) {
+      this.log(`Error parsing config JSON: ${jsonError.message}`, 'error');
+      return {
+        success: false,
+        message: `Config file exists but contains invalid JSON: ${jsonError.message}`,
+        path: configPath
+      };
+    }
+    
+    // Check if our plugin is in the config with multiple possible platform names
+    const platforms = config.platforms || [];
+    
+    // Try multiple possible platform names
+    const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
+    let ourPlatform = null;
+    
+    for (const name of platformNames) {
+      const found = platforms.find(p => 
+        p.platform && p.platform.toLowerCase() === name.toLowerCase());
+      
+      if (found) {
+        ourPlatform = found;
+        this.log(`Found platform with name: ${found.platform}`);
+        break;
+      }
+    }
+    
+    // Debug logging for troubleshooting
+    this.log(`Config platforms: ${JSON.stringify(platforms.map(p => p.platform || 'unnamed'))}`);
+    
+    return {
+      success: true,
+      platformFound: !!ourPlatform,
+      platformConfig: ourPlatform ? {
+        name: ourPlatform.name || 'SleepMe Simple',
+        hasApiToken: !!ourPlatform.apiToken,
+        unit: ourPlatform.unit || 'C',
+        pollingInterval: ourPlatform.pollingInterval || 90,
+        logLevel: ourPlatform.logLevel || 'normal',
+        enableSchedules: !!ourPlatform.enableSchedules,
+        scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
+      } : null,
+      allPlatforms: platforms.map(p => p.platform || 'unnamed'),
+      path: configPath
+    };
+  } catch (error) {
+    this.logError(`Error checking config file: ${error.message}`, error);
+    return {
+      success: false,
+      error: error.message,
+      path: this.homebridgeConfigPath || 'unknown'
+    };
   }
+}
   
   /**
    * Test connection to the SleepMe API
