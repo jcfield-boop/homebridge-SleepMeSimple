@@ -35,46 +35,7 @@ const templates = {
       { type: "Weekdays", time: "06:00", temperature: 26, description: "Warm Hug Wake-up" }
     ]
   },
-  nightOwl: {
-    name: "Night Owl",
-    description: "Later bedtime with extended morning warm-up",
-    schedules: [
-      { type: "Weekdays", time: "23:30", temperature: 21, description: "Cool Down" },
-      { type: "Weekdays", time: "00:30", temperature: 19, description: "Deep Sleep" },
-      { type: "Weekdays", time: "03:30", temperature: 23, description: "REM Support" },
-      { type: "Weekdays", time: "07:30", temperature: 26, description: "Warm Hug Wake-up" }
-    ]
-  },
-  earlyBird: {
-    name: "Early Bird",
-    description: "Earlier bedtime and wake-up schedule",
-    schedules: [
-      { type: "Weekdays", time: "21:00", temperature: 21, description: "Cool Down" },
-      { type: "Weekdays", time: "22:00", temperature: 19, description: "Deep Sleep" },
-      { type: "Weekdays", time: "01:00", temperature: 23, description: "REM Support" },
-      { type: "Weekdays", time: "05:00", temperature: 26, description: "Warm Hug Wake-up" }
-    ]
-  },
-  recovery: {
-    name: "Weekend Recovery",
-    description: "Extra sleep with later wake-up time",
-    schedules: [
-      { type: "Weekend", time: "23:00", temperature: 21, description: "Cool Down" },
-      { type: "Weekend", time: "00:00", temperature: 19, description: "Deep Sleep" },
-      { type: "Weekend", time: "03:00", temperature: 23, description: "REM Support" },
-      { type: "Weekend", time: "08:00", temperature: 26, description: "Warm Hug Wake-up" }
-    ]
-  },
-  relaxed: {
-    name: "Relaxed Weekend",
-    description: "Gradual transitions for weekend leisure",
-    schedules: [
-      { type: "Weekend", time: "23:30", temperature: 22, description: "Cool Down" },
-      { type: "Weekend", time: "01:00", temperature: 20, description: "Deep Sleep" },
-      { type: "Weekend", time: "04:00", temperature: 24, description: "REM Support" },
-      { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up" }
-    ]
-  }
+  // Other templates...
 };
 
 /**
@@ -84,6 +45,7 @@ const templates = {
  */
 function initializeDOMReferences() {
   console.log('Initializing DOM element references');
+  
   // Get key DOM elements
   scheduleTypeSelect = document.getElementById('scheduleType');
   daySelectContainer = document.getElementById('daySelectContainer');
@@ -116,46 +78,15 @@ function initializeDOMReferences() {
   if (!scheduleTypeSelect || !daySelectContainer || !scheduleTimeInput || 
       !scheduleTemperatureInput || !unitSelect || !warmHugInfo || 
       !addScheduleBtn || !cancelEditBtn || !scheduleList) {
-    showToast('warning', 'Some UI elements could not be found', 'UI Warning');
+    if (typeof showToast === 'function') {
+      showToast('warning', 'Some UI elements could not be found', 'UI Warning');
+    } else {
+      console.warn('Some UI elements could not be found and showToast function is not available');
+    }
     return false;
   }
   
   return true;
-}
-
-/**
- * Create logs section in the UI
- */
-function createLogsSection() {
-  // Create a container for logs
-  const container = document.createElement('div');
-  container.id = 'logsContainer';
-  container.className = 'container hidden';
-  
-  const title = document.createElement('h2');
-  title.textContent = 'Server Logs';
-  
-  const content = document.createElement('div');
-  content.id = 'logsContent';
-  content.className = 'logs-content';
-  
-  const refreshButton = document.createElement('button');
-  refreshButton.textContent = 'Refresh Logs';
-  refreshButton.className = 'secondary';
-  refreshButton.style.marginTop = '10px';
-  
-  // Add click handler to refresh logs
-  refreshButton.addEventListener('click', () => {
-    fetchServerLogs();
-  });
-  
-  // Assemble the logs UI
-  container.appendChild(title);
-  container.appendChild(content);
-  container.appendChild(refreshButton);
-  
-  // Add to the page
-  document.body.appendChild(container);
 }
 
 /**
@@ -171,11 +102,17 @@ function initializeEventListeners() {
     if (configForm) {
       configForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        await saveConfig();
+        if (typeof saveConfig === 'function') {
+          await saveConfig();
+        } else {
+          console.error('saveConfig function not available');
+        }
       });
     } else {
       console.error('Config form not found in DOM');
-      showToast('error', 'Config form not found in DOM', 'DOM Error');
+      if (typeof showToast === 'function') {
+        showToast('error', 'Config form not found in DOM', 'DOM Error');
+      }
       return false;
     }
     
@@ -268,172 +205,196 @@ function initializeEventListeners() {
       console.warn('No tab elements found');
     }
     
-    // Template description updates
-    const weekdayTemplate = document.getElementById('weekdayTemplate');
-    const weekdayTemplateDesc = document.getElementById('weekdayTemplateDesc');
-    if (weekdayTemplate && weekdayTemplateDesc) {
-      weekdayTemplate.addEventListener('change', () => {
-        const selected = weekdayTemplate.value;
-        weekdayTemplateDesc.textContent = selected && templates[selected] ? 
-          templates[selected].description : '';
-      });
-    }
-    
-    const weekendTemplate = document.getElementById('weekendTemplate');
-    const weekendTemplateDesc = document.getElementById('weekendTemplateDesc');
-    if (weekendTemplate && weekendTemplateDesc) {
-      weekendTemplate.addEventListener('change', () => {
-        const selected = weekendTemplate.value;
-        weekendTemplateDesc.textContent = selected && templates[selected] ? 
-          templates[selected].description : '';
-      });
-    }
-    
     console.log('Event listeners successfully initialized');
     return true;
   } catch (error) {
     console.error('Error setting up event listeners:', error);
-    showToast('error', 'Error setting up event listeners: ' + error.message, 'Event Error');
+    if (typeof showToast === 'function') {
+      showToast('error', 'Error setting up event listeners: ' + error.message, 'Event Error');
+    }
     return false;
   }
 }
 
-/**
- * Test connection with the API
- */
-async function testConnection() {
-  try {
-    showLoading('Testing API connection...');
-    
-    // Get the API token value
-    const apiTokenInput = document.getElementById('apiToken');
-    if (!apiTokenInput || !apiTokenInput.value) {
-      showToast('error', 'API token is required', 'Connection Error');
-      hideLoading();
-      return;
+// Need to make helper functions globally available
+window.showToast = function(type, message, title, callback) {
+  // Log to console for debugging
+  const logMethod = type === 'error' ? console.error : 
+                   type === 'warning' ? console.warn : console.log;
+  
+  logMethod(`${title}: ${message}`);
+  
+  // Display toast if homebridge is available
+  if (homebridge && homebridge.toast) {
+    if (homebridge.toast[type]) {
+      homebridge.toast[type](message, title);
+    } else {
+      homebridge.toast.info(message, title);
     }
-    
-    // Make request to server
-    const result = await homebridge.request('/device/test', { 
-      apiToken: apiTokenInput.value 
+  }
+
+  if (typeof callback === 'function') {
+    setTimeout(callback, 2000);
+  }
+};
+
+// More global function definitions
+window.showLoading = function(message) {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
+    homebridge.showSpinner();
+  }
+  window.showToast('info', message, 'Loading...');
+  console.log('Loading:', message);
+};
+
+window.hideLoading = function() {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+    homebridge.hideSpinner();
+  }
+  console.log('Loading complete');
+};
+
+// Initialization sequence - critical part
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOMContentLoaded event fired');
+  
+  // Check if the homebridge object is available (basic check)
+  if (typeof homebridge === 'undefined') {
+    // Cannot use showToast here as it depends on homebridge
+    alert('Error: Homebridge UI framework not detected. Please reload the page.');
+    console.error('Homebridge object not available at DOMContentLoaded');
+    return;
+  }
+  
+  // Global error handler for uncaught exceptions
+  window.onerror = function(message, source, lineno, colno, error) {
+    console.error('Uncaught error:', message, 'at', source, ':', lineno);
+    window.showToast('error', 'Uncaught error: ' + message, 'Error');
+    return false;
+  };
+  
+  // Expose key functions to window for cross-file access
+  window.initializeEventListeners = initializeEventListeners;
+  window.initializeDOMReferences = initializeDOMReferences;
+  
+  // Wait for Homebridge's ready event or initialize if it's already ready
+  if (typeof homebridge.getPluginConfig === 'function') {
+    // Homebridge API already available
+    console.log('Homebridge API already available at DOMContentLoaded');
+    initApp();
+  } else {
+    // Wait for the ready event
+    console.log('Waiting for Homebridge ready event');
+    homebridge.addEventListener('ready', () => {
+      window.showToast('info', 'Homebridge ready event received, initializing...', 'Homebridge Ready');
+      console.log('Homebridge ready event received');
+      // Small delay to ensure Homebridge API is fully available
+      setTimeout(initApp, 500);
     });
     
-    if (result.success) {
-      // Show success message with device info
-      const deviceInfo = result.deviceInfo || [];
-      let deviceListHtml = '';
-      
-      if (deviceInfo.length > 0) {
-        deviceListHtml = '<ul style="margin-top:10px;">';
-        deviceInfo.forEach(device => {
-          deviceListHtml += `<li>${device.name} (${device.type || 'Unknown type'})</li>`;
-        });
-        deviceListHtml += '</ul>';
+    // Set a failsafe timeout in case the ready event doesn't fire
+    setTimeout(() => {
+      if (!initialized) {
+        console.warn('Homebridge ready event not received after 10 seconds, attempting fallback initialization');
+        window.showToast('warning', 'Homebridge ready event not received, attempting initialization anyway', 'Backup Init');
+        initApp();
       }
-      
-      const successMessage = `${result.message}${deviceListHtml}`;
-      
-      // Create status element or get existing one
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-        statusElement.innerHTML = successMessage;
-        statusElement.className = 'status success';
-        statusElement.classList.remove('hidden');
-      }
-      
-      showToast('success', 'Connection test successful!', 'API Connection');
-    } else {
-      // Show error message
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-        statusElement.textContent = result.error || 'Connection failed';
-        statusElement.className = 'status error';
-        statusElement.classList.remove('hidden');
-      }
-      
-      showToast('error', result.error || 'Connection failed', 'API Connection');
-    }
-    
-    hideLoading();
-  } catch (error) {
-    console.error('Test connection error:', error);
-    showToast('error', 'Error testing connection: ' + error.message, 'Connection Error');
-    hideLoading();
+    }, 10000); // 10 second backup timeout
   }
-}
+});
 
 /**
- * Fetch logs from the server
+ * Initialize the application
+ * Sets up event handlers, loads configuration and prepares the UI
  */
-async function fetchServerLogs() {
+async function initApp() {
   try {
-    showLoading('Fetching server logs...');
+    console.log('Starting UI initialization');
     
-    const result = await homebridge.request('/logs');
+    // Create logs section (can be done early)
+    createLogsSection();
     
-    if (result.success) {
-      const logsContent = document.getElementById('logsContent');
-      if (logsContent) {
-        // Clear existing content
-        logsContent.innerHTML = '';
-        
-        if (result.logs && result.logs.length > 0) {
-          // Create log entries
-          result.logs.forEach(log => {
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            
-            const timestamp = document.createElement('div');
-            timestamp.className = 'log-timestamp';
-            timestamp.textContent = log.timestamp;
-            
-            const content = document.createElement('div');
-            content.className = `log-content log-${log.level || 'info'}`;
-            
-            const context = document.createElement('span');
-            context.className = 'log-context';
-            context.textContent = `[${log.context || 'Server'}] `;
-            
-            const message = document.createElement('span');
-            message.textContent = log.message;
-            
-            content.appendChild(context);
-            content.appendChild(message);
-            
-            entry.appendChild(timestamp);
-            entry.appendChild(content);
-            
-            // Add stack trace if available
-            if (log.stack) {
-              const stack = document.createElement('div');
-              stack.className = 'log-stack';
-              stack.textContent = log.stack;
-              entry.appendChild(stack);
-            }
-            
-            logsContent.appendChild(entry);
-          });
-        } else {
-          logsContent.innerHTML = '<p>No logs available</p>';
-        }
-        
-        // Show logs container
-        const logsContainer = document.getElementById('logsContainer');
-        if (logsContainer) {
-          logsContainer.classList.remove('hidden');
-        }
-      }
-      
-      showToast('success', 'Logs retrieved successfully', 'Server Logs');
-    } else {
-      showToast('error', result.error || 'Failed to retrieve logs', 'Server Logs');
+    // Verify the homebridge object is ready
+    try {
+      await waitForHomebridgeReady();
+      console.log('Homebridge API ready, continuing initialization');
+    } catch (homebridgeError) {
+      console.error('Homebridge API not ready:', homebridgeError);
+      window.showToast('error', 'Homebridge API initialization failed: ' + homebridgeError.message, 'API Error');
+      // Continue anyway - sometimes the API becomes available later
     }
     
-    hideLoading();
+    // Initialize DOM element references
+    try {
+      const elementsInitialized = initializeDOMReferences();
+      if (!elementsInitialized) {
+        console.error('Failed to initialize UI elements');
+        window.showToast('error', 'Failed to initialize UI elements', 'DOM Error');
+        // Continue despite error
+      }
+    } catch (domError) {
+      console.error('DOM initialization error:', domError);
+      // Continue despite error
+    }
+    
+    // Load initial configuration with retry mechanism
+    let configLoadAttempts = 0;
+    let config = {};
+    
+    while (configLoadAttempts < 3) {
+      try {
+        if (typeof loadConfig === 'function') {
+          config = await loadConfig();
+          configLoaded = true;
+          console.log('Configuration loaded successfully');
+          break; // Exit loop on success
+        } else {
+          console.error('loadConfig function not available');
+          window.showToast('error', 'loadConfig function not available', 'Function Error');
+          break;
+        }
+      } catch (configError) {
+        configLoadAttempts++;
+        console.error(`Config load attempt ${configLoadAttempts} failed:`, configError);
+        
+        if (configLoadAttempts < 3) {
+          console.log(`Waiting before retry ${configLoadAttempts}...`);
+          window.showToast('warning', `Retrying config load (${configLoadAttempts}/3)`, 'Config Retry');
+          await new Promise(resolve => setTimeout(resolve, 2000 * configLoadAttempts));
+        } else {
+          window.showToast('error', 'Failed to load config after multiple attempts', 'Config Error');
+        }
+      }
+    }
+    
+    // Setup event listeners after DOM and config are ready
+    try {
+      const listenersInitialized = initializeEventListeners();
+      if (!listenersInitialized) {
+        console.error('Failed to initialize event listeners');
+        window.showToast('error', 'Failed to initialize event listeners', 'Event Error');
+      }
+    } catch (listenerError) {
+      console.error('Event listener initialization error:', listenerError);
+    }
+    
+    // Initialize schedule UI if needed
+    if (configLoaded && typeof renderScheduleList === 'function') {
+      try {
+        console.log('Rendering schedule list');
+        renderScheduleList();
+      } catch (scheduleError) {
+        console.error('Error rendering schedule list:', scheduleError);
+      }
+    }
+    
+    // Mark as initialized
+    initialized = true;
+    console.log('SleepMe Simple UI initialization complete');
+    window.showToast('success', 'SleepMe Simple UI initialized successfully', 'Ready');
   } catch (error) {
-    console.error('Fetch logs error:', error);
-    showToast('error', 'Error fetching logs: ' + error.message, 'Server Logs');
-    hideLoading();
+    console.error('Fatal initialization error:', error);
+    window.showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
   }
 }
 
@@ -487,642 +448,40 @@ function waitForHomebridgeReady() {
 }
 
 /**
- * Wait for all required DOM elements to be available
- * @returns {Promise<void>} Resolves when DOM elements are available
+ * Create logs section in the UI
  */
-async function waitForDOMElements() {
-  const requiredElements = [
-    'apiToken', 'unit', 'pollingInterval', 'logLevel', 'enableSchedules'
-  ];
+function createLogsSection() {
+  // Create a container for logs
+  const container = document.createElement('div');
+  container.id = 'logsContainer';
+  container.className = 'container hidden';
   
-  return new Promise((resolve, reject) => {
-    console.log('Checking for required DOM elements');
-    
-    // If all elements already exist, resolve immediately
-    if (requiredElements.every(id => document.getElementById(id))) {
-      console.log('All required DOM elements already available');
-      resolve();
-      return;
-    }
-    
-    let attempts = 0;
-    const maxAttempts = 10;
-    const checkInterval = 300;
-    
-    // Check periodically for elements
-    const intervalId = setInterval(() => {
-      attempts++;
-      
-      if (requiredElements.every(id => document.getElementById(id))) {
-        console.log(`All required DOM elements now available after ${attempts} attempts`);
-        clearInterval(intervalId);
-        resolve();
-      } else if (attempts >= maxAttempts) {
-        const missing = requiredElements.filter(id => !document.getElementById(id));
-        console.error(`Timed out waiting for DOM elements: ${missing.join(', ')}`);
-        clearInterval(intervalId);
-        reject(new Error(`DOM elements not available: ${missing.join(', ')}`));
-      }
-    }, checkInterval);
-  });
-}
-
-/**
- * Ensures the Homebridge API is fully initialized and ready
- * @returns {Promise<void>} Resolves when API is ready
- */
-async function ensureHomebridgeReady() {
-  return new Promise((resolve, reject) => {
-    // Check if homebridge object exists
-    if (typeof homebridge === 'undefined') {
-      reject(new Error('Homebridge API not available - cannot load config'));
-      return;
-    }
-    
-    // If already ready, resolve immediately
-    if (typeof homebridge.getPluginConfig === 'function') {
-      console.log('Homebridge API already initialized');
-      resolve();
-      return;
-    }
-    
-    // Wait for ready event with timeout
-    const timeout = setTimeout(() => {
-      reject(new Error('Timeout waiting for Homebridge API to initialize'));
-    }, 10000);
-    
-    homebridge.addEventListener('ready', () => {
-      clearTimeout(timeout);
-      
-      // Add delay to ensure full initialization
-      setTimeout(() => {
-        if (typeof homebridge.getPluginConfig === 'function') {
-          console.log('Homebridge API now initialized');
-          resolve();
-        } else {
-          reject(new Error('Homebridge API methods not available after ready event'));
-        }
-      }, 1000);
-    });
-  });
-}
-
-/**
- * Load configuration from Homebridge
- * Uses the Homebridge UI APIs to fetch plugin configuration
- * @returns {Promise<Object>} The loaded configuration object
- */
-async function loadConfig() {
-  try {
-    showLoading('Loading configuration...');
-    
-    // Ensure homebridge object is fully initialized
-    await ensureHomebridgeReady();
-    
-    // Log homebridge info for debugging
-    console.log('Homebridge plugin info:', homebridge.plugin);
-    console.log('Homebridge server env:', homebridge.serverEnv);
-    
-    // Request direct config check from server
-    try {
-      const configCheck = await homebridge.request('/config/check');
-      if (configCheck.success) {
-        showToast('success', 'Server can access config.json directly', 'Config Check');
-        console.log('Server config check result:', configCheck);
-      } else {
-        showToast('warning', 'Server cannot access config.json directly', 'Config Warning');
-        console.warn('Server config check warning:', configCheck);
-      }
-    } catch (checkError) {
-      console.error('Config check error:', checkError);
-      showToast('warning', 'Config check failed: ' + checkError.message, 'Config Warning');
-    }
-    
-    // Get the plugin config using the Homebridge API
-    let retries = 0;
-    let pluginConfig = null;
-    let retryDelay = 1000;
-    
-    // Try up to 3 times to load the config with increasing delay
-    while (retries < 3 && !pluginConfig) {
-      try {
-        console.log(`Attempt ${retries + 1}/3 to get plugin config...`);
-        pluginConfig = await homebridge.getPluginConfig();
-        
-        console.log('Raw plugin config:', JSON.stringify(pluginConfig));
-        showToast('success', 'Configuration retrieved successfully', 'Config Loaded');
-      } catch (configError) {
-        retries++;
-        console.error(`Config load attempt ${retries} failed:`, configError);
-        showToast('warning', `Config load attempt ${retries} failed: ${configError.message}`, 'Retry');
-        
-        if (retries < 3) {
-          // Wait before retrying with exponential backoff
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          retryDelay *= 2; // Double the delay for each retry
-        } else {
-          throw new Error(`Failed to load config after ${retries} attempts: ${configError.message}`);
-        }
-      }
-    }
-    
-    // Find our platform configuration with more forgiving matching
-    let config = {};
-    if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
-      // Try to find by exact platform name
-      let platformConfig = pluginConfig.find(cfg => 
-        cfg && cfg.platform && cfg.platform.toLowerCase() === 'sleepmebasic');
-      
-      // If not found, try the alternative name
-      if (!platformConfig) {
-        platformConfig = pluginConfig.find(cfg => 
-          cfg && cfg.platform && (cfg.platform.toLowerCase() === 'sleepme' || 
-          cfg.platform === 'SleepMeSimple'));
-      }
-      
-      // If still not found, take the first platform config
-      if (!platformConfig && pluginConfig.length > 0) {
-        platformConfig = pluginConfig.find(cfg => cfg && cfg.platform) || pluginConfig[0];
-      }
-      
-      config = platformConfig || {};
-      
-      console.log('Found platform config:', config);
-      showToast('success', 'Found configuration in API response', 'Config Found');
+  const title = document.createElement('h2');
+  title.textContent = 'Server Logs';
+  
+  const content = document.createElement('div');
+  content.id = 'logsContent';
+  content.className = 'logs-content';
+  
+  const refreshButton = document.createElement('button');
+  refreshButton.textContent = 'Refresh Logs';
+  refreshButton.className = 'secondary';
+  refreshButton.style.marginTop = '10px';
+  
+  // Add click handler to refresh logs
+  refreshButton.addEventListener('click', () => {
+    if (typeof fetchServerLogs === 'function') {
+      fetchServerLogs();
     } else {
-      console.warn('No plugin config found in API response');
-      showToast('info', 'No existing configuration found, using defaults', 'New Config');
+      console.error('fetchServerLogs function not available');
     }
-    
-    // Wait for DOM elements to be available
-    await waitForDOMElements();
-    
-    // Fill form fields with config values
-    populateFormFields(config);
-    
-    hideLoading();
-    return config;
-  } catch (error) {
-    console.error('Configuration loading error:', error);
-    showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
-    hideLoading();
-    return {};
-  }
-}
-
-/**
- * Populate form fields with configuration values
- * @param {Object} config - The configuration object
- */
-function populateFormFields(config) {
-  // Safely get DOM elements with logging
-  const getElement = (id) => {
-    const element = document.getElementById(id);
-    if (!element) {
-      console.warn(`Element ${id} not found in DOM`);
-    }
-    return element;
-  };
-  
-  // Get form elements
-  const apiTokenInput = getElement('apiToken');
-  const unitSelect = getElement('unit');
-  const pollingIntervalInput = getElement('pollingInterval');
-  const logLevelSelect = getElement('logLevel');
-  const enableSchedulesCheckbox = getElement('enableSchedules');
-  const schedulesContainer = getElement('schedulesContainer');
-  
-  console.log('Setting form values from config:', {
-    hasApiToken: !!config.apiToken,
-    unit: config.unit,
-    pollingInterval: config.pollingInterval,
-    logLevel: config.logLevel,
-    enableSchedules: config.enableSchedules,
-    scheduleCount: Array.isArray(config.schedules) ? config.schedules.length : 0
   });
   
-  // Set API token if available
-  if (apiTokenInput && config.apiToken) {
-    apiTokenInput.value = config.apiToken;
-    showToast('info', 'API token loaded from config', 'Config');
-  } else if (apiTokenInput) {
-    console.warn('No API token found in config');
-  }
+  // Assemble the logs UI
+  container.appendChild(title);
+  container.appendChild(content);
+  container.appendChild(refreshButton);
   
-  // Set temperature unit if available
-  if (unitSelect && config.unit) {
-    unitSelect.value = config.unit;
-    showToast('info', `Temperature unit set to ${config.unit}`, 'Config');
-  }
-  
-  // Set polling interval if available
-  if (pollingIntervalInput && config.pollingInterval) {
-    pollingIntervalInput.value = config.pollingInterval;
-    showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Config');
-  }
-  
-  // Set log level if available
-  if (logLevelSelect && config.logLevel) {
-    logLevelSelect.value = config.logLevel;
-    showToast('info', `Log level set to ${config.logLevel}`, 'Config');
-  }
-  
-  // Handle schedules
-  if (enableSchedulesCheckbox) {
-    const enableSchedules = config.enableSchedules === true;
-    enableSchedulesCheckbox.checked = enableSchedules;
-    
-    if (schedulesContainer) {
-      schedulesContainer.classList.toggle('hidden', !enableSchedules);
-    }
-    
-    // Load schedules if available
-    if (Array.isArray(config.schedules) && config.schedules.length > 0) {
-      // Create a clean copy of schedules with unit info
-      window.schedules = config.schedules.map(schedule => ({
-        ...schedule,
-        unit: schedule.unit || (unitSelect ? unitSelect.value : 'C')
-      }));
-      
-      // Assign to global schedules variable for compatibility
-      schedules = [...window.schedules];
-      
-      // Render schedule list if the function exists
-      if (typeof renderScheduleList === 'function') {
-        console.log('Rendering schedule list with', schedules.length, 'schedules');
-        renderScheduleList();
-      } else {
-        console.warn('renderScheduleList function not available');
-      }
-      
-      showToast('info', `Loaded ${schedules.length} schedules from config`, 'Schedules');
-    } else if (enableSchedules) {
-      console.log('No schedules found in config but schedules are enabled');
-      window.schedules = [];
-      schedules = [];
-      showToast('info', 'No existing schedules found', 'Schedules');
-    }
-  }
-  
-  // Apply the updated temperature validation based on the loaded unit
-  if (typeof updateTemperatureValidation === 'function') {
-    updateTemperatureValidation();
-  } else {
-    console.warn('updateTemperatureValidation function not available');
-  }
+  // Add to the page
+  document.body.appendChild(container);
 }
-
-/**
- * Save configuration to Homebridge
- * @returns {Promise<void>}
- */
-async function saveConfig() {
-  try {
-    showLoading('Saving configuration...');
-    showToast('info', 'Starting save process...', 'Save Config');
-    
-    // Verify Homebridge API is available
-    await ensureHomebridgeReady();
-    
-    // Get current config to update
-    showToast('info', 'Fetching current config...', 'Save Step 1');
-    const pluginConfig = await homebridge.getPluginConfig();
-    console.log('Current plugin config:', pluginConfig);
-    
-    // Get values from form
-    const getInputValue = (id) => {
-      const element = document.getElementById(id);
-      return element ? element.value : null;
-    };
-    
-    const getCheckboxValue = (id) => {
-      const element = document.getElementById(id);
-      return element ? element.checked : false;
-    };
-    
-    const apiToken = getInputValue('apiToken');
-    const unit = getInputValue('unit');
-    const pollingInterval = parseInt(getInputValue('pollingInterval'), 10);
-    const logLevel = getInputValue('logLevel');
-    const enableSchedules = getCheckboxValue('enableSchedules');
-    
-    // Validate required fields
-    if (!apiToken) {
-      showToast('error', 'API token is required', 'Validation Error');
-      hideLoading();
-      return;
-    }
-    
-    // Validate polling interval
-    if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
-      showToast('error', 'Polling interval must be between 60 and 300 seconds', 'Validation Error');
-      hideLoading();
-      return;
-    }
-    
-    // Create updated config
-    const config = {
-      platform: 'SleepMeSimple',
-      name: 'SleepMe Simple',
-      apiToken,
-      unit,
-      pollingInterval,
-      logLevel,
-      enableSchedules
-    };
-    
-    console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
-    showToast('info', 'Config object prepared...', 'Save Step 2');
-    
-    // Add schedules if enabled
-    if (enableSchedules && window.schedules && window.schedules.length > 0) {
-      // Clean schedules for storage
-      config.schedules = window.schedules.map(schedule => {
-        // Create a clean schedule object
-        const cleanSchedule = {
-          type: schedule.type,
-          time: schedule.time,
-          temperature: parseFloat(schedule.temperature)
-        };
-        
-        // Add day property for Specific Day schedules
-        if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-          cleanSchedule.day = parseInt(schedule.day, 10);
-        }
-        
-        // Add optional description
-        if (schedule.description) {
-          cleanSchedule.description = schedule.description;
-        }
-        
-        return cleanSchedule;
-      });
-      
-      console.log(`Adding ${config.schedules.length} schedules to config`);
-      showToast('info', `Added ${config.schedules.length} schedules to config`, 'Schedules');
-    }
-    
-    // Find current config position and update
-    const existingConfigIndex = Array.isArray(pluginConfig) ? 
-      pluginConfig.findIndex(cfg => cfg.platform === 'SleepMeSimple') : -1;
-
-    let updatedConfig;
-    if (existingConfigIndex >= 0) {
-      // Replace existing config
-      updatedConfig = [...pluginConfig];
-      updatedConfig[existingConfigIndex] = config;
-      console.log(`Updating existing config at index ${existingConfigIndex}`);
-    } else if (Array.isArray(pluginConfig)) {
-      // Add new config to array
-      updatedConfig = [...pluginConfig, config];
-      console.log('Adding new config to existing array');
-    } else {
-      // Create new config array
-      updatedConfig = [config];
-      console.log('Creating new config array');
-    }
-    
-    // Update plugin config
-    showToast('info', 'Calling updatePluginConfig...', 'Save Step 3');
-    await homebridge.updatePluginConfig(updatedConfig);
-    
-    // Save changes to disk
-    showToast('info', 'Calling savePluginConfig...', 'Save Step 4');
-    await homebridge.savePluginConfig();
-    
-    // Verify config was saved
-    try {
-      const verifyResult = await homebridge.request('/config/check');
-      console.log('Config verification result:', verifyResult);
-      
-      if (verifyResult.success && verifyResult.platformFound) {
-        showToast('success', 'Configuration verified by server', 'Config Verified');
-      } else {
-        showToast('warning', 'Server verification inconclusive', 'Verify Warning');
-      }
-    } catch (verifyError) {
-      console.error('Verification error:', verifyError);
-      showToast('warning', 'Could not verify configuration: ' + verifyError.message, 'Verify Warning');
-    }
-    
-    hideLoading();
-    showToast('success', 'Configuration saved successfully', 'Save Complete');
-  } catch (error) {
-    console.error('Save configuration error:', error);
-    showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
-    hideLoading();
-  }
-}
-
-/**
- * Initialize the application
- * Sets up event handlers, loads configuration and prepares the UI
- */
-async function initApp() {
-  try {
-    console.log('Starting UI initialization');
-    
-    // Create logs section (can be done early)
-    createLogsSection();
-    
-    // Verify the homebridge object is ready
-    try {
-      await waitForHomebridgeReady();
-      console.log('Homebridge API ready, continuing initialization');
-    } catch (homebridgeError) {
-      console.error('Homebridge API not ready:', homebridgeError);
-      showToast('error', 'Homebridge API initialization failed: ' + homebridgeError.message, 'API Error');
-      // Continue anyway - sometimes the API becomes available later
-    }
-    
-    // Initialize DOM element references
-    try {
-      const elementsInitialized = initializeDOMReferences();
-      if (!elementsInitialized) {
-        console.error('Failed to initialize UI elements');
-        showToast('error', 'Failed to initialize UI elements', 'DOM Error');
-        // Continue despite error
-      }
-    } catch (domError) {
-      console.error('DOM initialization error:', domError);
-      // Continue despite error
-    }
-    
-    // Load initial configuration with retry mechanism
-    let configLoadAttempts = 0;
-    let config = {};
-    
-    while (configLoadAttempts < 3) {
-      try {
-        config = await loadConfig();
-        configLoaded = true;
-        console.log('Configuration loaded successfully');
-        break; // Exit loop on success
-      } catch (configError) {
-        configLoadAttempts++;
-        console.error(`Config load attempt ${configLoadAttempts} failed:`, configError);
-        
-        if (configLoadAttempts < 3) {
-          console.log(`Waiting before retry ${configLoadAttempts}...`);
-          showToast('warning', `Retrying config load (${configLoadAttempts}/3)`, 'Config Retry');
-          await new Promise(resolve => setTimeout(resolve, 2000 * configLoadAttempts));
-        } else {
-          showToast('error', 'Failed to load config after multiple attempts', 'Config Error');
-        }
-      }
-    }
-    
-    // Setup event listeners after DOM and config are ready
-    try {
-      const listenersInitialized = initializeEventListeners();
-      if (!listenersInitialized) {
-        console.error('Failed to initialize event listeners');
-        showToast('error', 'Failed to initialize event listeners', 'Event Error');
-      }
-    } catch (listenerError) {
-      console.error('Event listener initialization error:', listenerError);
-    }
-    
-    // Initialize schedule UI if needed
-    if (configLoaded && typeof renderScheduleList === 'function') {
-      try {
-        console.log('Rendering schedule list');
-        renderScheduleList();
-      } catch (scheduleError) {
-        console.error('Error rendering schedule list:', scheduleError);
-      }
-    }
-    
-    // Mark as initialized
-    initialized = true;
-    console.log('SleepMe Simple UI initialization complete');
-    showToast('success', 'SleepMe Simple UI initialized successfully', 'Ready');
-  } catch (error) {
-    console.error('Fatal initialization error:', error);
-    showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
-  }
-}
-
-/**
- * Show loading indicator with message
- * @param {string} message - Message to display
- */
-function showLoading(message) {
-  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
-    homebridge.showSpinner();
-  }
-  showToast('info', message, 'Loading...');
-  console.log('Loading:', message);
-}
-
-/**
- * Hide loading indicator
- */
-function hideLoading() {
-  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
-    homebridge.hideSpinner();
-  }
-  console.log('Loading complete');
-}
-
-/**
- * Show toast notification
- * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
- * @param {string} message - Toast message
- * @param {string} title - Toast title
- * @param {Function} callback - Optional callback function
- */
-function showToast(type, message, title, callback) {
-  // Log to console for debugging
-  const logMethod = type === 'error' ? console.error : 
-                   type === 'warning' ? console.warn : console.log;
-  
-  logMethod(`${title}: ${message}`);
-  
-  // Display toast if homebridge is available
-  if (homebridge && homebridge.toast) {
-    if (homebridge.toast[type]) {
-      homebridge.toast[type](message, title);
-    } else {
-      homebridge.toast.info(message, title);
-    }
-  }
-
-  if (typeof callback === 'function') {
-    setTimeout(callback, 2000);
-  }
-}
-
-// Initialization sequence - critical part
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOMContentLoaded event fired');
-  
-  // Check if the homebridge object is available (basic check)
-  if (typeof homebridge === 'undefined') {
-    // Cannot use showToast here as it depends on homebridge
-    alert('Error: Homebridge UI framework not detected. Please reload the page.');
-    console.error('Homebridge object not available at DOMContentLoaded');
-    return;
-  }
-  
-  // Global error handler for uncaught exceptions
-  window.onerror = function(message, source, lineno, colno, error) {
-    console.error('Uncaught error:', message, 'at', source, ':', lineno);
-    showToast('error', 'Uncaught error: ' + message, 'Error');
-    return false;
-  };
-  
-  // Wait for Homebridge's ready event or initialize if it's already ready
-  if (typeof homebridge.getPluginConfig === 'function') {
-    // Homebridge API already available
-    console.log('Homebridge API already available at DOMContentLoaded');
-    initApp();
-  } else {
-    // Wait for the ready event
-    console.log('Waiting for Homebridge ready event');
-    homebridge.addEventListener('ready', () => {
-      showToast('info', 'Homebridge ready event received, initializing...', 'Homebridge Ready');
-      console.log('Homebridge ready event received');
-      // Small delay to ensure Homebridge API is fully available
-      setTimeout(initApp, 500);
-    });
-    
-    // Set a failsafe timeout in case the ready event doesn't fire
-    setTimeout(() => {
-      if (!initialized) {
-        console.warn('Homebridge ready event not received after 10 seconds, attempting fallback initialization');
-        showToast('warning', 'Homebridge ready event not received, attempting initialization anyway', 'Backup Init');
-        initApp();
-      }
-    }, 10000); // 10 second backup timeout
-  }
-});
-
-// Event listeners for server events
-homebridge.addEventListener('config-status', (event) => {
-  const configStatus = event.data;
-  console.log('Received config-status event:', configStatus);
-  
-  if (configStatus.success) {
-    showToast('success', `Config file accessed successfully`, 'Config Status');
-    
-    if (configStatus.platformFound && configStatus.platformConfig) {
-      showToast('info', `Found configuration with ${configStatus.platformConfig.scheduleCount} schedules`, 'Config Details');
-    } else {
-      console.warn('Platform config not found in config.json');
-      if (configStatus.allPlatforms && configStatus.allPlatforms.length > 0) {
-        console.log('Available platforms:', configStatus.allPlatforms);
-      }
-    }
-  } else {
-    console.error('Config status error:', configStatus);
-    showToast('error', `Unable to read config file: ${configStatus.error || 'Unknown error'}`, 'Config Error');
-  }
-});
-
-// Server error listener
-homebridge.addEventListener('server-error', (event) => {
-  const errorData = event.data;
-  console.error('Server error event:', errorData);
-  showToast('error', `Server error: ${errorData.message}`, 'Server Error');
-});
