@@ -1,5 +1,5 @@
 // homebridge-ui/server.js
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -97,11 +97,46 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         };
       }
       
-      // Check if our plugin is in the config
+      // Check if our plugin is in the config with multiple possible platform names
       const platforms = config.platforms || [];
-      const ourPlatform = platforms.find(p => p.platform === 'SleepMeSimple');
       
-      this.log(`Config file checked: Platform found: ${!!ourPlatform}`);
+      // Try multiple possible platform names
+      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
+      let ourPlatform = null;
+      
+      for (const name of platformNames) {
+        const found = platforms.find(p => 
+          p.platform && p.platform.toLowerCase() === name.toLowerCase());
+        
+        if (found) {
+          ourPlatform = found;
+          this.log(`Found platform with name: ${found.platform}`);
+          break;
+        }
+      }
+      
+      // Log detailed platform information
+      if (ourPlatform) {
+        this.log(`Platform config found: ${JSON.stringify({
+          name: ourPlatform.name || 'SleepMe Simple',
+          hasApiToken: !!ourPlatform.apiToken,
+          unit: ourPlatform.unit || 'C',
+          pollingInterval: ourPlatform.pollingInterval || 90,
+          logLevel: ourPlatform.logLevel || 'normal',
+          enableSchedules: !!ourPlatform.enableSchedules,
+          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
+        })}`);
+      } else {
+        this.log('Platform config not found in config.json');
+        
+        // Log all platform names to help debugging
+        if (platforms.length > 0) {
+          const platformNames = platforms.map(p => p.platform || 'unnamed').join(', ');
+          this.log(`Available platforms: ${platformNames}`);
+        } else {
+          this.log('No platforms defined in config.json');
+        }
+      }
       
       return {
         success: true,
@@ -111,8 +146,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
           hasApiToken: !!ourPlatform.apiToken,
           unit: ourPlatform.unit || 'C',
           pollingInterval: ourPlatform.pollingInterval || 90,
+          logLevel: ourPlatform.logLevel || 'normal',
+          enableSchedules: !!ourPlatform.enableSchedules,
           scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
         } : null,
+        allPlatforms: platforms.map(p => p.platform || 'unnamed'),
         path: configPath
       };
     } catch (error) {
@@ -143,7 +181,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       if (!apiToken) {
         this.log('API token missing from test request', 'error');
-        throw new Error('API token is required');
+        throw new RequestError('API token is required', { status: 400 });
       }
       
       this.log(`Testing SleepMe API connection with provided token`);

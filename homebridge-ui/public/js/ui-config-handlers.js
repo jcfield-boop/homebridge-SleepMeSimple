@@ -1,136 +1,105 @@
 /**
+ * Configuration handling for SleepMe Simple Homebridge Plugin UI
+ * Provides functions to load and save configuration data
+ */
+
+/**
  * Load configuration from Homebridge
- * Uses the proper Homebridge UI APIs to fetch plugin configuration
+ * Uses the Homebridge UI APIs to fetch plugin configuration
+ * @returns {Promise<Object>} The loaded configuration object
  */
 async function loadConfig() {
   try {
     showLoading('Loading configuration...');
     
-    // Make sure homebridge object is available and initialized
-    if (typeof homebridge === 'undefined') {
-      throw new Error('Homebridge API not available - cannot load config');
-    }
+    // Ensure homebridge object is fully initialized
+    await ensureHomebridgeReady();
     
-    if (typeof homebridge.getPluginConfig !== 'function') {
-      throw new Error('Homebridge getPluginConfig method not available');
-    }
+    // Log homebridge info for debugging
+    console.log('Homebridge plugin info:', homebridge.plugin);
+    console.log('Homebridge server env:', homebridge.serverEnv);
     
-    showToast('info', 'Fetching plugin configuration...', 'Config');
-    
-    // Request direct config check from server - this is optional but helpful
+    // Request direct config check from server
     try {
       const configCheck = await homebridge.request('/config/check');
       if (configCheck.success) {
         showToast('success', 'Server can access config.json directly', 'Config Check');
+        console.log('Server config check result:', configCheck);
       } else {
         showToast('warning', 'Server cannot access config.json directly', 'Config Warning');
+        console.warn('Server config check warning:', configCheck);
       }
     } catch (checkError) {
-      // Don't fail on this error, it's just informational
+      console.error('Config check error:', checkError);
       showToast('warning', 'Config check failed: ' + checkError.message, 'Config Warning');
     }
     
-    // This is the critical part - get the plugin config using the Homebridge API
+    // Get the plugin config using the Homebridge API
     let retries = 0;
     let pluginConfig = null;
+    let retryDelay = 1000;
     
-    // Try up to 3 times to load the config
+    // Try up to 3 times to load the config with increasing delay
     while (retries < 3 && !pluginConfig) {
       try {
+        console.log(`Attempt ${retries + 1}/3 to get plugin config...`);
         pluginConfig = await homebridge.getPluginConfig();
+        
+        console.log('Raw plugin config:', JSON.stringify(pluginConfig));
         showToast('success', 'Configuration retrieved successfully', 'Config Loaded');
       } catch (configError) {
         retries++;
+        console.error(`Config load attempt ${retries} failed:`, configError);
         showToast('warning', `Config load attempt ${retries} failed: ${configError.message}`, 'Retry');
         
         if (retries < 3) {
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait before retrying with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          retryDelay *= 2; // Double the delay for each retry
         } else {
           throw new Error(`Failed to load config after ${retries} attempts: ${configError.message}`);
         }
       }
     }
     
-    // Find our platform configuration (should be the first/only one)
+    // Find our platform configuration with more forgiving matching
     let config = {};
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
-      config = pluginConfig.find(cfg => cfg.platform === 'SleepMeSimple') || pluginConfig[0] || {};
+      // Try to find by exact platform name
+      let platformConfig = pluginConfig.find(cfg => 
+        cfg && cfg.platform && cfg.platform.toLowerCase() === 'sleepmebasic');
+      
+      // If not found, try the alternative name
+      if (!platformConfig) {
+        platformConfig = pluginConfig.find(cfg => 
+          cfg && cfg.platform && cfg.platform.toLowerCase() === 'sleepme' || 
+          cfg.platform === 'SleepMeSimple');
+      }
+      
+      // If still not found, take the first platform config
+      if (!platformConfig && pluginConfig.length > 0) {
+        platformConfig = pluginConfig.find(cfg => cfg && cfg.platform) || pluginConfig[0];
+      }
+      
+      config = platformConfig || {};
+      
+      console.log('Found platform config:', config);
       showToast('success', 'Found configuration in API response', 'Config Found');
     } else {
+      console.warn('No plugin config found in API response');
       showToast('info', 'No existing configuration found, using defaults', 'New Config');
     }
     
+    // Wait for DOM elements to be available
+    await waitForDOMElements();
+    
     // Fill form fields with config values
-    const apiTokenInput = document.getElementById('apiToken');
-    const unitSelect = document.getElementById('unit');
-    const pollingIntervalInput = document.getElementById('pollingInterval');
-    const logLevelSelect = document.getElementById('logLevel');
-    const enableSchedulesCheckbox = document.getElementById('enableSchedules');
-    const schedulesContainer = document.getElementById('schedulesContainer');
-    
-    // Set API token if available
-    if (apiTokenInput && config.apiToken) {
-      apiTokenInput.value = config.apiToken;
-      showToast('info', 'API token loaded from config', 'Config');
-    } else if (apiTokenInput) {
-      showToast('warning', 'No API token found in config', 'Config');
-    }
-    
-    // Set temperature unit if available
-    if (unitSelect && config.unit) {
-      unitSelect.value = config.unit;
-      showToast('info', `Temperature unit set to ${config.unit}`, 'Config');
-    }
-    
-    // Set polling interval if available
-    if (pollingIntervalInput && config.pollingInterval) {
-      pollingIntervalInput.value = config.pollingInterval;
-      showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Config');
-    }
-    
-    // Set log level if available
-    if (logLevelSelect && config.logLevel) {
-      logLevelSelect.value = config.logLevel;
-      showToast('info', `Log level set to ${config.logLevel}`, 'Config');
-    }
-    
-    // Handle schedules
-    if (enableSchedulesCheckbox) {
-      const enableSchedules = config.enableSchedules === true;
-      enableSchedulesCheckbox.checked = enableSchedules;
-      
-      if (schedulesContainer) {
-        schedulesContainer.classList.toggle('hidden', !enableSchedules);
-      }
-      
-      // Load schedules if available
-      if (Array.isArray(config.schedules)) {
-        // Define schedules with global scope
-        window.schedules = config.schedules.map(schedule => ({
-          ...schedule,
-          unit: schedule.unit || (unitSelect ? unitSelect.value : 'C') // Set unit if not present
-        }));
-        
-        // Render schedule list if the function exists
-        if (typeof renderScheduleList === 'function') {
-          renderScheduleList();
-        }
-        
-        showToast('info', `Loaded ${window.schedules.length} schedules from config`, 'Schedules');
-      } else if (enableSchedules) {
-        showToast('info', 'No existing schedules found', 'Schedules');
-      }
-    }
-    
-    // Apply the updated temperature validation based on the loaded unit
-    if (typeof updateTemperatureValidation === 'function') {
-      updateTemperatureValidation();
-    }
+    populateFormFields(config);
     
     hideLoading();
     return config;
   } catch (error) {
+    console.error('Configuration loading error:', error);
     showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
     hideLoading();
     return {};
@@ -138,8 +107,189 @@ async function loadConfig() {
 }
 
 /**
+ * Ensures the Homebridge API is fully initialized and ready
+ * @returns {Promise<void>} Resolves when API is ready
+ */
+async function ensureHomebridgeReady() {
+  return new Promise((resolve, reject) => {
+    // Check if homebridge object exists
+    if (typeof homebridge === 'undefined') {
+      reject(new Error('Homebridge API not available - cannot load config'));
+      return;
+    }
+    
+    // If already ready, resolve immediately
+    if (typeof homebridge.getPluginConfig === 'function') {
+      console.log('Homebridge API already initialized');
+      resolve();
+      return;
+    }
+    
+    // Wait for ready event with timeout
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout waiting for Homebridge API to initialize'));
+    }, 10000);
+    
+    homebridge.addEventListener('ready', () => {
+      clearTimeout(timeout);
+      
+      // Add delay to ensure full initialization
+      setTimeout(() => {
+        if (typeof homebridge.getPluginConfig === 'function') {
+          console.log('Homebridge API now initialized');
+          resolve();
+        } else {
+          reject(new Error('Homebridge API methods not available after ready event'));
+        }
+      }, 1000);
+    });
+  });
+}
+
+/**
+ * Wait for all required DOM elements to be available
+ * @returns {Promise<void>} Resolves when DOM elements are available
+ */
+async function waitForDOMElements() {
+  const requiredElements = [
+    'apiToken', 'unit', 'pollingInterval', 'logLevel', 'enableSchedules'
+  ];
+  
+  return new Promise((resolve, reject) => {
+    // If all elements already exist, resolve immediately
+    if (requiredElements.every(id => document.getElementById(id))) {
+      console.log('All required DOM elements already available');
+      resolve();
+      return;
+    }
+    
+    let attempts = 0;
+    const maxAttempts = 10;
+    const checkInterval = 300;
+    
+    // Check periodically for elements
+    const intervalId = setInterval(() => {
+      attempts++;
+      
+      if (requiredElements.every(id => document.getElementById(id))) {
+        console.log(`All required DOM elements now available after ${attempts} attempts`);
+        clearInterval(intervalId);
+        resolve();
+      } else if (attempts >= maxAttempts) {
+        const missing = requiredElements.filter(id => !document.getElementById(id));
+        console.error(`Timed out waiting for DOM elements: ${missing.join(', ')}`);
+        clearInterval(intervalId);
+        reject(new Error(`DOM elements not available: ${missing.join(', ')}`));
+      }
+    }, checkInterval);
+  });
+}
+
+/**
+ * Populate form fields with configuration values
+ * @param {Object} config - The configuration object
+ */
+function populateFormFields(config) {
+  // Safely get DOM elements with logging
+  const getElement = (id) => {
+    const element = document.getElementById(id);
+    if (!element) {
+      console.warn(`Element ${id} not found in DOM`);
+    }
+    return element;
+  };
+  
+  // Get form elements
+  const apiTokenInput = getElement('apiToken');
+  const unitSelect = getElement('unit');
+  const pollingIntervalInput = getElement('pollingInterval');
+  const logLevelSelect = getElement('logLevel');
+  const enableSchedulesCheckbox = getElement('enableSchedules');
+  const schedulesContainer = getElement('schedulesContainer');
+  
+  console.log('Setting form values from config:', {
+    hasApiToken: !!config.apiToken,
+    unit: config.unit,
+    pollingInterval: config.pollingInterval,
+    logLevel: config.logLevel,
+    enableSchedules: config.enableSchedules,
+    scheduleCount: Array.isArray(config.schedules) ? config.schedules.length : 0
+  });
+  
+  // Set API token if available
+  if (apiTokenInput && config.apiToken) {
+    apiTokenInput.value = config.apiToken;
+    showToast('info', 'API token loaded from config', 'Config');
+  } else if (apiTokenInput) {
+    console.warn('No API token found in config');
+  }
+  
+  // Set temperature unit if available
+  if (unitSelect && config.unit) {
+    unitSelect.value = config.unit;
+    showToast('info', `Temperature unit set to ${config.unit}`, 'Config');
+  }
+  
+  // Set polling interval if available
+  if (pollingIntervalInput && config.pollingInterval) {
+    pollingIntervalInput.value = config.pollingInterval;
+    showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Config');
+  }
+  
+  // Set log level if available
+  if (logLevelSelect && config.logLevel) {
+    logLevelSelect.value = config.logLevel;
+    showToast('info', `Log level set to ${config.logLevel}`, 'Config');
+  }
+  
+  // Handle schedules
+  if (enableSchedulesCheckbox) {
+    const enableSchedules = config.enableSchedules === true;
+    enableSchedulesCheckbox.checked = enableSchedules;
+    
+    if (schedulesContainer) {
+      schedulesContainer.classList.toggle('hidden', !enableSchedules);
+    }
+    
+    // Load schedules if available
+    if (Array.isArray(config.schedules) && config.schedules.length > 0) {
+      // Create a clean copy of schedules with unit info
+      window.schedules = config.schedules.map(schedule => ({
+        ...schedule,
+        unit: schedule.unit || (unitSelect ? unitSelect.value : 'C')
+      }));
+      
+      // Assign to global schedules variable for compatibility
+      schedules = [...window.schedules];
+      
+      // Render schedule list if the function exists
+      if (typeof renderScheduleList === 'function') {
+        console.log('Rendering schedule list with', schedules.length, 'schedules');
+        renderScheduleList();
+      } else {
+        console.warn('renderScheduleList function not available');
+      }
+      
+      showToast('info', `Loaded ${schedules.length} schedules from config`, 'Schedules');
+    } else if (enableSchedules) {
+      console.log('No schedules found in config but schedules are enabled');
+      window.schedules = [];
+      schedules = [];
+      showToast('info', 'No existing schedules found', 'Schedules');
+    }
+  }
+  
+  // Apply the updated temperature validation based on the loaded unit
+  if (typeof updateTemperatureValidation === 'function') {
+    updateTemperatureValidation();
+  } else {
+    console.warn('updateTemperatureValidation function not available');
+  }
+}
+
+/**
  * Save configuration to Homebridge
- * Uses the proper Homebridge UI APIs to update plugin configuration
+ * @returns {Promise<void>}
  */
 async function saveConfig() {
   try {
@@ -147,20 +297,29 @@ async function saveConfig() {
     showToast('info', 'Starting save process...', 'Save Config');
     
     // Verify Homebridge API is available
-    if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
-      throw new Error('Homebridge API not available for saving configuration');
-    }
+    await ensureHomebridgeReady();
     
     // Get current config to update
     showToast('info', 'Fetching current config...', 'Save Step 1');
     const pluginConfig = await homebridge.getPluginConfig();
+    console.log('Current plugin config:', pluginConfig);
     
     // Get values from form
-    const apiToken = document.getElementById('apiToken').value;
-    const unit = document.getElementById('unit').value;
-    const pollingInterval = parseInt(document.getElementById('pollingInterval').value, 10);
-    const logLevel = document.getElementById('logLevel').value;
-    const enableSchedules = document.getElementById('enableSchedules').checked;
+    const getInputValue = (id) => {
+      const element = document.getElementById(id);
+      return element ? element.value : null;
+    };
+    
+    const getCheckboxValue = (id) => {
+      const element = document.getElementById(id);
+      return element ? element.checked : false;
+    };
+    
+    const apiToken = getInputValue('apiToken');
+    const unit = getInputValue('unit');
+    const pollingInterval = parseInt(getInputValue('pollingInterval'), 10);
+    const logLevel = getInputValue('logLevel');
+    const enableSchedules = getCheckboxValue('enableSchedules');
     
     // Validate required fields
     if (!apiToken) {
@@ -187,6 +346,7 @@ async function saveConfig() {
       enableSchedules
     };
     
+    console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
     showToast('info', 'Config object prepared...', 'Save Step 2');
     
     // Add schedules if enabled
@@ -213,54 +373,57 @@ async function saveConfig() {
         return cleanSchedule;
       });
       
+      console.log(`Adding ${config.schedules.length} schedules to config`);
       showToast('info', `Added ${config.schedules.length} schedules to config`, 'Schedules');
     }
     
-    // Critical part 1: Update config via homebridge API
-    showToast('info', 'Calling updatePluginConfig...', 'Save Step 3');
-    const existingConfig = Array.isArray(pluginConfig) ? 
-      pluginConfig.find(cfg => cfg.platform === 'SleepMeSimple') : null;
-    
-    if (existingConfig) {
-      // Find the index of the existing config
-      const configIndex = pluginConfig.findIndex(cfg => cfg.platform === 'SleepMeSimple');
-      if (configIndex >= 0) {
-        // Replace the existing config
-        const updatedConfig = [...pluginConfig];
-        updatedConfig[configIndex] = config;
-        await homebridge.updatePluginConfig(updatedConfig);
-        showToast('info', 'Updated existing configuration', 'Config Update');
-      } else {
-        // This shouldn't happen, but handle it anyway
-        await homebridge.updatePluginConfig([...pluginConfig, config]);
-        showToast('info', 'Added new configuration', 'Config Create');
-      }
+    // Find current config position and update
+    const existingConfigIndex = Array.isArray(pluginConfig) ? 
+      pluginConfig.findIndex(cfg => cfg.platform === 'SleepMeSimple') : -1;
+
+    let updatedConfig;
+    if (existingConfigIndex >= 0) {
+      // Replace existing config
+      updatedConfig = [...pluginConfig];
+      updatedConfig[existingConfigIndex] = config;
+      console.log(`Updating existing config at index ${existingConfigIndex}`);
     } else if (Array.isArray(pluginConfig)) {
       // Add new config to array
-      await homebridge.updatePluginConfig([...pluginConfig, config]);
-      showToast('info', 'Added new configuration', 'Config Create');
+      updatedConfig = [...pluginConfig, config];
+      console.log('Adding new config to existing array');
     } else {
       // Create new config array
-      await homebridge.updatePluginConfig([config]);
-      showToast('info', 'Created new configuration array', 'Config Create');
+      updatedConfig = [config];
+      console.log('Creating new config array');
     }
     
-    // Critical part 2: Save changes to disk
+    // Update plugin config
+    showToast('info', 'Calling updatePluginConfig...', 'Save Step 3');
+    await homebridge.updatePluginConfig(updatedConfig);
+    
+    // Save changes to disk
     showToast('info', 'Calling savePluginConfig...', 'Save Step 4');
     await homebridge.savePluginConfig();
     
-    // Verify config was saved via the server
+    // Verify config was saved
     try {
-      await homebridge.request('/config/check');
-      showToast('success', 'Configuration verified by server', 'Config Verified');
+      const verifyResult = await homebridge.request('/config/check');
+      console.log('Config verification result:', verifyResult);
+      
+      if (verifyResult.success && verifyResult.platformFound) {
+        showToast('success', 'Configuration verified by server', 'Config Verified');
+      } else {
+        showToast('warning', 'Server verification inconclusive', 'Verify Warning');
+      }
     } catch (verifyError) {
+      console.error('Verification error:', verifyError);
       showToast('warning', 'Could not verify configuration: ' + verifyError.message, 'Verify Warning');
-      // Continue despite verification error
     }
     
     hideLoading();
     showToast('success', 'Configuration saved successfully', 'Save Complete');
   } catch (error) {
+    console.error('Save configuration error:', error);
     showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
     hideLoading();
   }
@@ -275,6 +438,7 @@ function showLoading(message) {
     homebridge.showSpinner();
   }
   showToast('info', message, 'Loading...');
+  console.log('Loading:', message);
 }
 
 /**
@@ -284,6 +448,7 @@ function hideLoading() {
   if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
     homebridge.hideSpinner();
   }
+  console.log('Loading complete');
 }
 
 /**
@@ -294,16 +459,19 @@ function hideLoading() {
  * @param {Function} callback - Optional callback function
  */
 function showToast(type, message, title, callback) {
-  if (!homebridge || !homebridge.toast) {
-    // Fallback if homebridge toast not available
-    console.log(`Toast (${type}): ${title} - ${message}`);
-    return;
-  }
-
-  if (homebridge.toast[type]) {
-    homebridge.toast[type](message, title);
-  } else {
-    homebridge.toast.info(message, title);
+  // Log to console for debugging
+  const logMethod = type === 'error' ? console.error : 
+                   type === 'warning' ? console.warn : console.log;
+  
+  logMethod(`${title}: ${message}`);
+  
+  // Display toast if homebridge is available
+  if (homebridge && homebridge.toast) {
+    if (homebridge.toast[type]) {
+      homebridge.toast[type](message, title);
+    } else {
+      homebridge.toast.info(message, title);
+    }
   }
 
   if (typeof callback === 'function') {
