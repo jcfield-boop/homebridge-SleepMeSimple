@@ -39,22 +39,21 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.ready();
   }
   
-  /**
-   * Check the config file and push status to UI
-   * This helps verify if we can read the config.json file directly
-   */
-  async checkConfigAndPush() {
-    try {
-      const configResult = await this.checkConfigFile();
-      // Push config status to UI as an event
-      this.pushEvent('config-status', configResult);
-      return configResult;
-    } catch (error) {
-      this.logError('Failed to check config file', error);
-      // Don't push error events to UI - only log to console
-      return { success: false, error: error.message };
-    }
+/**
+ * Check the config file and push status to UI
+ * This helps verify if we can read the config.json file directly
+ */
+async checkConfigAndPush() {
+  try {
+    const configResult = await this.checkConfigFile();
+    // Only log to console, don't push events that might trigger toasts
+    console.log('Config check result:', configResult);
+    return configResult;
+  } catch (error) {
+    console.error('Failed to check config file', error);
+    return { success: false, error: error.message };
   }
+}
   
   /**
    * Check if we can access the config.json file

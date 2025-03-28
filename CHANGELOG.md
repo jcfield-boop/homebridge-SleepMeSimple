@@ -1,5 +1,16 @@
 # Changelog
-## 4.0.16-dev.23 (Current Development Version)
+# Changelog
+
+## 4.0.11-dev.27 (Current Development)
+- Implemented strict allowlist approach for toast notifications
+- Completely eliminated "Fetching Server logs" and "Error: Logs not found" toast messages
+- Moved all non-critical messages to console-only logging
+- Added comprehensive filtering for toast messages by exact title matching
+- Prevented all informational and background task messages from showing as toasts
+- Fixed server-side event handling to avoid unnecessary UI notifications
+- Improved console logging with better categorization of message types
+- Enhanced error handling to ensure toast notifications are only shown for critical issues
+## 4.0.16-dev.23
 - Completely removed toast notifications for routine operations
 - Implemented allowlist-based approach for toast notifications
 - Only display toast notifications for critical actions and errors

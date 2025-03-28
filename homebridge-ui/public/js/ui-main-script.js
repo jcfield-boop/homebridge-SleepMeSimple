@@ -284,58 +284,53 @@ window.showToast = function(type, message, title = '') {
     console.error(`${title}: ${message}`);
   } else if (type === 'warning') {
     console.warn(`${title}: ${message}`);
-  } else if (debugLogging || type === 'success') {
+  } else {
     console.log(`${title}: ${message}`);
   }
   
-  // Critical message allowlist - only show these as toast notifications
-  const criticalTitles = [
-    'Validation Error',
-    'API Test Failed',
-    'API Test',
-    'Config Error',
-    'Save Error',
-    'Save Complete',
-    'Connection Error'
+  // Strict allowlist approach - ONLY show these specific toast notifications
+  const allowedToasts = [
+    // Critical user actions that need feedback
+    { type: 'success', title: 'Save Complete' },
+    { type: 'success', title: 'API Test', titleMatch: 'exact' },
+    { type: 'success', title: 'Templates Applied', titleMatch: 'exact' },
+    
+    // Critical errors that require user attention
+    { type: 'error', title: 'Validation Error' },
+    { type: 'error', title: 'API Test Failed' },
+    { type: 'error', title: 'API Test Error' },
+    { type: 'error', title: 'Save Error' },
+    { type: 'error', title: 'Connection Error' }
   ];
   
-  // Skip ALL info toasts - move them to console only
-  if (type === 'info') {
+  // Check if this toast should be shown based on the allowlist
+  const shouldShow = allowedToasts.some(allowed => {
+    // Type must match
+    if (allowed.type !== type) return false;
+    
+    // Title matching based on the matching strategy
+    if (allowed.titleMatch === 'exact') {
+      return allowed.title === title;
+    } else {
+      return title.includes(allowed.title);
+    }
+  });
+  
+  // Exit early if this toast shouldn't be shown
+  if (!shouldShow) {
     return;
   }
   
-  // Skip non-critical warnings
-  if (type === 'warning' && !criticalTitles.some(warning => title.includes(warning))) {
+  // Special handling for known recurring messages that should never be shown as toasts
+  if (message.includes('Server logs') || 
+      message.includes('Logs not found') ||
+      message.includes('Fetching') ||
+      message.includes('Loading') ||
+      message.includes('logs unavailable')) {
     return;
   }
   
-  // Skip routine success messages
-  if (type === 'success' && (
-    message.includes('loaded') ||
-    message.includes('initialized') ||
-    message.includes('Updated') ||
-    message.includes('Added') ||
-    message.includes('Schedule added') ||
-    message.includes('found')
-  )) {
-    return;
-  }
-  
-  // Skip routine error messages that aren't critical
-  if (type === 'error' && (
-    message.includes('not found in DOM') ||
-    message.includes('not initialized') ||
-    message.includes('not available')
-  )) {
-    return;
-  }
-  
-  // Only display critical toasts if title matches allowlist
-  if (!criticalTitles.some(allowed => title.includes(allowed)) && type !== 'error') {
-    return;
-  }
-  
-  // Display toast if homebridge is available and it's a critical notification
+  // Display toast if homebridge is available and it passed all filters
   if (typeof homebridge !== 'undefined' && homebridge.toast) {
     if (homebridge.toast[type]) {
       homebridge.toast[type](message, title);
@@ -344,7 +339,6 @@ window.showToast = function(type, message, title = '') {
     }
   }
 };
-
 /**
  * Show loading indicator with message
  * @param {string} message - Message to display
@@ -356,7 +350,6 @@ window.showLoading = function(message) {
   // Log to console but don't show toast for loading messages
   console.log(`Loading: ${message}`);
 };
-
 /**
  * Hide loading indicator
  */
