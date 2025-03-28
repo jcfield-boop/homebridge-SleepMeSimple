@@ -271,21 +271,19 @@ function initializeEventListeners() {
     return false;
   }
 }
-
 /**
- * Show a toast notification with consistent formatting
- * This helper function ensures toast notifications work across files
+ * Show a toast notification with simplified formatting
  * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
  * @param {string} message - Toast message
- * @param {string} title - Toast title
- * @param {Function} callback - Optional callback function
+ * @param {string} title - Toast title (optional)
  */
-window.showToast = function(type, message, title, callback) {
-  // Log to console for debugging
-  const logMethod = type === 'error' ? console.error : 
-                   type === 'warning' ? console.warn : console.log;
-  
-  logMethod(`${title}: ${message}`);
+window.showToast = function(type, message, title = '') {
+  // Only log critical messages and errors to console
+  if (type === 'error') {
+    console.error(`${title}: ${message}`);
+  } else if (type === 'warning') {
+    console.warn(`${title}: ${message}`);
+  }
   
   // Display toast if homebridge is available
   if (typeof homebridge !== 'undefined' && homebridge.toast) {
@@ -294,10 +292,6 @@ window.showToast = function(type, message, title, callback) {
     } else {
       homebridge.toast.info(message, title);
     }
-  }
-
-  if (typeof callback === 'function') {
-    setTimeout(callback, 2000);
   }
 };
 
@@ -509,7 +503,7 @@ async function initApp() {
 
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
-// Ensure confirmation modal is hidden at startup
+// Add this to the DOMContentLoaded event handler at the beginning
 const confirmModal = document.getElementById('confirmModal');
 if (confirmModal) {
   console.log('Hiding confirmation modal at startup');

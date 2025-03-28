@@ -62,7 +62,6 @@ window.showConfirmModal = function(title, message, callback) {
     }
   });
 };
-
 /**
  * Exit edit mode and reset form fields
  */
