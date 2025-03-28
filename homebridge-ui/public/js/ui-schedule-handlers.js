@@ -2,6 +2,7 @@
  * Schedule handling functions for SleepMe Simple UI
  * Handles adding, editing, and rendering schedules
  */
+
 /**
  * Show a confirmation modal dialog
  * @param {string} title - Modal title
@@ -30,90 +31,90 @@ window.showConfirmModal = function(title, message, callback) {
   // Show modal
   modal.classList.remove('hidden');
   
+  // Clear any existing event listeners to prevent duplicates
+  const newOkButton = okButton.cloneNode(true);
+  const newCancelButton = cancelButton.cloneNode(true);
+  okButton.parentNode.replaceChild(newOkButton, okButton);
+  cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
+  
   // Set up event listeners
-  const handleConfirm = () => {
+  newOkButton.addEventListener('click', () => {
     modal.classList.add('hidden');
-    okButton.removeEventListener('click', handleConfirm);
-    cancelButton.removeEventListener('click', handleCancel);
     if (typeof callback === 'function') {
       callback();
     }
-  };
+  });
   
-  const handleCancel = () => {
+  newCancelButton.addEventListener('click', () => {
     modal.classList.add('hidden');
-    okButton.removeEventListener('click', handleConfirm);
-    cancelButton.removeEventListener('click', handleCancel);
-  };
-  
-  okButton.addEventListener('click', handleConfirm);
-  cancelButton.addEventListener('click', handleCancel);
+  });
 };
+
 /**
  * Exit edit mode and reset form fields
  */
-function exitEditMode() {
-  isEditing = false;
-  editingScheduleIndex = -1;
+window.exitEditMode = function() {
+  window.isEditing = false;
+  window.editingScheduleIndex = -1;
   
   // Reset UI
-  if (addScheduleBtn) {
-    addScheduleBtn.textContent = 'Add Schedule';
+  if (window.addScheduleBtn) {
+    window.addScheduleBtn.textContent = 'Add Schedule';
   }
   
-  if (cancelEditBtn) {
-    cancelEditBtn.classList.add('hidden');
+  if (window.cancelEditBtn) {
+    window.cancelEditBtn.classList.add('hidden');
   }
   
   // Reset form fields to default values
-  if (scheduleTypeSelect && unitSelect && scheduleTimeInput && scheduleTemperatureInput) {
-    const unit = unitSelect.value;
-    scheduleTypeSelect.value = 'Everyday';
-    if (daySelectContainer) {
-      daySelectContainer.classList.add('hidden');
+  if (window.scheduleTypeSelect && window.unitSelect && window.scheduleTimeInput && window.scheduleTemperatureInput) {
+    const unit = window.unitSelect.value;
+    window.scheduleTypeSelect.value = 'Everyday';
+    if (window.daySelectContainer) {
+      window.daySelectContainer.classList.add('hidden');
     }
-    scheduleTimeInput.value = '21:30';
-    scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
+    window.scheduleTimeInput.value = '21:30';
+    window.scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
     
     // Hide warm hug info
-    if (warmHugInfo) {
-      warmHugInfo.classList.add('hidden');
+    if (window.warmHugInfo) {
+      window.warmHugInfo.classList.add('hidden');
     }
   }
-}
+};
 
 /**
  * Handle adding/updating a schedule
  */
-function handleScheduleAction() {
-  if (!scheduleTypeSelect || !scheduleTimeInput || !scheduleTemperatureInput || !unitSelect) {
-    showToast('error', 'UI elements not initialized', 'Configuration Error');
+window.handleScheduleAction = function() {
+  if (!window.scheduleTypeSelect || !window.scheduleTimeInput || !window.scheduleTemperatureInput || !window.unitSelect) {
+    window.showToast('error', 'UI elements not initialized', 'Configuration Error');
     return;
   }
   
   // Validate inputs first
-  const isTimeValid = validateScheduleTime();
-  const isTempValid = validateTemperature();
+  const isTimeValid = window.validateScheduleTime();
+  const isTempValid = window.validateTemperature();
   
   if (!isTimeValid || !isTempValid) {
-    showToast('error', 'Please correct the errors in the schedule form', 'Validation Error');
+    window.showToast('error', 'Please correct the errors in the schedule form', 'Validation Error');
     return;
   }
   
   // Get values from form
-  const type = scheduleTypeSelect.value;
-  const time = scheduleTimeInput.value;
-  const temperature = parseFloat(scheduleTemperatureInput.value);
-  const unit = unitSelect.value;
+  const type = window.scheduleTypeSelect.value;
+  const time = window.scheduleTimeInput.value;
+  const temperature = parseFloat(window.scheduleTemperatureInput.value);
+  const unit = window.unitSelect.value;
   
   // Validate required fields have values
   if (!type || !time || isNaN(temperature)) {
-    showToast('error', 'All schedule fields are required', 'Validation Error');
+    window.showToast('error', 'All schedule fields are required', 'Validation Error');
     return;
   }
   
   try {
-    if (isEditing && editingScheduleIndex >= 0 && editingScheduleIndex < schedules.length) {
+    if (window.isEditing && window.editingScheduleIndex >= 0 && window.editingScheduleIndex < window.schedules.length) {
       // Create updated schedule object
       const updatedSchedule = {
         type,
@@ -133,17 +134,17 @@ function handleScheduleAction() {
       // Add description for warm hug
       if (type === 'Warm Hug') {
         updatedSchedule.description = 'Warm Hug Wake-up';
-      } else if (schedules[editingScheduleIndex].description) {
+      } else if (window.schedules[window.editingScheduleIndex].description) {
         // Preserve original description if it exists
-        updatedSchedule.description = schedules[editingScheduleIndex].description;
+        updatedSchedule.description = window.schedules[window.editingScheduleIndex].description;
       }
       
       // Update existing schedule
-      schedules[editingScheduleIndex] = updatedSchedule;
-      showToast('success', 'Schedule updated successfully', 'Schedule Updated');
+      window.schedules[window.editingScheduleIndex] = updatedSchedule;
+      window.showToast('success', 'Schedule updated successfully', 'Schedule Updated');
       
       // Exit edit mode
-      exitEditMode();
+      window.exitEditMode();
     } else {
       // Create new schedule object
       const schedule = {
@@ -167,125 +168,125 @@ function handleScheduleAction() {
       }
       
       // Add new schedule
-      schedules.push(schedule);
+      window.schedules.push(schedule);
       
       // Reset form fields to default values
-      scheduleTimeInput.value = '21:30';
-      scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
+      window.scheduleTimeInput.value = '21:30';
+      window.scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
       
-      showToast('success', 'Schedule added successfully', 'Schedule Added');
+      window.showToast('success', 'Schedule added successfully', 'Schedule Added');
     }
     
     // Update UI
-    renderScheduleList();
+    window.renderScheduleList();
   } catch (error) {
     console.error('Schedule action error:', error);
-    showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
+    window.showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
   }
-}
+};
 
 /**
  * Edit a schedule
  * @param {number} index - Index of schedule to edit
  */
-function editSchedule(index) {
-  if (!scheduleTypeSelect || !daySelectContainer || !scheduleTimeInput || 
-      !scheduleTemperatureInput || !addScheduleBtn || !cancelEditBtn || !warmHugInfo) {
-    showToast('error', 'UI elements not initialized', 'Edit Error');
+window.editSchedule = function(index) {
+  if (!window.scheduleTypeSelect || !window.daySelectContainer || !window.scheduleTimeInput || 
+      !window.scheduleTemperatureInput || !window.addScheduleBtn || !window.cancelEditBtn || !window.warmHugInfo) {
+    window.showToast('error', 'UI elements not initialized', 'Edit Error');
     return;
   }
   
-  if (index < 0 || index >= schedules.length) {
-    showToast('error', 'Invalid schedule index', 'Edit Error');
+  if (index < 0 || index >= window.schedules.length) {
+    window.showToast('error', 'Invalid schedule index', 'Edit Error');
     return;
   }
 
-  const schedule = schedules[index];
+  const schedule = window.schedules[index];
   
   if (!schedule) {
-    showToast('error', 'Schedule not found', 'Edit Error');
+    window.showToast('error', 'Schedule not found', 'Edit Error');
     return;
   }
 
-  isEditing = true;
-  editingScheduleIndex = index;
+  window.isEditing = true;
+  window.editingScheduleIndex = index;
   
   // Set form values from schedule
-  scheduleTypeSelect.value = schedule.type || 'Everyday';
+  window.scheduleTypeSelect.value = schedule.type || 'Everyday';
   
   // Show/hide day select for specific day schedules
   if (schedule.type === 'Specific Day') {
-    daySelectContainer.classList.remove('hidden');
+    window.daySelectContainer.classList.remove('hidden');
     const daySelect = document.getElementById('scheduleDay');
     if (daySelect) {
       daySelect.value = schedule.day !== undefined ? schedule.day.toString() : '0';
     }
   } else {
-    daySelectContainer.classList.add('hidden');
+    window.daySelectContainer.classList.add('hidden');
   }
   
   // Show/hide warm hug info
-  warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
+  window.warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
   
   // Set time
-  scheduleTimeInput.value = schedule.time || '21:30';
-  validateScheduleTime();
+  window.scheduleTimeInput.value = schedule.time || '21:30';
+  window.validateScheduleTime();
   
   // Convert temperature if needed
-  const currentUnit = unitSelect.value;
+  const currentUnit = window.unitSelect.value;
   let displayTemp = schedule.temperature;
   
   // Handle unit conversion if stored unit differs from current unit
   if (schedule.unit && schedule.unit !== currentUnit) {
     if (schedule.unit === 'C' && currentUnit === 'F') {
-      displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+      displayTemp = Math.round(window.convertCtoF(displayTemp) * 10) / 10;
     } else if (schedule.unit === 'F' && currentUnit === 'C') {
-      displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
+      displayTemp = Math.round(window.convertFtoC(displayTemp) * 10) / 10;
     }
   }
   
   // Set temperature
-  scheduleTemperatureInput.value = displayTemp.toString();
-  validateTemperature();
+  window.scheduleTemperatureInput.value = displayTemp.toString();
+  window.validateTemperature();
   
   // Update UI to show we're in edit mode
-  addScheduleBtn.textContent = 'Update Schedule';
-  cancelEditBtn.classList.remove('hidden');
+  window.addScheduleBtn.textContent = 'Update Schedule';
+  window.cancelEditBtn.classList.remove('hidden');
   
   // Scroll to edit form
-  addScheduleBtn.scrollIntoView({ behavior: 'smooth' });
+  window.addScheduleBtn.scrollIntoView({ behavior: 'smooth' });
   
-  showToast('info', 'Editing schedule', 'Edit Schedule');
-}
+  window.showToast('info', 'Editing schedule', 'Edit Schedule');
+};
 
 /**
  * Apply schedule templates
  */
-function applyScheduleTemplates() {
+window.applyScheduleTemplates = function() {
   const weekdayTemplateSelect = document.getElementById('weekdayTemplate');
   const weekendTemplateSelect = document.getElementById('weekendTemplate');
   
-  if (!weekdayTemplateSelect || !weekendTemplateSelect || !unitSelect) {
-    showToast('error', 'UI elements not initialized', 'Template Error');
+  if (!weekdayTemplateSelect || !weekendTemplateSelect || !window.unitSelect) {
+    window.showToast('error', 'UI elements not initialized', 'Template Error');
     return;
   }
   
   const weekdayKey = weekdayTemplateSelect.value;
   const weekendKey = weekendTemplateSelect.value;
-  const currentUnit = unitSelect.value;
+  const currentUnit = window.unitSelect.value;
   
   let count = 0;
   
-  if (weekdayKey && templates[weekdayKey]) {
+  if (weekdayKey && window.templates[weekdayKey]) {
     // Remove existing weekday schedules
-    schedules = schedules.filter(s => s.type !== 'Weekdays');
+    window.schedules = window.schedules.filter(s => s.type !== 'Weekdays');
     
     // Add new weekday schedules
-    templates[weekdayKey].schedules.forEach(templateSchedule => {
+    window.templates[weekdayKey].schedules.forEach(templateSchedule => {
       // Convert temperature if needed (templates are stored in Celsius)
       let adjustedTemp = templateSchedule.temperature;
       if (currentUnit === 'F') {
-        adjustedTemp = Math.round(convertCtoF(adjustedTemp) * 10) / 10;
+        adjustedTemp = Math.round(window.convertCtoF(adjustedTemp) * 10) / 10;
       }
       
       const schedule = {
@@ -295,21 +296,21 @@ function applyScheduleTemplates() {
         unit: currentUnit,
         description: templateSchedule.description
       };
-      schedules.push(schedule);
+      window.schedules.push(schedule);
       count++;
     });
   }
   
-  if (weekendKey && templates[weekendKey]) {
+  if (weekendKey && window.templates[weekendKey]) {
     // Remove existing weekend schedules
-    schedules = schedules.filter(s => s.type !== 'Weekend');
+    window.schedules = window.schedules.filter(s => s.type !== 'Weekend');
     
     // Add new weekend schedules
-    templates[weekendKey].schedules.forEach(templateSchedule => {
+    window.templates[weekendKey].schedules.forEach(templateSchedule => {
       // Convert temperature if needed (templates are stored in Celsius)
       let adjustedTemp = templateSchedule.temperature;
       if (currentUnit === 'F') {
-        adjustedTemp = Math.round(convertCtoF(adjustedTemp) * 10) / 10;
+        adjustedTemp = Math.round(window.convertCtoF(adjustedTemp) * 10) / 10;
       }
       
       const schedule = {
@@ -319,37 +320,37 @@ function applyScheduleTemplates() {
         unit: currentUnit,
         description: templateSchedule.description
       };
-      schedules.push(schedule);
+      window.schedules.push(schedule);
       count++;
     });
   }
   
   // Update the UI
-  renderScheduleList();
+  window.renderScheduleList();
   
   if (count > 0) {
-    showToast('success', `Applied ${count} schedules from templates`, 'Templates Applied');
+    window.showToast('success', `Applied ${count} schedules from templates`, 'Templates Applied');
   } else {
-    showToast('warning', 'No templates selected', 'Template Error');
+    window.showToast('warning', 'No templates selected', 'Template Error');
   }
-}
+};
 
 /**
  * Render the schedule list in the UI
  */
-function renderScheduleList() {
-  if (!scheduleList || !unitSelect) {
+window.renderScheduleList = function() {
+  if (!window.scheduleList || !window.unitSelect) {
     console.warn('Schedule list or unit select not initialized');
     return;
   }
   
   try {
     // Clear the current list
-    scheduleList.innerHTML = '';
+    window.scheduleList.innerHTML = '';
     
     // If no schedules, show message
-    if (!schedules || schedules.length === 0) {
-      scheduleList.innerHTML = '<p>No schedules configured.</p>';
+    if (!window.schedules || window.schedules.length === 0) {
+      window.scheduleList.innerHTML = '<p>No schedules configured.</p>';
       return;
     }
     
@@ -365,7 +366,7 @@ function renderScheduleList() {
     };
     
     // Group schedules by type
-    schedules.forEach((schedule, index) => {
+    window.schedules.forEach((schedule, index) => {
       if (!groupedSchedules[schedule.type]) {
         groupedSchedules[schedule.type] = [];
       }
@@ -381,10 +382,10 @@ function renderScheduleList() {
       
       const desc = (schedule.description || '').toLowerCase();
       const temp = schedule.temperature;
-      const unit = schedule.unit || unitSelect.value;
+      const unit = schedule.unit || window.unitSelect.value;
       
       // Normalize temperature to Celsius for consistent comparison
-      const tempC = unit === 'C' ? temp : convertFtoC(temp);
+      const tempC = unit === 'C' ? temp : window.convertFtoC(temp);
       
       // Determine phase based on description keywords and temperature
       if (desc.includes('wake') || desc.includes('hug') || tempC > 30) {
@@ -477,14 +478,14 @@ function renderScheduleList() {
         
         // Format temperature based on current selected unit
         let displayTemp = schedule.temperature;
-        const currentUnit = unitSelect.value;
+        const currentUnit = window.unitSelect.value;
         
         try {
           // Handle unit conversion if needed
           if (schedule.unit === 'C' && currentUnit === 'F') {
-            displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+            displayTemp = Math.round(window.convertCtoF(displayTemp) * 10) / 10;
           } else if (schedule.unit === 'F' && currentUnit === 'C') {
-            displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
+            displayTemp = Math.round(window.convertFtoC(displayTemp) * 10) / 10;
           }
           
           // Ensure displayTemp is a valid number
@@ -535,21 +536,21 @@ function renderScheduleList() {
         // Add event listeners
         editBtn.addEventListener('click', () => {
           const index = parseInt(editBtn.getAttribute('data-index'), 10);
-          if (!isNaN(index) && index >= 0 && index < schedules.length) {
-            editSchedule(index);
+          if (!isNaN(index) && index >= 0 && index < window.schedules.length) {
+            window.editSchedule(index);
           }
         });
         
         removeBtn.addEventListener('click', () => {
           const index = parseInt(removeBtn.getAttribute('data-index'), 10);
-          if (!isNaN(index) && index >= 0 && index < schedules.length) {
-            // Use the modal confirmation instead of toast
+          if (!isNaN(index) && index >= 0 && index < window.schedules.length) {
+            // Use the modal confirmation
             window.showConfirmModal(
               'Confirm Removal',
               'Are you sure you want to remove this schedule?',
               () => {
-                schedules.splice(index, 1);
-                renderScheduleList();
+                window.schedules.splice(index, 1);
+                window.renderScheduleList();
                 window.showToast('success', 'Schedule removed successfully', 'Schedule Removed');
               }
             );
@@ -569,10 +570,10 @@ function renderScheduleList() {
       });
       
       // Add group container to schedule list
-      scheduleList.appendChild(groupContainer);
+      window.scheduleList.appendChild(groupContainer);
     });
   } catch (error) {
     console.error('Render schedule error:', error);
-    showToast('error', `Error rendering schedule list: ${error.message}`, 'Render Error');
+    window.showToast('error', `Error rendering schedule list: ${error.message}`, 'Render Error');
   }
-}
+};

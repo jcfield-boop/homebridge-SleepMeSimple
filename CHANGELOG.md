@@ -1,8 +1,13 @@
 # Changelog
 
-## 4.0.10-dev.16 (Current Development Version)
-- added confirmation modal to remove button
-- removed a lot of logging 
+## 4.0.10-dev.17 (Current Development Version)
+- Fixed confirmation modal appearing on startup issue
+- Improved modal event handling to prevent duplicate listeners
+- Enhanced UI initialization sequence
+
+## 4.0.10-dev.16 
+- Added confirmation modal to remove button
+- Removed redundant logging statements
 
 ## 4.0.10-dev.15 
 - Fixed custom UI configuration loading and saving functionality
