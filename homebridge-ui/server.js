@@ -125,7 +125,133 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // Helper logging methods (keeping the same logic)
+  /**
+   * Test connection to the SleepMe API
+   * @param {Object} payload - Payload containing API token
+   * @returns {Promise<Object>} Object with success status and device info
+   */
+  async testDeviceConnection(payload) {
+    try {
+      // Extract API token
+      let apiToken = null;
+      
+      if (payload && typeof payload.apiToken === 'string') {
+        apiToken = payload.apiToken;
+      } else if (payload && payload.body && typeof payload.body.apiToken === 'string') {
+        apiToken = payload.body.apiToken;
+      }
+      
+      if (!apiToken) {
+        this.log('API token missing from test request', 'error');
+        throw new Error('API token is required');
+      }
+      
+      this.log(`Testing SleepMe API connection with provided token`);
+      
+      // Make API call to test connection
+      const response = await axios({
+        method: 'GET',
+        url: `${API_BASE_URL}/devices`,
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      
+      this.log(`API responded with status: ${response.status}`);
+      
+      // Handle different API response formats
+      let devices = [];
+      if (Array.isArray(response.data)) {
+        devices = response.data;
+      } else if (response.data && response.data.devices && Array.isArray(response.data.devices)) {
+        devices = response.data.devices;
+      }
+      
+      // Extract device info
+      const deviceInfo = devices.map(device => ({
+        id: device.id,
+        name: device.name || 'Unnamed Device',
+        type: this.detectDeviceType(device)
+      }));
+      
+      this.log(`Connection test successful. Found ${devices.length} device(s)`);
+      
+      return {
+        success: true,
+        devices: devices.length,
+        deviceInfo: deviceInfo,
+        message: `Connection successful. Found ${devices.length} device(s).`
+      };
+    } catch (error) {
+      const statusCode = error.response?.status;
+      const errorMessage = error.response?.data?.message || error.message;
+      
+      this.logError(`API connection test failed with status ${statusCode}`, error);
+      
+      return {
+        success: false,
+        error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
+      };
+    }
+  }
+  
+  /**
+   * Helper method to detect device type from API response
+   * @param {Object} device - Device data from API
+   * @returns {string} Detected device type
+   */
+  detectDeviceType(device) {
+    if (!device) return 'Unknown';
+    
+    // Check attachments first
+    if (Array.isArray(device.attachments)) {
+      if (device.attachments.includes('CHILIPAD_PRO')) return 'ChiliPad Pro';
+      if (device.attachments.includes('OOLER')) return 'OOLER';
+      if (device.attachments.includes('DOCK_PRO')) return 'Dock Pro';
+    }
+    
+    // Check model field 
+    if (device.model) {
+      const model = String(device.model);
+      if (model.includes('DP')) return 'Dock Pro';
+      if (model.includes('OL')) return 'OOLER';
+      if (model.includes('CP')) return 'ChiliPad';
+    }
+    
+    // Check about.model if available
+    if (device.about && device.about.model) {
+      const model = String(device.about.model);
+      if (model.includes('DP')) return 'Dock Pro';
+      if (model.includes('OL')) return 'OOLER';
+      if (model.includes('CP')) return 'ChiliPad';
+    }
+    
+    return 'Unknown SleepMe Device';
+  }
+  
+  /**
+   * Get server logs for debugging
+   * @returns {Promise<Object>} Object with success status and logs array
+   */
+  async getServerLogs() {
+    try {
+      // Return our internal UI server logs
+      return {
+        success: true,
+        logs: [...this.recentLogs]
+      };
+    } catch (error) {
+      this.logError('Error getting logs', error);
+      return {
+        success: false,
+        error: `Failed to retrieve logs: ${error.message || 'Unknown error'}`
+      };
+    }
+  }
+  
+  // Helper logging methods
   log(message, level = 'info') {
     const entry = {
       timestamp: new Date().toISOString(),
@@ -173,8 +299,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Silent fail on push error
     }
   }
-  
-  // Rest of implementation remains the same...
 }
 
 // Create and export a new instance
