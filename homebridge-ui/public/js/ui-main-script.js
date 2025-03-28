@@ -11,6 +11,17 @@ let isEditing = false;         // Flag to track if we're in edit mode
 let editingScheduleIndex = -1; // Index of schedule being edited
 let initialized = false;       // Flag to track initialization state
 
+// DOM element references
+let scheduleTypeSelect;        // Schedule type dropdown
+let daySelectContainer;        // Container for day selection
+let scheduleTimeInput;         // Time input field
+let scheduleTemperatureInput;  // Temperature input field
+let unitSelect;                // Temperature unit selection
+let warmHugInfo;               // Warm hug information container
+let addScheduleBtn;            // Add schedule button
+let cancelEditBtn;             // Cancel edit button
+let scheduleList;              // Schedule list container
+
 // Template definitions for schedule presets
 const templates = {
   optimal: {
@@ -71,6 +82,9 @@ const templates = {
  */
 async function initApp() {
   try {
+    // Initialize DOM element references
+    initializeDOMReferences();
+    
     // Create logs section
     createLogsSection();
     
@@ -84,6 +98,37 @@ async function initApp() {
     initialized = true;
   } catch (error) {
     showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
+    console.error('UI Initialization error:', error);
+  }
+}
+
+/**
+ * Initialize references to DOM elements
+ * This ensures elements are available before trying to use them
+ */
+function initializeDOMReferences() {
+  scheduleTypeSelect = document.getElementById('scheduleType');
+  daySelectContainer = document.getElementById('daySelectContainer');
+  scheduleTimeInput = document.getElementById('scheduleTime');
+  scheduleTemperatureInput = document.getElementById('scheduleTemperature');
+  unitSelect = document.getElementById('unit');
+  warmHugInfo = document.getElementById('warmHugInfo');
+  addScheduleBtn = document.getElementById('addSchedule');
+  cancelEditBtn = document.getElementById('cancelEdit');
+  scheduleList = document.getElementById('scheduleList');
+}
+
+/**
+ * Hide loading spinner
+ */
+function hideLoading() {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+    homebridge.hideSpinner();
+  }
+  
+  const statusElement = document.getElementById('status');
+  if (statusElement) {
+    statusElement.classList.add('hidden');
   }
 }
 
@@ -149,10 +194,30 @@ function showToast(type, message, title = '', confirmCallback = null) {
   }
 }
 
+/**
+ * Show loading spinner with message
+ * @param {string} message - Optional message to display
+ */
+function showLoading(message = '') {
+  if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
+    homebridge.showSpinner();
+  }
+  
+  if (message) {
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      statusElement.textContent = message;
+      statusElement.className = 'status info';
+      statusElement.classList.remove('hidden');
+    }
+  }
+}
+
 // Wait for DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', async () => {
   // Create a centralized error handler for better error tracking
   window.onerror = function(message, source, lineno, colno, error) {
+    console.error('UI Error:', message, source, lineno, colno, error);
     showToast('error', 'An error occurred in the UI. Check browser console for details.', 'UI Error');
     return false;
   };
