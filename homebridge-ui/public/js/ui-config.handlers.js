@@ -1,223 +1,267 @@
 /**
- * Event handler initialization for SleepMe Simple UI
- * Sets up all event listeners for the UI components
+ * Load configuration from Homebridge
+ * Uses the proper Homebridge UI APIs to fetch plugin configuration
  */
+async function loadConfig() {
+  try {
+    showLoading('Loading configuration...');
+    
+    // Use the Homebridge API to get plugin config (recommended approach)
+    const pluginConfig = await homebridge.getPluginConfig();
+    
+    // Find our platform configuration (should be the first/only one)
+    let config = {};
+    if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
+      config = pluginConfig[0] || {};
+    }
+    
+    console.log('Loaded config:', config);
+    
+    // Fill form fields with config values
+    const apiTokenInput = document.getElementById('apiToken');
+    const unitSelect = document.getElementById('unit');
+    const pollingIntervalInput = document.getElementById('pollingInterval');
+    const logLevelSelect = document.getElementById('logLevel');
+    const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+    const schedulesContainer = document.getElementById('schedulesContainer');
+    
+    if (apiTokenInput && config.apiToken) {
+      apiTokenInput.value = config.apiToken;
+    }
+    
+    if (unitSelect && config.unit) {
+      unitSelect.value = config.unit;
+    }
+    
+    if (pollingIntervalInput && config.pollingInterval) {
+      pollingIntervalInput.value = config.pollingInterval;
+    }
+    
+    if (logLevelSelect && config.logLevel) {
+      logLevelSelect.value = config.logLevel;
+    }
+    
+    // Handle schedules
+    if (enableSchedulesCheckbox) {
+      const enableSchedules = config.enableSchedules === true;
+      enableSchedulesCheckbox.checked = enableSchedules;
+      
+      if (schedulesContainer) {
+        schedulesContainer.classList.toggle('hidden', !enableSchedules);
+      }
+      
+      // Load schedules if available
+      if (Array.isArray(config.schedules)) {
+        schedules = config.schedules.map(schedule => ({
+          ...schedule,
+          unit: schedule.unit || unitSelect.value // Set unit if not present
+        }));
+        
+        // Render schedule list
+        renderScheduleList();
+      }
+    }
+    
+    // Apply the updated temperature validation based on the loaded unit
+    updateTemperatureValidation();
+    
+    hideLoading();
+    return config;
+  } catch (error) {
+    console.error('Error loading config:', error);
+    showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
+    hideLoading();
+    return {};
+  }
+}
 
 /**
- * Initialize UI event listeners
- * Sets up all the event handlers for the UI
+ * Save configuration to Homebridge
+ * Uses the proper Homebridge UI APIs to update plugin configuration
  */
-function initializeEventListeners() {
-  // Form submission
-  const configForm = document.getElementById('configForm');
-  if (configForm) {
-    configForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      await saveConfig();
-    });
-  }
-  
-  // Test connection button
-  const testConnectionBtn = document.getElementById('testConnection');
-  if (testConnectionBtn) {
-    testConnectionBtn.addEventListener('click', testConnection);
-  }
-  
-  // Schedule type change
-  if (scheduleTypeSelect && daySelectContainer && warmHugInfo) {
-    scheduleTypeSelect.addEventListener('change', () => {
-      const scheduleType = scheduleTypeSelect.value;
-      
-      // Show/hide day select for specific day schedules
-      daySelectContainer.classList.toggle('hidden', scheduleType !== 'Specific Day');
-      
-      // Show/hide warm hug info
-      warmHugInfo.classList.toggle('hidden', scheduleType !== 'Warm Hug');
-    });
-  }
-  
-  // Enable schedules checkbox
-  const enableSchedulesCheckbox = document.getElementById('enableSchedules');
-  const schedulesContainer = document.getElementById('schedulesContainer');
-  if (enableSchedulesCheckbox && schedulesContainer) {
-    enableSchedulesCheckbox.addEventListener('change', () => {
-      // Toggle visibility of schedules container
-      schedulesContainer.classList.toggle('hidden', !enableSchedulesCheckbox.checked);
-      
-      // If schedules are being disabled, clear the schedules array
-      if (!enableSchedulesCheckbox.checked) {
-        // Clear schedules when disabled to ensure clean state
-        schedules = [];
-        renderScheduleList(); // Update UI to reflect empty schedules
-        showToast('info', 'Schedules have been disabled and cleared', 'Schedules');
-      } else {
-        showToast('info', 'Schedules have been enabled', 'Schedules');
-      }
-    });
-  }
-  
-  // Tab functionality
-  const tabs = document.querySelectorAll('.tab');
-  const tabContents = document.querySelectorAll('.tab-content');
-  if (tabs.length > 0 && tabContents.length > 0) {
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        // Remove active class from all tabs
-        tabs.forEach(t => t.classList.remove('active'));
-        
-        // Add active class to clicked tab
-        tab.classList.add('active');
-        
-        // Show corresponding tab content
-        const tabId = tab.getAttribute('data-tab');
-        tabContents.forEach(content => {
-          content.classList.remove('active');
-        });
-        document.getElementById(tabId + 'Tab').classList.add('active');
-      });
-    });
-  }
-  
-  // Template selects
-  const weekdayTemplateSelect = document.getElementById('weekdayTemplate');
-  const weekendTemplateSelect = document.getElementById('weekendTemplate');
-  const weekdayTemplateDesc = document.getElementById('weekdayTemplateDesc');
-  const weekendTemplateDesc = document.getElementById('weekendTemplateDesc');
-  
-  if (weekdayTemplateSelect && weekdayTemplateDesc) {
-    weekdayTemplateSelect.addEventListener('change', () => {
-      const templateKey = weekdayTemplateSelect.value;
-      if (templateKey && templates[templateKey]) {
-        const template = templates[templateKey];
-        weekdayTemplateDesc.textContent = `${template.name}: ${template.description}`;
-      } else {
-        weekdayTemplateDesc.textContent = '';
-      }
-    });
-  }
-  
-  if (weekendTemplateSelect && weekendTemplateDesc) {
-    weekendTemplateSelect.addEventListener('change', () => {
-      const templateKey = weekendTemplateSelect.value;
-      if (templateKey && templates[templateKey]) {
-        const template = templates[templateKey];
-        weekendTemplateDesc.textContent = `${template.name}: ${template.description}`;
-      } else {
-        weekendTemplateDesc.textContent = '';
-      }
-    });
-  }
-  
-  // Apply templates button
-  const applyTemplatesBtn = document.getElementById('applyTemplates');
-  if (applyTemplatesBtn) {
-    applyTemplatesBtn.addEventListener('click', applyScheduleTemplates);
-  }
-  
-  // Add/Update schedule button
-  if (addScheduleBtn) {
-    addScheduleBtn.addEventListener('click', handleScheduleAction);
-  }
-  
-  // Cancel edit button
-  if (cancelEditBtn) {
-    cancelEditBtn.addEventListener('click', exitEditMode);
-  }
-  
-  // Validate time format
-  if (scheduleTimeInput) {
-    scheduleTimeInput.addEventListener('input', validateScheduleTime);
-    scheduleTimeInput.addEventListener('blur', validateScheduleTime);
-  }
-  
-  // Validate temperature
-  if (scheduleTemperatureInput) {
-    scheduleTemperatureInput.addEventListener('input', validateTemperature);
-    scheduleTemperatureInput.addEventListener('blur', validateTemperature);
-  }
-  
-  // Update temperature validation when unit changes
-  if (unitSelect) {
-    unitSelect.addEventListener('change', updateTemperatureValidation);
-  }
-  
-  // Refresh logs button
-  const refreshLogsBtn = document.getElementById('refreshLogs');
-  if (refreshLogsBtn) {
-    refreshLogsBtn.addEventListener('click', fetchServerLogs);
-  }
-  
-  // View logs button - create it dynamically if it doesn't exist
-  addDebugButton();
-  
-  // Listen for plugin events from server
-  homebridge.addEventListener('event', async (event) => {
-    try {
-      if (!event || !event.data) return;
-      
-      const data = event.data;
-      
-      if (data.event === 'config-updated') {
-        // Reload config on update event
-        await loadConfig();
-      } else if (data.event === 'server-error') {
-        // Auto-fetch logs when an error occurs
-        fetchServerLogs();
-        
-        // Show a toast notification with more details
-        const errorTime = data.time ? new Date(data.time).toLocaleString() : 'recent';
-        
-        showToast(
-          'error', 
-          `Server error at ${errorTime}: ${data.message || 'Unknown error'}. Check the logs section for details.`, 
-          'Server Error'
-        );
-      }
-    } catch (error) {
-      console.error('Event handler error:', error);
-      showToast('error', 'Error processing server event: ' + error.message, 'Event Error');
+async function saveConfig() {
+  try {
+    showLoading('Saving configuration...');
+    
+    // Get current config to update
+    const pluginConfig = await homebridge.getPluginConfig();
+    
+    // Get values from form
+    const apiToken = document.getElementById('apiToken').value;
+    const unit = document.getElementById('unit').value;
+    const pollingInterval = parseInt(document.getElementById('pollingInterval').value, 10);
+    const logLevel = document.getElementById('logLevel').value;
+    const enableSchedules = document.getElementById('enableSchedules').checked;
+    
+    // Validate required fields
+    if (!apiToken) {
+      showToast('error', 'API token is required', 'Validation Error');
+      hideLoading();
+      return;
     }
-  });
-}
-/**
- * Add a debug button to view logs
- * Creates and adds a button to view server logs
- */
-function addDebugButton() {
-  const configForm = document.getElementById('configForm');
-  if (!configForm || document.getElementById('viewLogs')) return;
-  
-  const buttonGroup = configForm.querySelector('.button-group');
-  if (buttonGroup) {
-    const viewLogsBtn = document.createElement('button');
-    viewLogsBtn.id = 'viewLogs';
-    viewLogsBtn.type = 'button';
-    viewLogsBtn.className = 'secondary';
-    viewLogsBtn.textContent = 'View Logs';
-    viewLogsBtn.style.marginRight = '5px';
     
-    // Add event listener
-    viewLogsBtn.addEventListener('click', () => {
-      // Show loading indicator while fetching logs
-      showToast('info', 'Fetching logs...', 'Logs');
-      
-      // Call fetchServerLogs with proper error handling
-      fetchServerLogs().catch(error => {
-        console.error('Logs fetch error:', error);
-        showToast('error', `Error fetching logs: ${error.message}`, 'Logs Error');
-      });
-      
-      // Scroll to logs container
-      setTimeout(() => {
-        const logsContainer = document.getElementById('logsContainer');
-        if (logsContainer) {
-          logsContainer.classList.remove('hidden');
-          logsContainer.scrollIntoView({ behavior: 'smooth' });
+    // Validate polling interval
+    if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
+      showToast('error', 'Polling interval must be between 60 and 300 seconds', 'Validation Error');
+      hideLoading();
+      return;
+    }
+    
+    // Create updated config
+    const config = {
+      platform: 'SleepMeSimple',
+      name: 'SleepMe Simple',
+      apiToken,
+      unit,
+      pollingInterval,
+      logLevel,
+      enableSchedules
+    };
+    
+    // Add schedules if enabled
+    if (enableSchedules && schedules.length > 0) {
+      // Clean schedules for storage
+      config.schedules = schedules.map(schedule => {
+        // Create a clean schedule object
+        const cleanSchedule = {
+          type: schedule.type,
+          time: schedule.time,
+          temperature: parseFloat(schedule.temperature)
+        };
+        
+        // Add day property for Specific Day schedules
+        if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+          cleanSchedule.day = parseInt(schedule.day, 10);
         }
-      }, 100);
-    });
+        
+        // Add optional description
+        if (schedule.description) {
+          cleanSchedule.description = schedule.description;
+        }
+        
+        return cleanSchedule;
+      });
+    }
     
-    // Insert at beginning of button group
-    buttonGroup.insertBefore(viewLogsBtn, buttonGroup.firstChild);
+    // Update config via homebridge API (proper method)
+    if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
+      // Update existing config
+      await homebridge.updatePluginConfig([config]);
+    } else {
+      // Create new config
+      await homebridge.updatePluginConfig([config]);
+    }
+    
+    // Save changes to disk
+    await homebridge.savePluginConfig();
+    
+    hideLoading();
+    showToast('success', 'Configuration saved successfully', 'Save Complete');
+  } catch (error) {
+    console.error('Error saving config:', error);
+    showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
+    hideLoading();
+  }
+}
+
+/**
+ * Test connection to the SleepMe API
+ * Sends a request to the server to test API connectivity
+ */
+async function testConnection() {
+  try {
+    showLoading('Testing connection...');
+    
+    // Get API token from input
+    const apiToken = document.getElementById('apiToken').value;
+    
+    if (!apiToken) {
+      showToast('error', 'API token is required to test connection', 'Validation Error');
+      hideLoading();
+      return;
+    }
+    
+    // Send test request to server
+    const response = await homebridge.request('/device/test', { apiToken });
+    
+    hideLoading();
+    
+    // Handle the response
+    if (response.success) {
+      showToast(
+        'success', 
+        `Connection successful. Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`, 
+        'Test Connection'
+      );
+    } else {
+      showToast('error', response.error || 'Unknown error', 'Connection Failed');
+    }
+  } catch (error) {
+    console.error('Connection test error:', error);
+    showToast('error', 'Connection test failed: ' + error.message, 'Test Error');
+    hideLoading();
+  }
+}
+
+/**
+ * Fetch server logs
+ * Retrieves logs from the server for debugging
+ */
+async function fetchServerLogs() {
+  try {
+    showLoading('Fetching logs...');
+    
+    // Request logs from server
+    const response = await homebridge.request('/logs');
+    
+    hideLoading();
+    
+    if (response.success && Array.isArray(response.logs)) {
+      // Show logs container
+      const logsContainer = document.getElementById('logsContainer');
+      const logsContent = document.getElementById('logsContent');
+      
+      if (logsContainer && logsContent) {
+        logsContainer.classList.remove('hidden');
+        
+        // Clear previous logs
+        logsContent.innerHTML = '';
+        
+        // Format and display logs
+        response.logs.forEach(log => {
+          const logEntry = document.createElement('div');
+          logEntry.className = 'log-entry';
+          
+          // Format timestamp
+          const timestamp = new Date(log.timestamp).toLocaleString();
+          
+          // Create HTML structure
+          logEntry.innerHTML = `
+            <div class="log-timestamp">${timestamp}</div>
+            <div class="log-context">[${log.context}]</div>
+            <div class="log-message">${log.message}</div>
+            ${log.stack ? `<div class="log-stack">${log.stack}</div>` : ''}
+          `;
+          
+          // Add appropriate styling based on log level
+          if (log.level === 'error') {
+            logEntry.style.color = '#dc3545';
+          } else if (log.level === 'warn') {
+            logEntry.style.color = '#fd7e14';
+          }
+          
+          logsContent.appendChild(logEntry);
+        });
+        
+        // Scroll to bottom to show most recent logs
+        logsContent.scrollTop = logsContent.scrollHeight;
+      }
+    } else {
+      showToast('error', response.error || 'Failed to retrieve logs', 'Logs Error');
+    }
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    showToast('error', 'Failed to fetch logs: ' + error.message, 'Logs Error');
+    hideLoading();
   }
 }
