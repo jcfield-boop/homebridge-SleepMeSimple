@@ -28,12 +28,17 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Log initialization
     this.log('SleepMe UI Server initialized');
     
-    // Immediately check the config file and send result to UI
-    this.checkConfigAndPush();
-    
-    // IMPORTANT: Signal that the server is ready to accept requests
-    // This must be called after all request handlers are registered
-    this.ready();
+    // Initialize with a small delay to ensure all is ready
+    setTimeout(() => {
+      // Check the config file and send result to UI
+      this.checkConfigAndPush();
+      
+      // IMPORTANT: Signal that the server is ready to accept requests
+      // This must be called after all request handlers are registered
+      this.ready();
+      
+      this.log('SleepMe UI Server ready to accept requests');
+    }, 500);
   }
   
   /**
@@ -45,6 +50,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const configResult = await this.checkConfigFile();
       // Push config status to UI as an event
       this.pushEvent('config-status', configResult);
+      this.log(`Config check completed and pushed to UI: ${JSON.stringify(configResult)}`);
     } catch (error) {
       this.logError('Failed to check config file', error);
     }
@@ -76,7 +82,17 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const configContents = fs.readFileSync(configPath, 'utf8');
       
       // Parse JSON
-      const config = JSON.parse(configContents);
+      let config = null;
+      try {
+        config = JSON.parse(configContents);
+      } catch (parseError) {
+        this.logError(`Error parsing config.json: ${parseError.message}`, parseError);
+        return {
+          success: false,
+          error: `Invalid JSON in config file: ${parseError.message}`,
+          path: configPath
+        };
+      }
       
       // Check if our plugin is in the config
       const platforms = config.platforms || [];
@@ -152,6 +168,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       });
     } catch (pushError) {
       // Silent fail on push error
+      console.error(`Failed to push error event: ${pushError.message}`);
     }
   }
   
@@ -173,7 +190,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       if (!apiToken) {
         this.log('API token missing from test request', 'error');
-        throw new Error('API token is required');
+        throw new RequestError('API token is required', { status: 400 });
       }
       
       this.log(`Testing SleepMe API connection with provided token`);
