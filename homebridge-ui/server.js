@@ -25,6 +25,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Log initialization
     this.log('SleepMe UI Server initialized');
     
+    // Push initialization event to the UI
+    this.pushEvent('server-ready', { 
+      timestamp: new Date().toISOString(),
+      serverPath: this.homebridgeStoragePath
+    });
+    
     // IMPORTANT: Signal that the server is ready to accept requests
     // This must be called after all request handlers are registered
     this.ready();
@@ -96,6 +102,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
       
       if (!apiToken) {
+        this.log('API token missing from test request', 'error');
         throw new Error('API token is required');
       }
       
@@ -111,6 +118,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         },
         timeout: 10000
       });
+      
+      this.log(`API responded with status: ${response.status}`);
       
       // Handle different API response formats
       let devices = [];
@@ -140,7 +149,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const errorMessage = error.response?.data?.message || error.message;
       
       this.logError(`API connection test failed with status ${statusCode}`, error);
-      
       return {
         success: false,
         error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
@@ -198,6 +206,27 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       return {
         success: false,
         error: `Failed to retrieve logs: ${error.message || 'Unknown error'}`
+      };
+    }
+  }
+  
+  /**
+   * Get the config paths for debugging
+   * @returns {Promise<Object>} Object with paths information
+   */
+  async getConfigPaths() {
+    try {
+      return {
+        success: true,
+        storagePath: this.homebridgeStoragePath,
+        configPath: this.homebridgeConfigPath,
+        uiVersion: this.homebridgeUiVersion
+      };
+    } catch (error) {
+      this.logError('Error getting paths', error);
+      return {
+        success: false,
+        error: 'Failed to retrieve configuration paths'
       };
     }
   }

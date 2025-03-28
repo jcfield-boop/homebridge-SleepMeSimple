@@ -6,16 +6,48 @@ async function loadConfig() {
   try {
     showLoading('Loading configuration...');
     
-    // Use the Homebridge API to get plugin config
-    const pluginConfig = await homebridge.getPluginConfig();
+    // Make sure homebridge object is available
+    if (typeof homebridge === 'undefined') {
+      throw new Error('Homebridge object is not available');
+    }
+    
+    // Make sure getPluginConfig function is available
+    if (typeof homebridge.getPluginConfig !== 'function') {
+      throw new Error('Homebridge getPluginConfig function is not available');
+    }
+    
+    // Use the Homebridge API to get plugin config with retry logic
+    let pluginConfig;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        pluginConfig = await homebridge.getPluginConfig();
+        showToast('info', 'Configuration loaded successfully', 'Config Loaded');
+        break; // Success, exit retry loop
+      } catch (retryError) {
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          throw new Error(`Failed to get plugin config after ${maxRetries} attempts: ${retryError.message}`);
+        }
+        
+        showToast('warning', `Retry attempt ${retryCount}...`, 'Loading Config');
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
     
     // Find our platform configuration (should be the first/only one)
     let config = {};
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
       config = pluginConfig[0] || {};
+      showToast('success', 'Found existing configuration', 'Config Found');
+    } else {
+      showToast('info', 'No existing configuration found, using defaults', 'New Config');
     }
-    
-    console.log('Loaded config:', config);
     
     // Fill form fields with config values
     const apiTokenInput = document.getElementById('apiToken');
@@ -25,20 +57,30 @@ async function loadConfig() {
     const enableSchedulesCheckbox = document.getElementById('enableSchedules');
     const schedulesContainer = document.getElementById('schedulesContainer');
     
+    // Set API token if available
     if (apiTokenInput && config.apiToken) {
       apiTokenInput.value = config.apiToken;
+      showToast('info', 'API token loaded from config', 'API Token');
+    } else if (apiTokenInput) {
+      showToast('warning', 'No API token found in config', 'API Token');
     }
     
+    // Set temperature unit if available
     if (unitSelect && config.unit) {
       unitSelect.value = config.unit;
+      showToast('info', `Temperature unit set to ${config.unit}`, 'Unit');
     }
     
+    // Set polling interval if available
     if (pollingIntervalInput && config.pollingInterval) {
       pollingIntervalInput.value = config.pollingInterval;
+      showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Polling');
     }
     
+    // Set log level if available
     if (logLevelSelect && config.logLevel) {
       logLevelSelect.value = config.logLevel;
+      showToast('info', `Log level set to ${config.logLevel}`, 'Log Level');
     }
     
     // Handle schedules
@@ -54,11 +96,15 @@ async function loadConfig() {
       if (Array.isArray(config.schedules)) {
         schedules = config.schedules.map(schedule => ({
           ...schedule,
-          unit: schedule.unit || unitSelect.value // Set unit if not present
+          unit: schedule.unit || (unitSelect ? unitSelect.value : 'C') // Set unit if not present
         }));
         
         // Render schedule list
         renderScheduleList();
+        
+        showToast('info', `Loaded ${schedules.length} schedules from config`, 'Schedules');
+      } else if (enableSchedules) {
+        showToast('info', 'No existing schedules found', 'Schedules');
       }
     }
     
@@ -68,7 +114,6 @@ async function loadConfig() {
     hideLoading();
     return config;
   } catch (error) {
-    console.error('Error loading config:', error);
     showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
     hideLoading();
     return {};
@@ -141,15 +186,22 @@ async function saveConfig() {
         
         return cleanSchedule;
       });
+      
+      showToast('info', `Saving ${config.schedules.length} schedules`, 'Schedules');
     }
+    
+    // Show saving message with config details
+    showToast('info', `Saving: ${unit}°, ${pollingInterval}s polling, ${logLevel} logging`, 'Config');
     
     // Update config via homebridge API
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
       // Update existing config
       await homebridge.updatePluginConfig([config]);
+      showToast('info', 'Updated existing configuration', 'Config Update');
     } else {
       // Create new config
       await homebridge.updatePluginConfig([config]);
+      showToast('info', 'Created new configuration', 'Config Create');
     }
     
     // Save changes to disk
@@ -158,7 +210,6 @@ async function saveConfig() {
     hideLoading();
     showToast('success', 'Configuration saved successfully', 'Save Complete');
   } catch (error) {
-    console.error('Error saving config:', error);
     showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
     hideLoading();
   }
@@ -181,13 +232,15 @@ async function testConnection() {
       return;
     }
     
+    showToast('info', 'Sending test request to SleepMe API...', 'Testing');
+    
     // Send test request to server
     const response = await homebridge.request('/device/test', { apiToken });
     
     hideLoading();
     
     // Handle the response
-    if (response.success) {
+    if (response && response.success) {
       showToast(
         'success', 
         `Connection successful. Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`, 
@@ -197,8 +250,7 @@ async function testConnection() {
       showToast('error', response.error || 'Unknown error', 'Connection Failed');
     }
   } catch (error) {
-    console.error('Connection test error:', error);
-    showToast('error', 'Connection test failed: ' + error.message, 'Test Error');
+    showToast('error', 'Connection test failed: ' + (error.message || 'Unknown error'), 'Test Error');
     hideLoading();
   }
 }
@@ -216,7 +268,7 @@ async function fetchServerLogs() {
     
     hideLoading();
     
-    if (response.success && Array.isArray(response.logs)) {
+    if (response && response.success && Array.isArray(response.logs)) {
       // Show logs container
       const logsContainer = document.getElementById('logsContainer');
       const logsContent = document.getElementById('logsContent');
@@ -255,13 +307,14 @@ async function fetchServerLogs() {
         
         // Scroll to bottom to show most recent logs
         logsContent.scrollTop = logsContent.scrollHeight;
+        
+        showToast('success', `Loaded ${response.logs.length} log entries`, 'Logs');
       }
     } else {
       showToast('error', response.error || 'Failed to retrieve logs', 'Logs Error');
     }
   } catch (error) {
-    console.error('Error fetching logs:', error);
-    showToast('error', 'Failed to fetch logs: ' + error.message, 'Logs Error');
+    showToast('error', 'Failed to fetch logs: ' + (error.message || 'Unknown error'), 'Logs Error');
     hideLoading();
   }
 }
