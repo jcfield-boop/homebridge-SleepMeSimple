@@ -1,6 +1,15 @@
 # Changelog
+# Changelog
 
-## 4.0.12-dev.19 (Current Development Version)
+## 4.0.13-dev.20 (Current Development Version)
+- Fixed confirmation modal appearing at startup - now properly hidden by default
+- Added modal close functionality when clicking outside the modal content
+- Reduced toast notification verbosity by filtering routine messages
+- Improved modal event handling with proper event listener cleanup
+- Enhanced error handling in modal to fall back to native confirmation dialogs
+- Added proper content defaults for modal title and message
+
+## 4.0.12-dev.19 (Previous Version)
 - Fixed confirmation modal appearing at startup and being unable to dismiss
 - Added ability to close modal by clicking outside
 - Simplified toast logging to reduce verbosity

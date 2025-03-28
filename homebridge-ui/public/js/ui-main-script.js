@@ -283,6 +283,20 @@ window.showToast = function(type, message, title = '') {
     console.error(`${title}: ${message}`);
   } else if (type === 'warning') {
     console.warn(`${title}: ${message}`);
+  } else if (type === 'debug' && window.debugLogging) {
+    // Only log debug messages if debug logging is enabled
+    console.log(`${title}: ${message}`);
+  }
+  
+  // For info messages, don't show toast for routine operations
+  if (type === 'info' && (
+    message.includes('loaded from config') ||
+    message.includes('set to') ||
+    message.includes('Rendering') ||
+    message.includes('found in config')
+  )) {
+    // Skip showing toast for routine info messages
+    return;
   }
   
   // Display toast if homebridge is available
@@ -503,28 +517,20 @@ async function initApp() {
 
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
-// Add this to the DOMContentLoaded event handler at the beginning
-const confirmModal = document.getElementById('confirmModal');
-if (confirmModal) {
-  console.log('Hiding confirmation modal at startup');
-  confirmModal.classList.add('hidden');
-  
-  // Make sure any modal that might appear during initialization can be dismissed
-  const okButton = document.getElementById('confirmOk');
-  const cancelButton = document.getElementById('confirmCancel');
-  
-  if (okButton) {
-    okButton.addEventListener('click', () => {
-      confirmModal.classList.add('hidden');
+  // Hide confirmation modal at startup
+  const confirmModal = document.getElementById('confirmModal');
+  if (confirmModal) {
+    console.log('Hiding confirmation modal at startup');
+    confirmModal.classList.add('hidden');
+    
+    // Setup event delegation for modal closing
+    confirmModal.addEventListener('click', (event) => {
+      // Close when clicking outside the modal content
+      if (event.target === confirmModal) {
+        confirmModal.classList.add('hidden');
+      }
     });
   }
-  
-  if (cancelButton) {
-    cancelButton.addEventListener('click', () => {
-      confirmModal.classList.add('hidden');
-    });
-  }
-}
 
   // Check if the homebridge object is available (basic check)
   if (typeof homebridge === 'undefined') {

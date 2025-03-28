@@ -29,21 +29,20 @@ window.showConfirmModal = function(title, message, callback) {
   }
   
   // Set modal content
-  titleElement.textContent = title;
-  messageElement.textContent = message;
+  titleElement.textContent = title || 'Confirm Action';
+  messageElement.textContent = message || 'Are you sure you want to perform this action?';
   
   // Show modal
   modal.classList.remove('hidden');
   
-  // Create new button elements to remove old event listeners
+  // Remove previous event listeners
   const newOkButton = okButton.cloneNode(true);
   const newCancelButton = cancelButton.cloneNode(true);
   
-  // Replace old buttons with new ones
   okButton.parentNode.replaceChild(newOkButton, okButton);
   cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
   
-  // Set up event listeners
+  // Add new event listeners
   newOkButton.addEventListener('click', () => {
     modal.classList.add('hidden');
     if (typeof callback === 'function') {
@@ -54,14 +53,7 @@ window.showConfirmModal = function(title, message, callback) {
   newCancelButton.addEventListener('click', () => {
     modal.classList.add('hidden');
   });
-  
-  // Also close modal when clicking outside
-  modal.addEventListener('click', (event) => {
-    if (event.target === modal) {
-      modal.classList.add('hidden');
-    }
-  });
-};
+}
 /**
  * Exit edit mode and reset form fields
  */
