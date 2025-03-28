@@ -6,7 +6,7 @@ async function loadConfig() {
   try {
     showLoading('Loading configuration...');
     
-    // Use the Homebridge API to get plugin config (recommended approach)
+    // Use the Homebridge API to get plugin config
     const pluginConfig = await homebridge.getPluginConfig();
     
     // Find our platform configuration (should be the first/only one)
@@ -143,7 +143,7 @@ async function saveConfig() {
       });
     }
     
-    // Update config via homebridge API (proper method)
+    // Update config via homebridge API
     if (Array.isArray(pluginConfig) && pluginConfig.length > 0) {
       // Update existing config
       await homebridge.updatePluginConfig([config]);

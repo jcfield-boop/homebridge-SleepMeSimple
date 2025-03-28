@@ -1,8 +1,6 @@
 // homebridge-ui/server.js
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
-import path from 'path';
-import fs from 'fs';
 
 // API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
@@ -21,8 +19,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.maxLogEntries = 100;
     
     // Register request handlers
-    this.onRequest('/config', this.getConfig.bind(this));
-    this.onRequest('/saveConfig', this.saveConfig.bind(this));
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/logs', this.getServerLogs.bind(this));
     
@@ -84,233 +80,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Get plugin configuration from Homebridge config.json
-   * @returns {Promise<Object>} Object with success status and config data
-   */
-  async getConfig() {
-    try {
-      this.log('Getting plugin configuration');
-      
-      // Get the current configuration from Homebridge
-      const config = await this.readHomebridgeConfig();
-      
-      return {
-        success: true,
-        config: config
-      };
-    } catch (error) {
-      this.logError('Error getting config', error);
-      return {
-        success: false,
-        error: `Failed to retrieve configuration: ${error.message || 'Unknown error'}`
-      };
-    }
-  }
-  
-  /**
-   * Helper method to read the Homebridge config.json file
-   * @returns {Promise<Object>} The plugin configuration object
-   */
-  async readHomebridgeConfig() {
-    return new Promise((resolve, reject) => {
-      try {
-        // Access the config path directly from the parent class property
-        const configPath = this.homebridgeConfigPath;
-        
-        if (!configPath || !fs.existsSync(configPath)) {
-          throw new Error(`Config file not found at path: ${configPath}`);
-        }
-        
-        // Read and parse the config file
-        const configData = fs.readFileSync(configPath, 'utf8');
-        let homebridgeConfig;
-        
-        try {
-          homebridgeConfig = JSON.parse(configData);
-        } catch (parseError) {
-          throw new Error(`Failed to parse config.json: ${parseError.message}`);
-        }
-        
-        // Find our platform configuration
-        let platformConfig = {};
-        if (homebridgeConfig && Array.isArray(homebridgeConfig.platforms)) {
-          const platform = homebridgeConfig.platforms.find(p => p && p.platform === 'SleepMeSimple');
-          
-          if (platform) {
-            platformConfig = platform;
-            this.log(`Found existing SleepMeSimple platform configuration`);
-          } else {
-            this.log('No existing SleepMeSimple platform found in config.json', 'warn');
-          }
-        } else {
-          this.log('No platforms array found in config.json', 'warn');
-        }
-        
-        resolve(platformConfig);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-  
-  /**
-   * Save plugin configuration to Homebridge config.json
-   * @param {Object} payload - The configuration to save
-   * @returns {Promise<Object>} Object with success status and message
-   */
-  async saveConfig(payload) {
-    try {
-      // Extract config from payload
-      let config = null;
-      
-      if (payload && payload.body && payload.body.config) {
-        config = payload.body.config;
-      } else if (payload && payload.config) {
-        config = payload.config;
-      } else if (payload && payload.platform === 'SleepMeSimple') {
-        config = payload;
-      }
-      
-      if (!config) {
-        throw new Error('Invalid configuration data in payload');
-      }
-      
-      this.log(`Saving configuration: ${JSON.stringify(config, null, 2)}`);
-      
-      // Ensure required platform properties
-      config.platform = 'SleepMeSimple';
-      config.name = config.name || 'SleepMe Simple';
-      
-      // Validate API token
-      if (!config.apiToken) {
-        throw new Error('API token is required');
-      }
-      
-      // Validate polling interval range
-      const pollingInterval = parseInt(config.pollingInterval, 10);
-      if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
-        throw new Error('Polling interval must be between 60 and 300 seconds');
-      }
-      
-      // Properly format schedules if present
-      if (config.enableSchedules === true && Array.isArray(config.schedules)) {
-        // Ensure all schedules have the required fields
-        config.schedules = config.schedules.map(schedule => {
-          // Basic validation
-          if (!schedule.type || !schedule.time || schedule.temperature === undefined) {
-            throw new Error('Invalid schedule entry: missing required fields');
-          }
-          
-          // Create a clean schedule object with required fields
-          const cleanSchedule = {
-            type: schedule.type,
-            time: schedule.time,
-            temperature: parseFloat(schedule.temperature)
-          };
-          
-          // Add day property for Specific Day schedules
-          if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-            cleanSchedule.day = parseInt(schedule.day, 10);
-          }
-          
-          // Add optional description
-          if (schedule.description) {
-            cleanSchedule.description = schedule.description;
-          }
-          
-          return cleanSchedule;
-        });
-      } else if (config.enableSchedules === true) {
-        // If schedules are enabled but no schedules array, initialize with empty array
-        config.schedules = [];
-      } else {
-        // If schedules are disabled, remove schedules property completely
-        delete config.schedules;
-      }
-      
-      // Write the configuration to the Homebridge config.json
-      await this.updateHomebridgeConfig(config);
-      
-      // Notify UI of update
-      this.pushEvent('config-updated', { timestamp: Date.now() });
-      
-      return {
-        success: true,
-        message: 'Configuration saved successfully'
-      };
-    } catch (error) {
-      this.logError('Error saving config', error);
-      return {
-        success: false,
-        error: `Failed to save configuration: ${error.message || 'Unknown error'}`
-      };
-    }
-  }
-  
-  /**
-   * Helper method to update the Homebridge config.json file
-   * @param {Object} newConfig - The new plugin configuration
-   * @returns {Promise<void>}
-   */
-  async updateHomebridgeConfig(newConfig) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Access the config path directly from the parent class property
-        const configPath = this.homebridgeConfigPath;
-        
-        if (!configPath || !fs.existsSync(configPath)) {
-          throw new Error(`Config file not found at path: ${configPath}`);
-        }
-        
-        // Read and parse the config file
-        const configData = fs.readFileSync(configPath, 'utf8');
-        let homebridgeConfig;
-        
-        try {
-          homebridgeConfig = JSON.parse(configData);
-        } catch (parseError) {
-          throw new Error(`Failed to parse config.json: ${parseError.message}`);
-        }
-        
-        // Ensure platforms array exists
-        if (!homebridgeConfig.platforms) {
-          homebridgeConfig.platforms = [];
-        }
-        
-        // Find our platform configuration
-        const platformIndex = homebridgeConfig.platforms.findIndex(p => p && p.platform === 'SleepMeSimple');
-        
-        if (platformIndex >= 0) {
-          // Update existing platform config
-          homebridgeConfig.platforms[platformIndex] = newConfig;
-          this.log('Updated existing SleepMeSimple platform configuration');
-        } else {
-          // Add new platform config
-          homebridgeConfig.platforms.push(newConfig);
-          this.log('Added new SleepMeSimple platform configuration');
-        }
-        
-        // Create backup of current config
-        try {
-          const backupPath = `${configPath}.backup`;
-          fs.writeFileSync(backupPath, configData, 'utf8');
-          this.log(`Created backup of previous config at ${backupPath}`);
-        } catch (backupError) {
-          this.log(`Failed to create config backup: ${backupError.message}`, 'warn');
-        }
-        
-        // Write the updated config back to file
-        fs.writeFileSync(configPath, JSON.stringify(homebridgeConfig, null, 4), 'utf8');
-        this.log('Successfully wrote configuration to disk');
-        
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-  
-  /**
    * Test connection to the SleepMe API
    * @param {Object} payload - Payload containing API token
    * @returns {Promise<Object>} Object with success status and device info
@@ -324,14 +93,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         apiToken = payload.apiToken;
       } else if (payload && payload.body && typeof payload.body.apiToken === 'string') {
         apiToken = payload.body.apiToken;
-      }
-      
-      // If no API token found in payload, try to get from stored config
-      if (!apiToken) {
-        const configResult = await this.getConfig();
-        if (configResult.success && configResult.config && configResult.config.apiToken) {
-          apiToken = configResult.config.apiToken;
-        }
       }
       
       if (!apiToken) {
@@ -427,97 +188,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    */
   async getServerLogs() {
     try {
-      // First include our internal UI server logs
-      const uiLogs = [...this.recentLogs];
-      
-      // Access the storage path directly from the parent class property
-      const storagePath = this.homebridgeStoragePath;
-      
-      // Path to the log file
-      const logPath = path.join(storagePath, 'logs', 'homebridge.log');
-      
-      let systemLogs = [];
-      
-      if (fs.existsSync(logPath)) {
-        // Read the log file
-        const logData = fs.readFileSync(logPath, 'utf8');
-        
-        // Split into lines and take the last 200
-        const allLines = logData.split('\n').filter(line => line.trim());
-        const recentLines = allLines.slice(Math.max(0, allLines.length - 200));
-        
-        // Only include SleepMe related logs
-        const sleepMeLines = recentLines.filter(line => 
-          line.includes('SleepMe') || 
-          line.includes('sleepme')
-        );
-        
-        // Take most recent 50 SleepMe lines
-        const relevantLines = sleepMeLines.slice(0, 50);
-        
-        // Parse log lines
-        systemLogs = relevantLines.map(line => {
-          try {
-            // Initialize with defaults
-            let entry = {
-              timestamp: new Date().toISOString(),
-              context: 'homebridge',
-              message: line,
-              level: 'info'
-            };
-            
-            // Try to extract timestamp in standard format [2023-03-27 10:15:30]
-            const timestampMatch = line.match(/\[(.*?)\]/);
-            if (timestampMatch && timestampMatch[1]) {
-              try {
-                const parsedDate = new Date(timestampMatch[1].trim());
-                if (!isNaN(parsedDate.getTime())) {
-                  entry.timestamp = parsedDate.toISOString();
-                  line = line.substring(timestampMatch[0].length).trim();
-                }
-              } catch (e) {
-                // Parsing failed, keep defaults
-              }
-            }
-            
-            // Try to extract context like [SleepMeSimple]
-            const contextMatch = line.match(/\[(.*?)\]/);
-            if (contextMatch && contextMatch[1]) {
-              entry.context = contextMatch[1].trim();
-              line = line.substring(contextMatch[0].length).trim();
-            }
-            
-            // Determine log level
-            if (line.includes('ERROR')) {
-              entry.level = 'error';
-            } else if (line.includes('WARN')) {
-              entry.level = 'warn';
-            }
-            
-            // Set cleaned message
-            entry.message = line.replace(/\[(INFO|WARN|ERROR|DEBUG)\]/, '').trim();
-            
-            return entry;
-          } catch (parseError) {
-            // If parsing fails, return basic entry
-            return {
-              timestamp: new Date().toISOString(),
-              context: 'homebridge',
-              message: line,
-              level: 'info'
-            };
-          }
-        });
-      }
-      
-      // Combine UI logs and system logs, sort by timestamp (newest first)
-      const combinedLogs = [...uiLogs, ...systemLogs]
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-        .slice(0, this.maxLogEntries);
-      
+      // Return our internal UI server logs
       return {
         success: true,
-        logs: combinedLogs
+        logs: [...this.recentLogs]
       };
     } catch (error) {
       this.logError('Error getting logs', error);
