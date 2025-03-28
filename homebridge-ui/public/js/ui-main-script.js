@@ -273,7 +273,7 @@ function initializeEventListeners() {
 }
 
 /**
- * Show a toast notification with improved filtering to reduce verbosity
+ * Show a toast notification with STRICT filtering to reduce verbosity
  * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
  * @param {string} message - Toast message
  * @param {string} title - Toast title (optional)
@@ -288,12 +288,30 @@ window.showToast = function(type, message, title = '') {
     console.log(`${title}: ${message}`);
   }
   
-  // Strict allowlist approach - ONLY show these specific toast notifications
+  // Global blocklist for message content that should NEVER trigger toasts
+  const blockedContentPatterns = [
+    'Fetching Server logs',
+    'Server logs unavailable',
+    'Log directory not found',
+    'Loading configuration',
+    'Logs not found',
+    'API token loaded',
+    'Temperature unit set',
+    'Config loaded'
+  ];
+  
+  // Check if message contains any blocked pattern
+  if (blockedContentPatterns.some(pattern => message.includes(pattern))) {
+    return; // Skip toast for blocked content
+  }
+  
+  // Very strict allowlist approach - ONLY show these specific toast combinations
   const allowedToasts = [
     // Critical user actions that need feedback
     { type: 'success', title: 'Save Complete' },
     { type: 'success', title: 'API Test', titleMatch: 'exact' },
     { type: 'success', title: 'Templates Applied', titleMatch: 'exact' },
+    { type: 'success', title: 'Schedule Removed', titleMatch: 'exact' },
     
     // Critical errors that require user attention
     { type: 'error', title: 'Validation Error' },
@@ -321,15 +339,6 @@ window.showToast = function(type, message, title = '') {
     return;
   }
   
-  // Special handling for known recurring messages that should never be shown as toasts
-  if (message.includes('Server logs') || 
-      message.includes('Logs not found') ||
-      message.includes('Fetching') ||
-      message.includes('Loading') ||
-      message.includes('logs unavailable')) {
-    return;
-  }
-  
   // Display toast if homebridge is available and it passed all filters
   if (typeof homebridge !== 'undefined' && homebridge.toast) {
     if (homebridge.toast[type]) {
@@ -339,6 +348,7 @@ window.showToast = function(type, message, title = '') {
     }
   }
 };
+
 /**
  * Show loading indicator with message
  * @param {string} message - Message to display
@@ -350,6 +360,7 @@ window.showLoading = function(message) {
   // Log to console but don't show toast for loading messages
   console.log(`Loading: ${message}`);
 };
+
 /**
  * Hide loading indicator
  */
@@ -548,16 +559,17 @@ async function initApp() {
 
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Hide confirmation modal at startup
+  console.log('DOM content loaded - initializing confirmation modal');
+  
+  // Initialize and properly hide confirmation modal at startup
   const confirmModal = document.getElementById('confirmModal');
   if (confirmModal) {
-    console.log('Ensuring confirmation modal is hidden at startup');
+    // Make sure modal is fully hidden - both style AND class
     confirmModal.classList.add('hidden');
-    confirmModal.style.display = 'none'; // Adding explicit style to ensure it's hidden
+    confirmModal.style.display = 'none';
     
-    // Setup event delegation for modal closing
+    // Setup event delegation for modal closing when clicking outside
     confirmModal.addEventListener('click', (event) => {
-      // Close when clicking outside the modal content
       if (event.target === confirmModal) {
         confirmModal.classList.add('hidden');
         confirmModal.style.display = 'none';
@@ -572,6 +584,8 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmModal.style.display = 'none';
       });
     }
+  } else {
+    console.warn('Confirmation modal element not found in DOM');
   }
 
   // Check if the homebridge object is available (basic check)

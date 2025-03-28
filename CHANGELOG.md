@@ -1,7 +1,18 @@
 # Changelog
 # Changelog
-
-## 4.0.11-dev.27 (Current Development)
+## 4.0.12-dev.28 (Current Development)
+- Fixed confirmation modal for removing schedule items not appearing
+- Implemented strict toast notification filtering to completely eliminate unwanted toasts
+- Added explicit handling for "Fetching Server logs" and other routine messages to prevent toast display
+- Improved confirmation modal handling with proper display/hide logic using both CSS classes and inline styles
+- Enhanced modal event handling to prevent duplicated event listeners
+- Refactored showToast function with stricter allowlist approach to reduce UI noise
+- Added comprehensive filtering system for toast notifications based on message content
+- Fixed initialization of confirmation modal at application startup
+- Added explicit error handling for modal-related operations
+- Improved console logging with better error diagnostics
+- Added schedule removal success notification
+## 4.0.11-dev.27 (Previous  Development)
 - Implemented strict allowlist approach for toast notifications
 - Completely eliminated "Fetching Server logs" and "Error: Logs not found" toast messages
 - Moved all non-critical messages to console-only logging
