@@ -16,13 +16,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Must call super first to initialize the parent class
     super();
     
-    // Initialize storage
+    // Initialize storage - only for console logging, not for UI
     this.recentLogs = [];
     this.maxLogEntries = 100;
     
     // Register request handlers
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
-    this.onRequest('/logs', this.getServerLogs.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
     
     // Log initialization
@@ -52,95 +51,92 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       return configResult;
     } catch (error) {
       this.logError('Failed to check config file', error);
-      // Push error event to UI
-      this.pushEvent('server-error', {
-        message: `Config check failed: ${error.message}`,
-        time: new Date().toISOString()
-      });
-      throw error;
+      // Don't push error events to UI - only log to console
+      return { success: false, error: error.message };
     }
   }
+  
   /**
- * Check if we can access the config.json file
- * @returns {Promise<Object>} Status of config file access
- */
-async checkConfigFile() {
-  try {
-    // Get the config path
-    const configPath = this.homebridgeConfigPath;
-    this.log(`Checking config file at: ${configPath}`);
-    
-    // Check if file exists
-    if (!fs.existsSync(configPath)) {
-      this.log('Config file not found', 'warn');
-      return {
-        success: false,
-        message: 'Config file not found',
-        path: configPath
-      };
-    }
-    
-    // Read file contents as string
-    const configContents = fs.readFileSync(configPath, 'utf8');
-    
-    // Parse JSON
-    let config;
+   * Check if we can access the config.json file
+   * @returns {Promise<Object>} Status of config file access
+   */
+  async checkConfigFile() {
     try {
-      config = JSON.parse(configContents);
-    } catch (jsonError) {
-      this.log(`Error parsing config JSON: ${jsonError.message}`, 'error');
+      // Get the config path
+      const configPath = this.homebridgeConfigPath;
+      this.log(`Checking config file at: ${configPath}`);
+      
+      // Check if file exists
+      if (!fs.existsSync(configPath)) {
+        this.log('Config file not found', 'warn');
+        return {
+          success: false,
+          message: 'Config file not found',
+          path: configPath
+        };
+      }
+      
+      // Read file contents as string
+      const configContents = fs.readFileSync(configPath, 'utf8');
+      
+      // Parse JSON
+      let config;
+      try {
+        config = JSON.parse(configContents);
+      } catch (jsonError) {
+        this.log(`Error parsing config JSON: ${jsonError.message}`, 'error');
+        return {
+          success: false,
+          message: `Config file exists but contains invalid JSON: ${jsonError.message}`,
+          path: configPath
+        };
+      }
+      
+      // Check if our plugin is in the config with multiple possible platform names
+      const platforms = config.platforms || [];
+      
+      // Try multiple possible platform names
+      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
+      let ourPlatform = null;
+      
+      for (const name of platformNames) {
+        const found = platforms.find(p => 
+          p.platform && p.platform.toLowerCase() === name.toLowerCase());
+        
+        if (found) {
+          ourPlatform = found;
+          this.log(`Found platform with name: ${found.platform}`);
+          break;
+        }
+      }
+      
+      // Debug logging for troubleshooting
+      this.log(`Config platforms: ${JSON.stringify(platforms.map(p => p.platform || 'unnamed'))}`);
+      
       return {
-        success: false,
-        message: `Config file exists but contains invalid JSON: ${jsonError.message}`,
+        success: true,
+        platformFound: !!ourPlatform,
+        platformConfig: ourPlatform ? {
+          name: ourPlatform.name || 'SleepMe Simple',
+          hasApiToken: !!ourPlatform.apiToken,
+          unit: ourPlatform.unit || 'C',
+          pollingInterval: ourPlatform.pollingInterval || 90,
+          logLevel: ourPlatform.logLevel || 'normal',
+          enableSchedules: !!ourPlatform.enableSchedules,
+          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
+        } : null,
+        allPlatforms: platforms.map(p => p.platform || 'unnamed'),
         path: configPath
       };
+    } catch (error) {
+      this.logError(`Error checking config file: ${error.message}`, error);
+      return {
+        success: false,
+        error: error.message,
+        path: this.homebridgeConfigPath || 'unknown'
+      };
     }
-    
-    // Check if our plugin is in the config with multiple possible platform names
-    const platforms = config.platforms || [];
-    
-    // Try multiple possible platform names
-    const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-    let ourPlatform = null;
-    
-    for (const name of platformNames) {
-      const found = platforms.find(p => 
-        p.platform && p.platform.toLowerCase() === name.toLowerCase());
-      
-      if (found) {
-        ourPlatform = found;
-        this.log(`Found platform with name: ${found.platform}`);
-        break;
-      }
-    }
-    
-    // Debug logging for troubleshooting
-    this.log(`Config platforms: ${JSON.stringify(platforms.map(p => p.platform || 'unnamed'))}`);
-    
-    return {
-      success: true,
-      platformFound: !!ourPlatform,
-      platformConfig: ourPlatform ? {
-        name: ourPlatform.name || 'SleepMe Simple',
-        hasApiToken: !!ourPlatform.apiToken,
-        unit: ourPlatform.unit || 'C',
-        pollingInterval: ourPlatform.pollingInterval || 90,
-        logLevel: ourPlatform.logLevel || 'normal',
-        enableSchedules: !!ourPlatform.enableSchedules,
-        scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
-      } : null,
-      allPlatforms: platforms.map(p => p.platform || 'unnamed'),
-      path: configPath
-    };
-  } catch (error) {
-    this.logError(`Error checking config file: ${error.message}`, error);
-    return {
-      success: false,
-      error: error.message,
-      path: this.homebridgeConfigPath || 'unknown'
-    };
   }
-}
   
   /**
    * Test connection to the SleepMe API
@@ -248,27 +244,7 @@ async checkConfigFile() {
     return 'Unknown SleepMe Device';
   }
   
-  /**
-   * Get server logs for debugging
-   * @returns {Promise<Object>} Object with success status and logs array
-   */
-  async getServerLogs() {
-    try {
-      // Return our internal UI server logs
-      return {
-        success: true,
-        logs: [...this.recentLogs]
-      };
-    } catch (error) {
-      this.logError('Error getting logs', error);
-      return {
-        success: false,
-        error: `Failed to retrieve logs: ${error.message || 'Unknown error'}`
-      };
-    }
-  }
-  
-  // Helper logging methods
+  // Helper logging methods - console only, no toast notifications
   log(message, level = 'info') {
     const entry = {
       timestamp: new Date().toISOString(),
@@ -307,14 +283,7 @@ async checkConfigFile() {
     
     console.error(`[SleepMeUI] ${message}:`, error);
     
-    try {
-      this.pushEvent('server-error', { 
-        message: error.message,
-        time: new Date().toISOString()
-      });
-    } catch (pushError) {
-      // Silent fail on push error
-    }
+    // Don't push error notifications to UI - only log to console
   }
 }
 
