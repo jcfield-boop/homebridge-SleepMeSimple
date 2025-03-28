@@ -1,13 +1,23 @@
 # Changelog
-
-## 4.0.15-dev.22 (Current Development Version)
+## 4.0.16-dev.23 (Current Development Version)
+- Completely removed toast notifications for routine operations
+- Implemented allowlist-based approach for toast notifications
+- Only display toast notifications for critical actions and errors
+- Moved all informational messages to console-only logging
+- Improved toast filtering with comprehensive criteria
+- Removed all UI-related toast notifications
+- Enhanced error handling with better console logging
+- Improved toast filtering based on message title and content
+- Added explicit toast suppression for routine operations
+- Fixed confirmation modal UX issues
+## 4.0.15-dev.22 
 - Completely removed Server Logs section from the HTML interface
 - Fixed persistent toast notifications for config-related messages
 - Changed all config-related messages to console-only logging
 - Implemented stricter filtering for toast notifications
 - Modified config handlers to avoid sending toast notifications
 - Added allowlist-based approach for toast notifications (only critical messages shown)
-## 4.0.14-dev.22 (Current Development Version)
+## 4.0.14-dev.22 
 - Fixed confirmation modal appearing at startup by adding both class and inline style
 - Added explicit style.display = 'none' to ensure modal is completely hidden
 - Significantly reduced toast notification verbosity with expanded filtering
@@ -17,7 +27,7 @@
 - Enhanced modal control logic with direct style manipulation
 - Fixed cancel button handling in confirmation modal
 - Added proper event cleanup for modal interactions
-## 4.0.11-dev.21 (Current Development Version)
+## 4.0.11-dev.21 
 - Fixed confirmation modal appearing at startup by using both CSS class and style display property
 - Added stronger modal event handling to ensure it can be dismissed
 - Significantly reduced toast notification verbosity by filtering common informational messages
@@ -27,7 +37,7 @@
 - Fixed event listener memory leak in modal dialog
 - Updated CSS to ensure modal stays hidden when required
 
-## 4.0.13-dev.20 (Current Development Version)
+## 4.0.13-dev.20 
 - Fixed confirmation modal appearing at startup - now properly hidden by default
 - Added modal close functionality when clicking outside the modal content
 - Reduced toast notification verbosity by filtering routine messages
@@ -35,14 +45,14 @@
 - Enhanced error handling in modal to fall back to native confirmation dialogs
 - Added proper content defaults for modal title and message
 
-## 4.0.12-dev.19 (Previous Version)
+## 4.0.12-dev.19 
 - Fixed confirmation modal appearing at startup and being unable to dismiss
 - Added ability to close modal by clicking outside
 - Simplified toast logging to reduce verbosity
 - Improved modal message for schedule removal confirmation
 - Added proper cleanup of event listeners to prevent duplicates
 
-## 4.0.11-dev.18 (Previous Version)
+## 4.0.11-dev.18 
 - Fixed confirmation modal appearing at startup and being unable to dismiss
 - Removed Server Logs section from the UI
 - Added safeguard to ensure confirmation modal is properly hidden by default

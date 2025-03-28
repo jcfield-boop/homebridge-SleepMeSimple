@@ -56,7 +56,8 @@ window.showConfirmModal = function(title, message, callback) {
     modal.style.display = 'none';
     modal.classList.add('hidden');
   });
-}
+};
+
 /**
  * Exit edit mode and reset form fields
  */
@@ -95,7 +96,7 @@ window.exitEditMode = function() {
  */
 window.handleScheduleAction = function() {
   if (!window.scheduleTypeSelect || !window.scheduleTimeInput || !window.scheduleTemperatureInput || !window.unitSelect) {
-    window.showToast('error', 'UI elements not initialized', 'Configuration Error');
+    console.error('UI elements not initialized');
     return;
   }
   
@@ -148,7 +149,7 @@ window.handleScheduleAction = function() {
       
       // Update existing schedule
       window.schedules[window.editingScheduleIndex] = updatedSchedule;
-      window.showToast('success', 'Schedule updated successfully', 'Schedule Updated');
+      console.log('Schedule updated successfully');
       
       // Exit edit mode
       window.exitEditMode();
@@ -181,7 +182,7 @@ window.handleScheduleAction = function() {
       window.scheduleTimeInput.value = '21:30';
       window.scheduleTemperatureInput.value = (unit === 'C') ? '23' : '73';
       
-      window.showToast('success', 'Schedule added successfully', 'Schedule Added');
+      console.log('Schedule added successfully');
     }
     
     // Update UI
@@ -199,19 +200,19 @@ window.handleScheduleAction = function() {
 window.editSchedule = function(index) {
   if (!window.scheduleTypeSelect || !window.daySelectContainer || !window.scheduleTimeInput || 
       !window.scheduleTemperatureInput || !window.addScheduleBtn || !window.cancelEditBtn || !window.warmHugInfo) {
-    window.showToast('error', 'UI elements not initialized', 'Edit Error');
+    console.error('UI elements not initialized');
     return;
   }
   
   if (index < 0 || index >= window.schedules.length) {
-    window.showToast('error', 'Invalid schedule index', 'Edit Error');
+    console.error('Invalid schedule index');
     return;
   }
 
   const schedule = window.schedules[index];
   
   if (!schedule) {
-    window.showToast('error', 'Schedule not found', 'Edit Error');
+    console.error('Schedule not found');
     return;
   }
 
@@ -263,7 +264,7 @@ window.editSchedule = function(index) {
   // Scroll to edit form
   window.addScheduleBtn.scrollIntoView({ behavior: 'smooth' });
   
-  window.showToast('info', 'Editing schedule', 'Edit Schedule');
+  console.log('Editing schedule');
 };
 
 /**
@@ -274,7 +275,7 @@ window.applyScheduleTemplates = function() {
   const weekendTemplateSelect = document.getElementById('weekendTemplate');
   
   if (!weekdayTemplateSelect || !weekendTemplateSelect || !window.unitSelect) {
-    window.showToast('error', 'UI elements not initialized', 'Template Error');
+    console.error('UI elements not initialized');
     return;
   }
   
@@ -336,9 +337,10 @@ window.applyScheduleTemplates = function() {
   window.renderScheduleList();
   
   if (count > 0) {
+    console.log(`Applied ${count} schedules from templates`);
     window.showToast('success', `Applied ${count} schedules from templates`, 'Templates Applied');
   } else {
-    window.showToast('warning', 'No templates selected', 'Template Error');
+    console.warn('No templates selected');
   }
 };
 
@@ -558,7 +560,7 @@ window.renderScheduleList = function() {
               () => {
                 window.schedules.splice(index, 1);
                 window.renderScheduleList();
-                window.showToast('success', 'Schedule removed successfully', 'Schedule Removed');
+                console.log('Schedule removed successfully');
               }
             );
           }

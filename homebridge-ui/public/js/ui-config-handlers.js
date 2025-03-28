@@ -64,7 +64,10 @@ window.loadConfig = async function() {
     return config;
   } catch (error) {
     console.error('Configuration loading error:', error);
-    window.showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
+    // Only show toast for critical config errors
+    if (error.message.includes('API') || error.message.includes('token')) {
+      window.showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
+    }
     window.hideLoading();
     return {};
   }
@@ -196,7 +199,6 @@ function populateFormFields(config) {
   } else if (unitSelect) {
     unitSelect.value = 'C'; // Set default
   }
-  
   // Set polling interval if available
   if (pollingIntervalInput && config.pollingInterval) {
     pollingIntervalInput.value = config.pollingInterval;
@@ -368,7 +370,9 @@ window.saveConfig = async function() {
       console.log('Update result:', updateResult);
     } catch (updateError) {
       console.error('Error updating config:', updateError);
-      throw new Error(`Update failed: ${updateError.message}`);
+      window.showToast('error', `Update failed: ${updateError.message}`, 'Save Error');
+      window.hideLoading();
+      return;
     }
     
     // Save changes to disk
@@ -376,13 +380,13 @@ window.saveConfig = async function() {
     try {
       await homebridge.savePluginConfig();
       console.log('Config saved successfully');
+      window.showToast('success', 'Configuration saved successfully', 'Save Complete');
     } catch (saveError) {
       console.error('Error saving config to disk:', saveError);
-      throw new Error(`Save to disk failed: ${saveError.message}`);
+      window.showToast('error', `Save to disk failed: ${saveError.message}`, 'Save Error');
     }
     
     window.hideLoading();
-    window.showToast('success', 'Configuration saved successfully', 'Save Complete');
   } catch (error) {
     console.error('Save configuration error:', error);
     window.showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');

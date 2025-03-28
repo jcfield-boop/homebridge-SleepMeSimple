@@ -134,13 +134,13 @@ function initializeDOMReferences() {
     const missingElementCount = requiredElements.filter(el => !el).length;
     
     if (missingElementCount > 0) {
-      window.showToast('warning', `${missingElementCount} UI elements could not be found. The UI may not function correctly.`, 'UI Warning');
+      console.warn(`${missingElementCount} UI elements could not be found. The UI may not function correctly.`);
       return false;
     }
     
     return true;
   } catch (error) {
-    window.showToast('error', 'Failed to initialize UI elements: ' + error.message, 'DOM Error');
+    console.error('Failed to initialize UI elements:', error.message);
     return false;
   }
 }
@@ -159,11 +159,11 @@ function initializeEventListeners() {
         if (typeof window.saveConfig === 'function') {
           await window.saveConfig();
         } else {
-          window.showToast('error', 'Save function not available', 'Function Error');
+          console.error('Save function not available');
         }
       });
     } else {
-      window.showToast('error', 'Config form not found in DOM', 'DOM Error');
+      console.error('Config form not found in DOM');
       return false;
     }
     
@@ -174,7 +174,7 @@ function initializeEventListeners() {
         if (typeof window.testConnection === 'function') {
           window.testConnection();
         } else {
-          window.showToast('error', 'Test connection function not available', 'Function Error');
+          console.error('Test connection function not available');
         }
       });
     }
@@ -267,7 +267,7 @@ function initializeEventListeners() {
     
     return true;
   } catch (error) {
-    window.showToast('error', 'Error setting up event listeners: ' + error.message, 'Event Error');
+    console.error('Error setting up event listeners:', error.message);
     return false;
   }
 }
@@ -279,44 +279,63 @@ function initializeEventListeners() {
  * @param {string} title - Toast title (optional)
  */
 window.showToast = function(type, message, title = '') {
-  // Only log critical messages and errors to console
+  // Always log to console for debugging purposes
   if (type === 'error') {
     console.error(`${title}: ${message}`);
   } else if (type === 'warning') {
     console.warn(`${title}: ${message}`);
-  } else if (type === 'debug' && debugLogging) {
-    // Only log debug messages if debug logging is enabled
+  } else if (debugLogging || type === 'success') {
     console.log(`${title}: ${message}`);
   }
   
-  // Skip toast notifications for routine operational messages
-  if (type === 'info' && (
-    message.includes('loaded from config') ||
-    message.includes('set to') ||
-    message.includes('Rendering') ||
-    message.includes('found in config') ||
-    message.includes('Starting') ||
-    message.includes('initialized') ||
-    message.includes('Initializing') ||
-    message.includes('Homebridge ready') ||
-    message.includes('Homebridge API') ||
-    message.includes('Config object') ||
-    message.includes('Preparing') ||
-    message.includes('Step') ||
-    message.includes('Loading') ||
-    message.includes('Getting') ||
-    message.includes('Added') ||
-    message.includes('Fetching') ||
-    message.includes('Checking') ||
-    message.includes('Updated') ||
-    message.startsWith('No ') ||
-    message.startsWith('Loaded')
-  )) {
-    // Skip showing toast for common info messages
+  // Critical message allowlist - only show these as toast notifications
+  const criticalTitles = [
+    'Validation Error',
+    'API Test Failed',
+    'API Test',
+    'Config Error',
+    'Save Error',
+    'Save Complete',
+    'Connection Error'
+  ];
+  
+  // Skip ALL info toasts - move them to console only
+  if (type === 'info') {
     return;
   }
   
-  // Display toast if homebridge is available
+  // Skip non-critical warnings
+  if (type === 'warning' && !criticalTitles.some(warning => title.includes(warning))) {
+    return;
+  }
+  
+  // Skip routine success messages
+  if (type === 'success' && (
+    message.includes('loaded') ||
+    message.includes('initialized') ||
+    message.includes('Updated') ||
+    message.includes('Added') ||
+    message.includes('Schedule added') ||
+    message.includes('found')
+  )) {
+    return;
+  }
+  
+  // Skip routine error messages that aren't critical
+  if (type === 'error' && (
+    message.includes('not found in DOM') ||
+    message.includes('not initialized') ||
+    message.includes('not available')
+  )) {
+    return;
+  }
+  
+  // Only display critical toasts if title matches allowlist
+  if (!criticalTitles.some(allowed => title.includes(allowed)) && type !== 'error') {
+    return;
+  }
+  
+  // Display toast if homebridge is available and it's a critical notification
   if (typeof homebridge !== 'undefined' && homebridge.toast) {
     if (homebridge.toast[type]) {
       homebridge.toast[type](message, title);
@@ -466,11 +485,11 @@ async function initApp() {
       }
       
       if (!domInitialized) {
-        window.showToast('error', 'Failed to initialize UI elements', 'DOM Error');
+        console.error('Failed to initialize UI elements');
         // Continue anyway - we'll try to recover
       }
     } catch (domError) {
-      window.showToast('error', 'DOM initialization error: ' + domError.message, 'DOM Error');
+      console.error('DOM initialization error:', domError.message);
       // Continue anyway - we'll try to recover
     }
     
@@ -487,10 +506,10 @@ async function initApp() {
           break; // Exit loop on success
         } else {
           if (!window.loadConfig) {
-            window.showToast('error', 'loadConfig function not available', 'Function Error');
+            console.error('loadConfig function not available');
           }
           if (!homebridgeReady) {
-            window.showToast('error', 'Cannot load config - Homebridge API not ready', 'API Error');
+            console.error('Cannot load config - Homebridge API not ready');
           }
           break;
         }
@@ -501,7 +520,7 @@ async function initApp() {
           console.warn(`Retrying config load (${configLoadAttempts}/3)`, configError.message);
           await new Promise(resolve => setTimeout(resolve, 2000 * configLoadAttempts));
         } else {
-          window.showToast('error', 'Failed to load config after multiple attempts', 'Config Error');
+          console.error('Failed to load config after multiple attempts:', configError.message);
         }
       }
     }
@@ -510,10 +529,10 @@ async function initApp() {
     try {
       const listenersInitialized = initializeEventListeners();
       if (!listenersInitialized) {
-        window.showToast('error', 'Failed to initialize event listeners', 'Event Error');
+        console.error('Failed to initialize event listeners');
       }
     } catch (listenerError) {
-      window.showToast('error', 'Event listener error: ' + listenerError.message, 'Event Error');
+      console.error('Event listener error:', listenerError.message);
     }
     
     // Step 5: Initialize schedule UI if needed
@@ -521,7 +540,7 @@ async function initApp() {
       try {
         window.renderScheduleList();
       } catch (scheduleError) {
-        window.showToast('error', 'Error rendering schedules: ' + scheduleError.message, 'Schedule Error');
+        console.error('Error rendering schedules:', scheduleError.message);
       }
     }
     
@@ -530,7 +549,7 @@ async function initApp() {
     console.log('SleepMe Simple UI initialization complete');
   } catch (error) {
     // Main try-catch block for initApp
-    window.showToast('error', 'Unhandled error during initialization: ' + error.message, 'Critical Error');
+    console.error('Unhandled error during initialization:', error.message);
   }
 }
 
@@ -571,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Global error handler for uncaught exceptions
   window.onerror = function(message, source, lineno, colno, error) {
-    window.showToast('error', 'Uncaught error: ' + message, 'Error');
+    console.error('Uncaught error:', message);
     return false;
   };
   
