@@ -1,6 +1,20 @@
 # Changelog
-# Changelog
-## 4.0.12-dev.28 (Current Development)
+
+## 4.0.11 (Current)
+- **Complete Solution for Toast Notification Issues**: Implemented comprehensive system to eliminate all unwanted toast notifications
+- Added Homebridge toast function overrides that intercept all notifications at the source
+- Removed server-side event pushing to prevent notifications
+- Expanded blocklist patterns to catch system messages like "Ready", "Config Check", etc.
+- Implemented strict allowlist approach with explicit title and type matching
+- Modified server.js to avoid triggering UI events for routine operations
+- Early toast function interception to filter notifications from any source
+- Enhanced console logging for better debugging without UI noise
+- Fixed confirmation modal styling and behavior
+- Added strict content filtering for all notification types
+- Improved error handling for more graceful recovery from failed operations
+- Added check for modal element existence before attaching event listeners
+
+## 4.0.12-dev.28 
 - Fixed confirmation modal for removing schedule items not appearing
 - Implemented strict toast notification filtering to completely eliminate unwanted toasts
 - Added explicit handling for "Fetching Server logs" and other routine messages to prevent toast display
@@ -12,7 +26,7 @@
 - Added explicit error handling for modal-related operations
 - Improved console logging with better error diagnostics
 - Added schedule removal success notification
-## 4.0.11-dev.27 (Previous  Development)
+## 4.0.11-dev.27 
 - Implemented strict allowlist approach for toast notifications
 - Completely eliminated "Fetching Server logs" and "Error: Logs not found" toast messages
 - Moved all non-critical messages to console-only logging

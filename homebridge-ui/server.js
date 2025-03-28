@@ -27,7 +27,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Log initialization
     this.log('SleepMe UI Server initialized');
     
-    // Immediately check the config file and send result to UI
+    // Immediately check the config file but don't push events to UI
     setTimeout(() => {
       this.checkConfigAndPush().catch(err => 
         this.logError('Failed initial config check', err)
@@ -39,21 +39,21 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.ready();
   }
   
-/**
- * Check the config file and push status to UI
- * This helps verify if we can read the config.json file directly
- */
-async checkConfigAndPush() {
-  try {
-    const configResult = await this.checkConfigFile();
-    // Only log to console, don't push events that might trigger toasts
-    console.log('Config check result:', configResult);
-    return configResult;
-  } catch (error) {
-    console.error('Failed to check config file', error);
-    return { success: false, error: error.message };
+  /**
+   * Check the config file and push status to UI
+   * This helps verify if we can read the config.json file directly
+   */
+  async checkConfigAndPush() {
+    try {
+      const configResult = await this.checkConfigFile();
+      // Only log to console, don't push events that might trigger toasts
+      console.log('Config check result:', configResult);
+      return configResult;
+    } catch (error) {
+      console.error('Failed to check config file', error);
+      return { success: false, error: error.message };
+    }
   }
-}
   
   /**
    * Check if we can access the config.json file
@@ -109,7 +109,7 @@ async checkConfigAndPush() {
         }
       }
       
-      // Debug logging for troubleshooting
+      // Debug logging for troubleshooting - console only
       this.log(`Config platforms: ${JSON.stringify(platforms.map(p => p.platform || 'unnamed'))}`);
       
       return {
@@ -264,6 +264,8 @@ async checkConfigAndPush() {
     } else {
       console.log(`[SleepMeUI] ${message}`);
     }
+    
+    // IMPORTANT: Do NOT push events to the UI for logs - this creates toast notifications
   }
   
   logError(message, error) {
@@ -282,7 +284,7 @@ async checkConfigAndPush() {
     
     console.error(`[SleepMeUI] ${message}:`, error);
     
-    // Don't push error notifications to UI - only log to console
+    // IMPORTANT: Do NOT push error events to UI - this creates toast notifications
   }
 }
 

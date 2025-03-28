@@ -273,6 +273,97 @@ function initializeEventListeners() {
 }
 
 /**
+ * CRUCIAL FIX: Intercept and override homebridge.toast methods to completely
+ * eliminate unwanted toast notifications from any source
+ */
+function installToastOverrides() {
+  // Skip if homebridge not available
+  if (typeof homebridge === 'undefined' || !homebridge.toast) {
+    console.warn('Cannot install toast overrides - homebridge.toast not available');
+    return;
+  }
+  
+  console.log('Installing toast notification overrides');
+  
+  // Keep reference to original toast methods
+  const originalToasts = {
+    success: homebridge.toast.success,
+    error: homebridge.toast.error,
+    warning: homebridge.toast.warning,
+    info: homebridge.toast.info
+  };
+  
+  // Messages that should NEVER be shown as toasts
+  const blockToastContents = [
+    'Config Check', 
+    'Config Found',
+    'Ready',
+    'SleepMe Simple UI',
+    'Loading',
+    'Config loaded',
+    'Fetching',
+    'Config saved',
+    'Server log',
+    'Log',
+    'API token'
+  ];
+  
+  // Only allow explicitly permitted titles
+  const allowedToastTitles = [
+    'Save Complete',
+    'API Test',
+    'Templates Applied',
+    'Schedule Removed',
+    'Validation Error',
+    'API Test Failed',
+    'API Test Error',
+    'Save Error',
+    'Connection Error'
+  ];
+  
+  // Replacement function that applies strict filtering
+  function createFilteredToast(type) {
+    return function(message, title = '') {
+      // Always log to console for debugging
+      if (type === 'error') {
+        console.error(`[Toast ${type}] ${title}: ${message}`);
+      } else if (type === 'warning') {
+        console.warn(`[Toast ${type}] ${title}: ${message}`);
+      } else {
+        console.log(`[Toast ${type}] ${title}: ${message}`);
+      }
+      
+      // Strict filtering: block any toast containing blocked terms
+      const shouldBlock = blockToastContents.some(term => 
+        (message && message.includes(term)) || (title && title.includes(term))
+      );
+      
+      if (shouldBlock) {
+        return; // Skip toast display completely
+      }
+      
+      // Only allow explicitly approved toast titles
+      const isAllowedTitle = allowedToastTitles.some(allowedTitle => 
+        title && title.includes(allowedTitle)
+      );
+      
+      // Only show toasts with explicitly allowed titles
+      if (isAllowedTitle) {
+        originalToasts[type](message, title);
+      }
+    };
+  }
+  
+  // Replace all toast methods with filtered versions
+  homebridge.toast.success = createFilteredToast('success');
+  homebridge.toast.error = createFilteredToast('error');
+  homebridge.toast.warning = createFilteredToast('warning');
+  homebridge.toast.info = createFilteredToast('info');
+  
+  console.log('Toast notification overrides installed');
+}
+
+/**
  * Show a toast notification with STRICT filtering to reduce verbosity
  * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
  * @param {string} message - Toast message
@@ -297,11 +388,18 @@ window.showToast = function(type, message, title = '') {
     'Logs not found',
     'API token loaded',
     'Temperature unit set',
-    'Config loaded'
+    'Config loaded',
+    'Config Check',
+    'Config Found',
+    'Ready',
+    'SleepMe Simple UI',
+    'Initialized'
   ];
   
   // Check if message contains any blocked pattern
-  if (blockedContentPatterns.some(pattern => message.includes(pattern))) {
+  if (blockedContentPatterns.some(pattern => 
+    (message && message.includes(pattern)) || (title && title.includes(pattern))
+  )) {
     return; // Skip toast for blocked content
   }
   
@@ -459,6 +557,9 @@ async function initApp() {
   try {
     // Skip toast for initialization - just log to console
     console.log('Initializing SleepMe Simple UI...');
+    
+    // Step 0: Install toast overrides as early as possible
+    installToastOverrides();
     
     // Step 1: Ensure Homebridge API is ready
     try {
