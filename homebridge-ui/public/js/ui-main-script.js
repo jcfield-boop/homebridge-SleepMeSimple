@@ -77,115 +77,6 @@ const templates = {
 };
 
 /**
- * Show loading indicator with message
- * @param {string} message - Message to display
- */
-function showLoading(message) {
-  homebridge.showSpinner();
-  showToast('info', message, 'Loading...');
-}
-
-/**
- * Hide loading indicator
- */
-function hideLoading() {
-  homebridge.hideSpinner();
-}
-
-/**
- * Show toast notification
- * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
- * @param {string} message - Toast message
- * @param {string} title - Toast title
- * @param {Function} callback - Optional callback function
- */
-function showToast(type, message, title, callback) {
-  if (!homebridge || !homebridge.toast) {
-    return;
-  }
-
-  if (homebridge.toast[type]) {
-    homebridge.toast[type](message, title);
-  } else {
-    homebridge.toast.info(message, title);
-  }
-
-  if (typeof callback === 'function') {
-    setTimeout(callback, 2000);
-  }
-}
-
-/**
- * Initialize the application
- * Sets up event handlers, loads configuration and prepares the UI
- */
-async function initApp() {
-  try {
-    showToast('info', 'Initializing plugin UI...', 'Starting');
-    
-    // Initialize DOM element references
-    initializeDOMReferences();
-    
-    // Create logs section
-    createLogsSection();
-    
-    // Verify the homebridge object is ready
-    await waitForHomebridgeReady();
-    
-    // Load initial configuration before setting up event listeners
-    // This ensures we have the values needed by event handlers
-    await loadConfig();
-    
-    // Setup event listeners after config is loaded
-    initializeEventListeners();
-    
-    // Mark as initialized
-    initialized = true;
-    showToast('success', 'SleepMe Simple UI initialized successfully', 'Ready');
-  } catch (error) {
-    showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
-  }
-}
-
-/**
- * Wait for Homebridge to be fully ready
- * @returns {Promise<void>}
- */
-function waitForHomebridgeReady() {
-  return new Promise((resolve, reject) => {
-    if (typeof homebridge === 'undefined') {
-      reject(new Error('Homebridge object is not available'));
-      return;
-    }
-    
-    if (typeof homebridge.getPluginConfig === 'function') {
-      // Homebridge appears to be initialized
-      resolve();
-      return;
-    }
-    
-    // Add a timeout in case the ready event never fires
-    const timeout = setTimeout(() => {
-      reject(new Error('Timed out waiting for Homebridge to initialize'));
-    }, 10000);
-    
-    // Wait for the ready event if not already fired
-    homebridge.addEventListener('ready', () => {
-      clearTimeout(timeout);
-      
-      // Add a small delay to make sure everything is fully ready
-      setTimeout(() => {
-        if (typeof homebridge.getPluginConfig !== 'function') {
-          reject(new Error('Homebridge API not properly initialized'));
-        } else {
-          resolve();
-        }
-      }, 500);
-    });
-  });
-}
-
-/**
  * Initialize DOM element references
  * Sets up references to key UI elements
  */
@@ -358,6 +249,77 @@ function initializeEventListeners() {
   }
 }
 
+/**
+ * Wait for Homebridge to be fully ready
+ * @returns {Promise<void>}
+ */
+function waitForHomebridgeReady() {
+  return new Promise((resolve, reject) => {
+    if (typeof homebridge === 'undefined') {
+      reject(new Error('Homebridge object is not available'));
+      return;
+    }
+    
+    if (typeof homebridge.getPluginConfig === 'function') {
+      // Homebridge appears to be initialized
+      resolve();
+      return;
+    }
+    
+    // Add a timeout in case the ready event never fires
+    const timeout = setTimeout(() => {
+      reject(new Error('Timed out waiting for Homebridge to initialize'));
+    }, 10000);
+    
+    // Wait for the ready event if not already fired
+    homebridge.addEventListener('ready', () => {
+      clearTimeout(timeout);
+      
+      // Add a small delay to make sure everything is fully ready
+      setTimeout(() => {
+        if (typeof homebridge.getPluginConfig !== 'function') {
+          reject(new Error('Homebridge API not properly initialized'));
+        } else {
+          resolve();
+        }
+      }, 500);
+    });
+  });
+}
+
+/**
+ * Initialize the application
+ * Sets up event handlers, loads configuration and prepares the UI
+ */
+async function initApp() {
+  try {
+    showToast('info', 'Initializing plugin UI...', 'Starting');
+    
+    // Initialize DOM element references
+    initializeDOMReferences();
+    
+    // Create logs section
+    createLogsSection();
+    
+    // Verify the homebridge object is ready
+    await waitForHomebridgeReady();
+    
+    // Load initial configuration before setting up event listeners
+    // This ensures we have the values needed by event handlers
+    await loadConfig();
+    
+    // Setup event listeners after config is loaded
+    initializeEventListeners();
+    
+    // Mark as initialized
+    initialized = true;
+    showToast('success', 'SleepMe Simple UI initialized successfully', 'Ready');
+  } catch (error) {
+    console.error('Initialization error:', error);
+    showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
+  }
+}
+
 // Wait for DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', () => {
   // Check if the homebridge object is available (required for communication)
@@ -368,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Global error handler for uncaught exceptions
   window.onerror = function(message, source, lineno, colno, error) {
+    console.error('Uncaught error:', message, source, lineno, error);
     showToast('error', 'An error occurred in the UI: ' + message, 'Error');
     return false;
   };
@@ -380,10 +343,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Initialize the application after Homebridge is ready
       await initApp();
     } catch (error) {
+      console.error('Initialization error after Homebridge ready:', error);
       showToast('error', 'Failed to initialize: ' + error.message, 'Initialization Error');
     }
   });
 });
+
 // Add listener for config status events from server
 homebridge.addEventListener('config-status', (event) => {
   const configStatus = event.data;
