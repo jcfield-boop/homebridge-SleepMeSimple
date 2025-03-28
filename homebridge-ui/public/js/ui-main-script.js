@@ -5,6 +5,35 @@
  * of SleepMe devices and scheduling features
  */
 
+// IMMEDIATE TOAST SUPPRESSION: Must happen before anything else
+(function installToastBlocker() {
+  if (typeof window.homebridge !== 'undefined' && window.homebridge.toast) {
+    // Override all toast methods with console-only versions
+    window.homebridge.toast.success = function(message, title) {
+      console.log(`✅ [SUCCESS] ${title ? title + ': ' : ''}${message}`);
+    };
+    
+    window.homebridge.toast.error = function(message, title) {
+      console.error(`❌ [ERROR] ${title ? title + ': ' : ''}${message}`);
+    };
+    
+    window.homebridge.toast.warning = function(message, title) {
+      console.warn(`⚠️ [WARNING] ${title ? title + ': ' : ''}${message}`);
+    };
+    
+    window.homebridge.toast.info = function(message, title) {
+      console.info(`ℹ️ [INFO] ${title ? title + ': ' : ''}${message}`);
+    };
+    
+    console.log('🛡️ Early toast suppression installed');
+  }
+})();
+
+// Global variables with proper initialization
+window.schedules = [];           // Array to store schedules
+window.isEditing = false;        // Flag to track if we're in edit mode
+window.editingScheduleIndex = -1; // Index of schedule being edited
+
 // Global variables with proper initialization
 window.schedules = [];           // Array to store schedules
 window.isEditing = false;        // Flag to track if we're in edit mode

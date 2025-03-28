@@ -1,6 +1,19 @@
 # Changelog
-
-##  (Latest)
+## 4.0.13 (In Development)
+- **Fixed Toast Notification Leak**: Implemented immediate toast suppression before any code executes
+- **Fixed Modal Not Appearing**: Complete rewrite of modal display code with multiple reliability techniques
+- **Key Improvements:**
+  - Added aggressive early toast function override at script initialization
+  - Fixed modal visibility issues with both class and style manipulation
+  - Replaced all direct homebridge.toast calls with console-only logging
+  - Enhanced server-side event filtering with comprehensive blocklist
+  - Implemented event listener cleanup to prevent handler duplication
+  - Added fallback to native confirm dialog if modal elements not found
+  - Added forced visibility check with timeout for modal reliability
+  - Fixed remove button handler to properly use the confirmation modal
+  - Improved console logging for better debugging visibility
+  - Added button cloning to guarantee clean event handlers
+## 4.0.12-dev.0
 - **Complete Console-Only Logging System**: Eliminated all toast notifications
 - **Key Improvements:**
   - Replaced all toast notifications with console-only logging

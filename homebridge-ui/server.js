@@ -34,28 +34,38 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // This must be called after all request handlers are registered
     this.ready();
   }
-  
   /**
-   * Override the pushEvent method to prevent unwanted toast notifications
-   * @param {string} event - Event name
-   * @param {any} data - Event data
-   */
-  pushEvent(event, data) {
-    // Block these event types that might trigger unwanted toasts
-    const blockedEvents = [
-      'log', 'logs', 'error', 'ready', 'config', 
-      'server-logs', 'log-update', 'server-error'
-    ];
-    
-    // Skip sending blocked event types to the UI
-    if (blockedEvents.some(blocked => event.includes(blocked))) {
-      console.log(`[Blocked Event] ${event}`);
-      return; // Don't send to UI
-    }
-    
-    // Allow other events to proceed normally
-    super.pushEvent(event, data);
+ * Override the pushEvent method to prevent unwanted toast notifications
+ * @param {string} event - Event name
+ * @param {any} data - Event data
+ */
+pushEvent(event, data) {
+  // Comprehensive list of events that might trigger toasts
+  const blockedEvents = [
+    'log', 'logs', 'error', 'ready', 'config', 'server',
+    'server-logs', 'log-update', 'server-error', 'fetch',
+    'configSaved', 'configUpdated', 'statusUpdate', 'cacheUpdate',
+    'pluginStatus', 'loadConfig', 'saveConfig', 'testConnection'
+  ];
+  
+  // Block any event containing these substrings
+  if (blockedEvents.some(blocked => 
+      typeof event === 'string' && event.toLowerCase().includes(blocked.toLowerCase()))) {
+    console.log(`[Blocked Event] ${event}`);
+    return; // Don't send to UI
   }
+  
+  // Also block events that might contain error messages about logs
+  if (typeof data === 'object' && data && 
+      (String(data.message || '').includes('log') || 
+       String(data.error || '').includes('log'))) {
+    console.log(`[Blocked Data Event] ${event}`);
+    return; // Don't send to UI
+  }
+  
+  // Allow other events to proceed normally
+  super.pushEvent(event, data);
+}
   
   /**
    * Server-side logging that never triggers UI notifications

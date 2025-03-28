@@ -20,7 +20,7 @@ window.showConfirmModal = function(title, message, callback) {
   const cancelButton = document.getElementById('confirmCancel');
   
   if (!modal || !titleElement || !messageElement || !okButton || !cancelButton) {
-    console.error('Modal elements not found - using native confirm');
+    console.error('Modal elements not found - using native confirm instead');
     if (window.confirm(message)) {
       if (typeof callback === 'function') callback();
     }
@@ -38,15 +38,15 @@ window.showConfirmModal = function(title, message, callback) {
   cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
   
   // Add new event listeners
-  newOkButton.addEventListener('click', () => {
-    // Hide modal using both methods
+  newOkButton.addEventListener('click', function() {
+    // Force hide modal using both methods
     modal.classList.add('hidden');
     modal.style.display = 'none';
     if (typeof callback === 'function') callback();
   });
   
-  newCancelButton.addEventListener('click', () => {
-    // Hide modal using both methods
+  newCancelButton.addEventListener('click', function() {
+    // Force hide modal using both methods
     modal.classList.add('hidden');
     modal.style.display = 'none';
   });
@@ -56,13 +56,38 @@ window.showConfirmModal = function(title, message, callback) {
   modal.style.display = 'flex';
   
   // Force visibility check with timeout as backup
-  setTimeout(() => {
+  setTimeout(function() {
     if (modal.classList.contains('hidden') || modal.style.display !== 'flex') {
       console.log('Backup visibility fix applied to modal');
       modal.classList.remove('hidden');
       modal.style.display = 'flex';
     }
   }, 50);
+};
+
+/**
+ * Handle removing a schedule with proper modal confirmation
+ * @param {number} index - Index of schedule to remove
+ */
+window.removeSchedule = function(index) {
+  if (index < 0 || index >= window.schedules.length) {
+    console.error('Invalid schedule index:', index);
+    return;
+  }
+  
+  // Use the modal confirmation with proper callback handling
+  window.showConfirmModal(
+    'Confirm Removal',
+    'Are you sure you want to remove this schedule?',
+    function() {
+      // Only execute this when confirmed
+      window.schedules.splice(index, 1);
+      window.renderScheduleList();
+      
+      // Log to console only, avoid toast
+      console.log('✅ Schedule removed successfully');
+    }
+  );
 };
 /**
  * Exit edit mode and reset form fields

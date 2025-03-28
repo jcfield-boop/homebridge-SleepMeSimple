@@ -370,7 +370,6 @@ window.saveConfig = async function() {
       console.log('Update result:', updateResult);
     } catch (updateError) {
       console.error('Error updating config:', updateError);
-      window.showToast('error', `Update failed: ${updateError.message}`, 'Save Error');
       window.hideLoading();
       return;
     }
@@ -380,16 +379,14 @@ window.saveConfig = async function() {
     try {
       await homebridge.savePluginConfig();
       console.log('Config saved successfully');
-      window.showToast('success', 'Configuration saved successfully', 'Save Complete');
     } catch (saveError) {
       console.error('Error saving config to disk:', saveError);
-      window.showToast('error', `Save to disk failed: ${saveError.message}`, 'Save Error');
+
     }
     
     window.hideLoading();
   } catch (error) {
     console.error('Save configuration error:', error);
-    window.showToast('error', 'Failed to save configuration: ' + error.message, 'Save Error');
     window.hideLoading();
   }
 };
