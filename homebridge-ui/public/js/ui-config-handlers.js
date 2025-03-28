@@ -23,15 +23,13 @@ window.loadConfig = async function() {
     try {
       const configCheck = await homebridge.request('/config/check');
       if (configCheck.success) {
-        window.showToast('success', 'Server can access config.json directly', 'Config Check');
-        console.log('Server config check result:', configCheck);
+        // Log to console only - no toast
+        console.log('Server can access config.json directly:', configCheck);
       } else {
-        window.showToast('warning', 'Server cannot access config.json directly', 'Config Warning');
-        console.warn('Server config check warning:', configCheck);
+        console.warn('Server cannot access config.json directly:', configCheck);
       }
     } catch (checkError) {
       console.error('Config check error:', checkError);
-      window.showToast('warning', 'Config check failed: ' + checkError.message, 'Config Warning');
     }
     
     // Get the plugin config using the Homebridge API
@@ -49,14 +47,11 @@ window.loadConfig = async function() {
       if (platformConfig) {
         config = platformConfig;
         console.log('Found SleepMeSimple platform config:', config);
-        window.showToast('success', 'Found configuration in API response', 'Config Found');
       } else {
         console.warn('No SleepMeSimple platform found in config');
-        window.showToast('info', 'No existing configuration found, using defaults', 'New Config');
       }
     } else {
       console.warn('No plugin config found in API response');
-      window.showToast('info', 'No existing configuration found, using defaults', 'New Config');
     }
     
     // Wait for DOM elements to be available
@@ -153,6 +148,7 @@ async function waitForDOMElements() {
     }, checkInterval);
   });
 }
+
 /**
  * Populate form fields with configuration values
  * @param {Object} config - The configuration object
@@ -187,7 +183,7 @@ function populateFormFields(config) {
   // Set API token if available
   if (apiTokenInput && config.apiToken) {
     apiTokenInput.value = config.apiToken;
-    window.showToast('info', 'API token loaded from config', 'Config');
+    console.log('API token loaded from config');
   } else if (apiTokenInput) {
     console.warn('No API token found in config');
     apiTokenInput.value = ''; // Ensure field is empty
@@ -196,7 +192,7 @@ function populateFormFields(config) {
   // Set temperature unit if available
   if (unitSelect && config.unit) {
     unitSelect.value = config.unit;
-    window.showToast('info', `Temperature unit set to ${config.unit}`, 'Config');
+    console.log(`Temperature unit set to ${config.unit}`);
   } else if (unitSelect) {
     unitSelect.value = 'C'; // Set default
   }
@@ -204,7 +200,7 @@ function populateFormFields(config) {
   // Set polling interval if available
   if (pollingIntervalInput && config.pollingInterval) {
     pollingIntervalInput.value = config.pollingInterval;
-    window.showToast('info', `Polling interval set to ${config.pollingInterval}s`, 'Config');
+    console.log(`Polling interval set to ${config.pollingInterval}s`);
   } else if (pollingIntervalInput) {
     pollingIntervalInput.value = '90'; // Set default
   }
@@ -212,7 +208,7 @@ function populateFormFields(config) {
   // Set log level if available
   if (logLevelSelect && config.logLevel) {
     logLevelSelect.value = config.logLevel;
-    window.showToast('info', `Log level set to ${config.logLevel}`, 'Config');
+    console.log(`Log level set to ${config.logLevel}`);
   } else if (logLevelSelect) {
     logLevelSelect.value = 'normal'; // Set default
   }
@@ -242,11 +238,10 @@ function populateFormFields(config) {
         console.warn('renderScheduleList function not available');
       }
       
-      window.showToast('info', `Loaded ${window.schedules.length} schedules from config`, 'Schedules');
+      console.log(`Loaded ${window.schedules.length} schedules from config`);
     } else if (enableSchedules) {
       console.log('No schedules found in config but schedules are enabled');
       window.schedules = [];
-      window.showToast('info', 'No existing schedules found', 'Schedules');
     }
   }
   
@@ -265,13 +260,13 @@ function populateFormFields(config) {
 window.saveConfig = async function() {
   try {
     window.showLoading('Saving configuration...');
-    window.showToast('info', 'Starting save process...', 'Save Config');
+    console.log('Starting save process...');
     
     // Verify Homebridge API is available
     await ensureHomebridgeReady();
     
     // Get current config to update
-    window.showToast('info', 'Fetching current config...', 'Save Step 1');
+    console.log('Fetching current config...');
     const pluginConfig = await homebridge.getPluginConfig();
     console.log('Current plugin config:', pluginConfig);
     
@@ -318,7 +313,6 @@ window.saveConfig = async function() {
     };
     
     console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
-    window.showToast('info', 'Config object prepared...', 'Save Step 2');
     
     // Add schedules if enabled
     if (enableSchedules && window.schedules && window.schedules.length > 0) {
@@ -345,7 +339,6 @@ window.saveConfig = async function() {
       });
       
       console.log(`Adding ${config.schedules.length} schedules to config`);
-      window.showToast('info', `Added ${config.schedules.length} schedules to config`, 'Schedules');
     }
     
     // Find current config position and update
@@ -369,8 +362,7 @@ window.saveConfig = async function() {
     }
     
     // Update plugin config - IMPORTANT FIX HERE
-    window.showToast('info', 'Updating plugin config...', 'Save Step 3');
-    console.log('Calling updatePluginConfig with:', updatedConfig);
+    console.log('Updating plugin config...');
     try {
       const updateResult = await homebridge.updatePluginConfig(updatedConfig);
       console.log('Update result:', updateResult);
@@ -380,7 +372,7 @@ window.saveConfig = async function() {
     }
     
     // Save changes to disk
-    window.showToast('info', 'Saving config to disk...', 'Save Step 4');
+    console.log('Saving config to disk...');
     try {
       await homebridge.savePluginConfig();
       console.log('Config saved successfully');

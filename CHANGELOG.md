@@ -1,4 +1,12 @@
 # Changelog
+
+## 4.0.15-dev.22 (Current Development Version)
+- Completely removed Server Logs section from the HTML interface
+- Fixed persistent toast notifications for config-related messages
+- Changed all config-related messages to console-only logging
+- Implemented stricter filtering for toast notifications
+- Modified config handlers to avoid sending toast notifications
+- Added allowlist-based approach for toast notifications (only critical messages shown)
 ## 4.0.14-dev.22 (Current Development Version)
 - Fixed confirmation modal appearing at startup by adding both class and inline style
 - Added explicit style.display = 'none' to ensure modal is completely hidden
