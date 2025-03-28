@@ -27,7 +27,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/logs', this.getServerLogs.bind(this));
     
     // Log initialization
-    console.log('[SleepMeUI] SleepMe UI Server initialized');
+    this.log('SleepMe UI Server initialized');
     
     // IMPORTANT: Signal that the server is ready to accept requests
     // This must be called after all request handlers are registered
@@ -83,46 +83,20 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // Get plugin configuration
+  /**
+   * Get plugin configuration from Homebridge config.json
+   * @returns {Promise<Object>} Object with success status and config data
+   */
   async getConfig() {
     try {
       this.log('Getting plugin configuration');
       
-      // Access the config path directly from the parent class property
-      const configPath = this.homebridgeConfigPath;
-      
-      if (!configPath || !fs.existsSync(configPath)) {
-        throw new Error(`Config file not found at path: ${configPath}`);
-      }
-      
-      // Read and parse the config file
-      const configData = fs.readFileSync(configPath, 'utf8');
-      let homebridgeConfig;
-      
-      try {
-        homebridgeConfig = JSON.parse(configData);
-      } catch (parseError) {
-        throw new Error(`Failed to parse config.json: ${parseError.message}`);
-      }
-      
-      // Find our platform configuration
-      let platformConfig = {};
-      if (homebridgeConfig && Array.isArray(homebridgeConfig.platforms)) {
-        const platform = homebridgeConfig.platforms.find(p => p && p.platform === 'SleepMeSimple');
-        
-        if (platform) {
-          platformConfig = platform;
-          this.log(`Found existing SleepMeSimple platform configuration`);
-        } else {
-          this.log('No existing SleepMeSimple platform found in config.json', 'warn');
-        }
-      } else {
-        this.log('No platforms array found in config.json', 'warn');
-      }
+      // Get the current configuration from Homebridge
+      const config = await this.readHomebridgeConfig();
       
       return {
         success: true,
-        config: platformConfig
+        config: config
       };
     } catch (error) {
       this.logError('Error getting config', error);
@@ -133,7 +107,57 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // Save plugin configuration
+  /**
+   * Helper method to read the Homebridge config.json file
+   * @returns {Promise<Object>} The plugin configuration object
+   */
+  async readHomebridgeConfig() {
+    return new Promise((resolve, reject) => {
+      try {
+        // Access the config path directly from the parent class property
+        const configPath = this.homebridgeConfigPath;
+        
+        if (!configPath || !fs.existsSync(configPath)) {
+          throw new Error(`Config file not found at path: ${configPath}`);
+        }
+        
+        // Read and parse the config file
+        const configData = fs.readFileSync(configPath, 'utf8');
+        let homebridgeConfig;
+        
+        try {
+          homebridgeConfig = JSON.parse(configData);
+        } catch (parseError) {
+          throw new Error(`Failed to parse config.json: ${parseError.message}`);
+        }
+        
+        // Find our platform configuration
+        let platformConfig = {};
+        if (homebridgeConfig && Array.isArray(homebridgeConfig.platforms)) {
+          const platform = homebridgeConfig.platforms.find(p => p && p.platform === 'SleepMeSimple');
+          
+          if (platform) {
+            platformConfig = platform;
+            this.log(`Found existing SleepMeSimple platform configuration`);
+          } else {
+            this.log('No existing SleepMeSimple platform found in config.json', 'warn');
+          }
+        } else {
+          this.log('No platforms array found in config.json', 'warn');
+        }
+        
+        resolve(platformConfig);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+  
+  /**
+   * Save plugin configuration to Homebridge config.json
+   * @param {Object} payload - The configuration to save
+   * @returns {Promise<Object>} Object with success status and message
+   */
   async saveConfig(payload) {
     try {
       // Extract config from payload
@@ -168,53 +192,44 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         throw new Error('Polling interval must be between 60 and 300 seconds');
       }
       
-      // Access the config path directly from the parent class property
-      const configPath = this.homebridgeConfigPath;
-      
-      if (!configPath || !fs.existsSync(configPath)) {
-        throw new Error(`Config file not found at path: ${configPath}`);
-      }
-      
-      // Read and parse the config file
-      const configData = fs.readFileSync(configPath, 'utf8');
-      let homebridgeConfig;
-      
-      try {
-        homebridgeConfig = JSON.parse(configData);
-      } catch (parseError) {
-        throw new Error(`Failed to parse config.json: ${parseError.message}`);
-      }
-      
-      // Ensure platforms array exists
-      if (!homebridgeConfig.platforms) {
-        homebridgeConfig.platforms = [];
-      }
-      
-      // Find our platform configuration
-      const platformIndex = homebridgeConfig.platforms.findIndex(p => p && p.platform === 'SleepMeSimple');
-      
-      if (platformIndex >= 0) {
-        // Update existing platform config
-        homebridgeConfig.platforms[platformIndex] = config;
-        this.log('Updated existing SleepMeSimple platform configuration');
+      // Properly format schedules if present
+      if (config.enableSchedules === true && Array.isArray(config.schedules)) {
+        // Ensure all schedules have the required fields
+        config.schedules = config.schedules.map(schedule => {
+          // Basic validation
+          if (!schedule.type || !schedule.time || schedule.temperature === undefined) {
+            throw new Error('Invalid schedule entry: missing required fields');
+          }
+          
+          // Create a clean schedule object with required fields
+          const cleanSchedule = {
+            type: schedule.type,
+            time: schedule.time,
+            temperature: parseFloat(schedule.temperature)
+          };
+          
+          // Add day property for Specific Day schedules
+          if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+            cleanSchedule.day = parseInt(schedule.day, 10);
+          }
+          
+          // Add optional description
+          if (schedule.description) {
+            cleanSchedule.description = schedule.description;
+          }
+          
+          return cleanSchedule;
+        });
+      } else if (config.enableSchedules === true) {
+        // If schedules are enabled but no schedules array, initialize with empty array
+        config.schedules = [];
       } else {
-        // Add new platform config
-        homebridgeConfig.platforms.push(config);
-        this.log('Added new SleepMeSimple platform configuration');
+        // If schedules are disabled, remove schedules property completely
+        delete config.schedules;
       }
       
-      // Create backup of current config
-      try {
-        const backupPath = `${configPath}.backup`;
-        fs.writeFileSync(backupPath, configData, 'utf8');
-        this.log(`Created backup of previous config at ${backupPath}`);
-      } catch (backupError) {
-        this.log(`Failed to create config backup: ${backupError.message}`, 'warn');
-      }
-      
-      // Write the updated config back to file
-      fs.writeFileSync(configPath, JSON.stringify(homebridgeConfig, null, 4), 'utf8');
-      this.log('Successfully wrote configuration to disk');
+      // Write the configuration to the Homebridge config.json
+      await this.updateHomebridgeConfig(config);
       
       // Notify UI of update
       this.pushEvent('config-updated', { timestamp: Date.now() });
@@ -232,7 +247,74 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // Test API connection
+  /**
+   * Helper method to update the Homebridge config.json file
+   * @param {Object} newConfig - The new plugin configuration
+   * @returns {Promise<void>}
+   */
+  async updateHomebridgeConfig(newConfig) {
+    return new Promise((resolve, reject) => {
+      try {
+        // Access the config path directly from the parent class property
+        const configPath = this.homebridgeConfigPath;
+        
+        if (!configPath || !fs.existsSync(configPath)) {
+          throw new Error(`Config file not found at path: ${configPath}`);
+        }
+        
+        // Read and parse the config file
+        const configData = fs.readFileSync(configPath, 'utf8');
+        let homebridgeConfig;
+        
+        try {
+          homebridgeConfig = JSON.parse(configData);
+        } catch (parseError) {
+          throw new Error(`Failed to parse config.json: ${parseError.message}`);
+        }
+        
+        // Ensure platforms array exists
+        if (!homebridgeConfig.platforms) {
+          homebridgeConfig.platforms = [];
+        }
+        
+        // Find our platform configuration
+        const platformIndex = homebridgeConfig.platforms.findIndex(p => p && p.platform === 'SleepMeSimple');
+        
+        if (platformIndex >= 0) {
+          // Update existing platform config
+          homebridgeConfig.platforms[platformIndex] = newConfig;
+          this.log('Updated existing SleepMeSimple platform configuration');
+        } else {
+          // Add new platform config
+          homebridgeConfig.platforms.push(newConfig);
+          this.log('Added new SleepMeSimple platform configuration');
+        }
+        
+        // Create backup of current config
+        try {
+          const backupPath = `${configPath}.backup`;
+          fs.writeFileSync(backupPath, configData, 'utf8');
+          this.log(`Created backup of previous config at ${backupPath}`);
+        } catch (backupError) {
+          this.log(`Failed to create config backup: ${backupError.message}`, 'warn');
+        }
+        
+        // Write the updated config back to file
+        fs.writeFileSync(configPath, JSON.stringify(homebridgeConfig, null, 4), 'utf8');
+        this.log('Successfully wrote configuration to disk');
+        
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+  
+  /**
+   * Test connection to the SleepMe API
+   * @param {Object} payload - Payload containing API token
+   * @returns {Promise<Object>} Object with success status and device info
+   */
   async testDeviceConnection(payload) {
     try {
       // Extract API token
@@ -305,7 +387,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
   }
   
-  // Helper method to detect device type
+  /**
+   * Helper method to detect device type from API response
+   * @param {Object} device - Device data from API
+   * @returns {string} Detected device type
+   */
   detectDeviceType(device) {
     if (!device) return 'Unknown';
     
@@ -335,7 +421,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     return 'Unknown SleepMe Device';
   }
   
-  // Get server logs
+  /**
+   * Get server logs for debugging
+   * @returns {Promise<Object>} Object with success status and logs array
+   */
   async getServerLogs() {
     try {
       // First include our internal UI server logs
