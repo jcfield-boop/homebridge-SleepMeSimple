@@ -4,15 +4,15 @@
  */
 
 /**
- * Show a confirmation modal dialog with improved error handling and cleanup
+ * Show a confirmation modal dialog with guaranteed visibility
  * @param {string} title - Modal title
  * @param {string} message - Modal message
  * @param {Function} callback - Function to call if confirmed
  */
 window.showConfirmModal = function(title, message, callback) {
-  console.log('Attempting to show confirmation modal:', title);
+  console.log('Showing confirmation modal:', title);
   
-  // Get modal elements
+  // Get modal elements with error handling
   const modal = document.getElementById('confirmModal');
   const titleElement = document.getElementById('confirmTitle');
   const messageElement = document.getElementById('confirmMessage');
@@ -20,7 +20,7 @@ window.showConfirmModal = function(title, message, callback) {
   const cancelButton = document.getElementById('confirmCancel');
   
   if (!modal || !titleElement || !messageElement || !okButton || !cancelButton) {
-    console.error('Modal elements not found in DOM');
+    console.error('Modal elements not found in DOM - using native confirm instead');
     // Fall back to native confirm if modal elements are missing
     if (window.confirm(message)) {
       if (typeof callback === 'function') {
@@ -34,8 +34,7 @@ window.showConfirmModal = function(title, message, callback) {
   titleElement.textContent = title || 'Confirm Action';
   messageElement.textContent = message || 'Are you sure you want to perform this action?';
   
-  // Make sure existing event listeners are removed to prevent duplicates
-  // Clone the buttons to remove all existing event listeners
+  // Make sure existing event listeners are removed
   const newOkButton = okButton.cloneNode(true);
   const newCancelButton = cancelButton.cloneNode(true);
   
@@ -44,7 +43,8 @@ window.showConfirmModal = function(title, message, callback) {
   
   // Add new event listeners
   newOkButton.addEventListener('click', () => {
-    // Hide the modal
+    console.log('Confirm button clicked');
+    // Hide the modal - both class and style
     modal.classList.add('hidden');
     modal.style.display = 'none';
     
@@ -55,14 +55,29 @@ window.showConfirmModal = function(title, message, callback) {
   });
   
   newCancelButton.addEventListener('click', () => {
-    // Hide the modal
+    console.log('Cancel button clicked');
+    // Hide the modal - both class and style
     modal.classList.add('hidden');
     modal.style.display = 'none';
   });
   
-  // Show modal - use both style and class to ensure visibility
+  // CRUCIAL FIX: Make modal visible with multiple techniques
+  console.log('Making modal visible');
+  
+  // Remove hidden class
   modal.classList.remove('hidden');
+  
+  // Force display style directly
   modal.style.display = 'flex';
+  
+  // Force visibility with timeout as backup
+  setTimeout(() => {
+    if (modal.classList.contains('hidden') || modal.style.display !== 'flex') {
+      console.log('Backup visibility fix applied to modal');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    }
+  }, 50);
   
   console.log('Confirmation modal displayed');
 };

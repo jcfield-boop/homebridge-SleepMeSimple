@@ -273,8 +273,8 @@ function initializeEventListeners() {
 }
 
 /**
- * CRUCIAL FIX: Intercept and override homebridge.toast methods to completely
- * eliminate unwanted toast notifications from any source
+ * CRUCIAL FIX: Intercept and completely block ALL toast notifications 
+ * except those explicitly allowed
  */
 function installToastOverrides() {
   // Skip if homebridge not available
@@ -283,7 +283,7 @@ function installToastOverrides() {
     return;
   }
   
-  console.log('Installing toast notification overrides');
+  console.log('Installing complete toast notification blocking system');
   
   // Keep reference to original toast methods
   const originalToasts = {
@@ -293,7 +293,7 @@ function installToastOverrides() {
     info: homebridge.toast.info
   };
   
-  // Messages that should NEVER be shown as toasts
+  // Extended list of messages that should NEVER be shown as toasts
   const blockToastContents = [
     'Config Check', 
     'Config Found',
@@ -305,10 +305,18 @@ function installToastOverrides() {
     'Config saved',
     'Server log',
     'Log',
-    'API token'
+    'API token',
+    'Error fetching logs',
+    'Logs not found',
+    'Server logs',
+    'initialized',
+    'File',
+    'Path',
+    'Directory',
+    'Storage'
   ];
   
-  // Only allow explicitly permitted titles
+  // Only these specific titles are allowed to show toasts
   const allowedToastTitles = [
     'Save Complete',
     'API Test',
@@ -321,7 +329,7 @@ function installToastOverrides() {
     'Connection Error'
   ];
   
-  // Replacement function that applies strict filtering
+  // Replacement function that applies ultra-strict filtering
   function createFilteredToast(type) {
     return function(message, title = '') {
       // Always log to console for debugging
@@ -333,18 +341,22 @@ function installToastOverrides() {
         console.log(`[Toast ${type}] ${title}: ${message}`);
       }
       
-      // Strict filtering: block any toast containing blocked terms
+      // Block by default - only specifically allowed toasts will show
+      let shouldShow = false;
+      
+      // 1. Block any toast containing blocked terms
       const shouldBlock = blockToastContents.some(term => 
-        (message && message.includes(term)) || (title && title.includes(term))
+        (message && message.toLowerCase().includes(term.toLowerCase())) || 
+        (title && title.toLowerCase().includes(term.toLowerCase()))
       );
       
       if (shouldBlock) {
         return; // Skip toast display completely
       }
       
-      // Only allow explicitly approved toast titles
+      // 2. Only allow explicitly approved toast titles - exact match required
       const isAllowedTitle = allowedToastTitles.some(allowedTitle => 
-        title && title.includes(allowedTitle)
+        title === allowedTitle // Exact match required
       );
       
       // Only show toasts with explicitly allowed titles
@@ -360,7 +372,7 @@ function installToastOverrides() {
   homebridge.toast.warning = createFilteredToast('warning');
   homebridge.toast.info = createFilteredToast('info');
   
-  console.log('Toast notification overrides installed');
+  console.log('Complete toast notification blocking system installed');
 }
 
 /**

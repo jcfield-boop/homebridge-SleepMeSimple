@@ -1,6 +1,17 @@
 # Changelog
-
-## 4.0.11 (Current)
+## 4.1.0 (Latest)
+- **Complete Block of Unwanted Toast Notifications**: Implemented ultra-strict filtering system
+- **Fixed Confirmation Modal Issues**: Ensured modal appears properly when removing schedules
+- **Key Improvements:**
+  - Extended toast blocking system to catch all unwanted notifications
+  - Added multiple techniques to guarantee modal visibility
+  - Implemented exact title matching for toast display (only explicitly allowed toasts show)
+  - Added comprehensive blocking for "Error fetching logs" and similar messages
+  - Enhanced modal visibility with multiple CSS techniques
+  - Added detailed console logging to track modal and toast activity
+  - Fixed event handler duplication in confirmation modal
+  - Improved modal initialization and visibility state management
+## 4.0.11 (
 - **Complete Solution for Toast Notification Issues**: Implemented comprehensive system to eliminate all unwanted toast notifications
 - Added Homebridge toast function overrides that intercept all notifications at the source
 - Removed server-side event pushing to prevent notifications
