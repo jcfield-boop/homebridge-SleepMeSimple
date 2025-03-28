@@ -12,6 +12,7 @@ window.editingScheduleIndex = -1; // Index of schedule being edited
 let initialized = false;         // Flag to track initialization state
 let configLoaded = false;        // Flag to track if config has been loaded
 let homebridgeReady = false;     // Flag to track Homebridge API readiness
+let modalInitialized = false;    // Flag to track modal initialization
 
 // DOM element references - initialize as null to avoid undeclared variable issues
 window.scheduleTypeSelect = null;       // Schedule type dropdown
@@ -272,12 +273,30 @@ function initializeEventListeners() {
   }
 }
 /**
- * Show a toast notification with simplified formatting
+ * Show a toast notification with simplified formatting and filtering
  * @param {string} type - Toast type: 'success', 'error', 'warning', 'info'
  * @param {string} message - Toast message
  * @param {string} title - Toast title (optional)
  */
 window.showToast = function(type, message, title = '') {
+  // Skip certain routine notifications completely
+  if (type === 'info' && (
+    message.includes('loaded from config') ||
+    message.includes('set to') ||
+    message.includes('Rendering') ||
+    message.includes('found in config') ||
+    message.includes('Homebridge ready') ||
+    message.includes('config.json') ||
+    message.includes('API initialized') ||
+    message.includes('templates') ||
+    message.includes('Config loaded') ||
+    message.includes('Config object prepared')
+  )) {
+    // Just log it to console without showing a toast
+    console.log(`${title}: ${message}`);
+    return;
+  }
+  
   // Only log critical messages and errors to console
   if (type === 'error') {
     console.error(`${title}: ${message}`);
@@ -288,18 +307,7 @@ window.showToast = function(type, message, title = '') {
     console.log(`${title}: ${message}`);
   }
   
-  // For info messages, don't show toast for routine operations
-  if (type === 'info' && (
-    message.includes('loaded from config') ||
-    message.includes('set to') ||
-    message.includes('Rendering') ||
-    message.includes('found in config')
-  )) {
-    // Skip showing toast for routine info messages
-    return;
-  }
-  
-  // Display toast if homebridge is available
+  // Display toast if homebridge is available and it's an important message
   if (typeof homebridge !== 'undefined' && homebridge.toast) {
     if (homebridge.toast[type]) {
       homebridge.toast[type](message, title);
@@ -514,22 +522,42 @@ async function initApp() {
     window.showToast('error', 'Unhandled error during initialization: ' + error.message, 'Critical Error');
   }
 }
-
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Hide confirmation modal at startup
-  const confirmModal = document.getElementById('confirmModal');
-  if (confirmModal) {
-    console.log('Hiding confirmation modal at startup');
-    confirmModal.classList.add('hidden');
-    
-    // Setup event delegation for modal closing
-    confirmModal.addEventListener('click', (event) => {
-      // Close when clicking outside the modal content
-      if (event.target === confirmModal) {
-        confirmModal.classList.add('hidden');
+  // Initialize confirmation modal - with improved error handling
+  try {
+    const confirmModal = document.getElementById('confirmModal');
+    if (confirmModal) {
+      // Force hide the modal at startup
+      confirmModal.style.display = 'none';
+      confirmModal.classList.add('hidden');
+      
+      // Setup event delegation for modal closing and cleanup existing listeners
+      confirmModal.addEventListener('click', (event) => {
+        // Close when clicking outside the modal content
+        if (event.target === confirmModal) {
+          confirmModal.style.display = 'none';
+          confirmModal.classList.add('hidden');
+        }
+      });
+      
+      // Get modal elements
+      const cancelButton = document.getElementById('confirmCancel');
+      if (cancelButton) {
+        // Add additional close handler to cancel button
+        cancelButton.addEventListener('click', () => {
+          confirmModal.style.display = 'none';
+          confirmModal.classList.add('hidden');
+        });
       }
-    });
+      
+      modalInitialized = true;
+      console.log('Modal initialized and hidden');
+    } else {
+      console.warn('Confirmation modal element not found in DOM');
+    }
+  } catch (modalError) {
+    console.error('Error initializing confirmation modal:', modalError);
   }
 
   // Check if the homebridge object is available (basic check)
@@ -554,7 +582,8 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     // Wait for the ready event
     homebridge.addEventListener('ready', () => {
-      window.showToast('info', 'Homebridge ready event received', 'Homebridge Ready');
+      // Removed excessive toast that was being shown on every load
+      console.log('Homebridge ready event received');
       // Small delay to ensure Homebridge API is fully available
       setTimeout(initApp, 500);
     });
@@ -562,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set a failsafe timeout in case the ready event doesn't fire
     setTimeout(() => {
       if (!initialized) {
-        window.showToast('warning', 'Homebridge ready event timeout, attempting initialization anyway', 'Backup Init');
+        console.warn('Homebridge ready event timeout, attempting initialization anyway');
         initApp();
       }
     }, 10000); // 10 second backup timeout

@@ -281,6 +281,10 @@
   z-index: 1000;
 }
 
+.modal-overlay.hidden {
+  display: none !important; /* Use !important to override any conflicting styles */
+}
+
 .modal-content {
   background-color: #fff;
   padding: 20px;
@@ -466,8 +470,8 @@
 <script src="js/ui-schedule-handlers.js"></script>
 <script src="js/ui-main-script.js"></script>
 
-<!-- Confirmation Modal -->
-<div id="confirmModal" class="modal-overlay hidden">
+<!-- Confirmation Modal with improved structure -->
+<div id="confirmModal" class="modal-overlay hidden" style="display: none;">
     <div class="modal-content">
       <h3 id="confirmTitle">Confirm Action</h3>
       <p id="confirmMessage">Are you sure you want to perform this action?</p>

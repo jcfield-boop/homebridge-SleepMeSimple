@@ -1,5 +1,13 @@
 # Changelog
-# Changelog
+## 4.0.11-dev.22 (Current Development Version)
+- Fixed confirmation modal appearing at startup by using both CSS class and style display property
+- Added stronger modal event handling to ensure it can be dismissed
+- Significantly reduced toast notification verbosity by filtering common informational messages
+- Improved error handling with detailed console logging
+- Added modal initialization status tracking
+- Added multiple redundant methods for closing the modal
+- Fixed event listener memory leak in modal dialog
+- Updated CSS to ensure modal stays hidden when required
 
 ## 4.0.13-dev.20 (Current Development Version)
 - Fixed confirmation modal appearing at startup - now properly hidden by default

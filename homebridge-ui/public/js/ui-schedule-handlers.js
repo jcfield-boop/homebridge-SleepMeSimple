@@ -4,7 +4,7 @@
  */
 
 /**
- * Show a confirmation modal dialog
+ * Show a confirmation modal dialog with improved error handling and cleanup
  * @param {string} title - Modal title
  * @param {string} message - Modal message
  * @param {Function} callback - Function to call if confirmed
@@ -32,10 +32,11 @@ window.showConfirmModal = function(title, message, callback) {
   titleElement.textContent = title || 'Confirm Action';
   messageElement.textContent = message || 'Are you sure you want to perform this action?';
   
-  // Show modal
+  // Show modal - use both style and class to ensure visibility
+  modal.style.display = 'flex';
   modal.classList.remove('hidden');
   
-  // Remove previous event listeners
+  // Remove previous event listeners to prevent duplicates
   const newOkButton = okButton.cloneNode(true);
   const newCancelButton = cancelButton.cloneNode(true);
   
@@ -44,6 +45,7 @@ window.showConfirmModal = function(title, message, callback) {
   
   // Add new event listeners
   newOkButton.addEventListener('click', () => {
+    modal.style.display = 'none';
     modal.classList.add('hidden');
     if (typeof callback === 'function') {
       callback();
@@ -51,6 +53,7 @@ window.showConfirmModal = function(title, message, callback) {
   });
   
   newCancelButton.addEventListener('click', () => {
+    modal.style.display = 'none';
     modal.classList.add('hidden');
   });
 }
