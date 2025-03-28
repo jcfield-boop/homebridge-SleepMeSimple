@@ -19,8 +19,12 @@ window.showConfirmModal = function(title, message, callback) {
   
   if (!modal || !titleElement || !messageElement || !okButton || !cancelButton) {
     console.error('Modal elements not found in DOM');
-    // Fall back to toast if modal elements are missing
-    window.showToast('warning', message, title, callback);
+    // Fall back to native confirm if modal elements are missing
+    if (window.confirm(message)) {
+      if (typeof callback === 'function') {
+        callback();
+      }
+    }
     return;
   }
   
@@ -31,9 +35,11 @@ window.showConfirmModal = function(title, message, callback) {
   // Show modal
   modal.classList.remove('hidden');
   
-  // Clear any existing event listeners to prevent duplicates
+  // Create new button elements to remove old event listeners
   const newOkButton = okButton.cloneNode(true);
   const newCancelButton = cancelButton.cloneNode(true);
+  
+  // Replace old buttons with new ones
   okButton.parentNode.replaceChild(newOkButton, okButton);
   cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
   
@@ -47,6 +53,13 @@ window.showConfirmModal = function(title, message, callback) {
   
   newCancelButton.addEventListener('click', () => {
     modal.classList.add('hidden');
+  });
+  
+  // Also close modal when clicking outside
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      modal.classList.add('hidden');
+    }
   });
 };
 

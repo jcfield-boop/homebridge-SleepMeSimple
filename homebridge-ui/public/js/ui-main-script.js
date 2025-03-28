@@ -509,6 +509,29 @@ async function initApp() {
 
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
+// Ensure confirmation modal is hidden at startup
+const confirmModal = document.getElementById('confirmModal');
+if (confirmModal) {
+  console.log('Hiding confirmation modal at startup');
+  confirmModal.classList.add('hidden');
+  
+  // Make sure any modal that might appear during initialization can be dismissed
+  const okButton = document.getElementById('confirmOk');
+  const cancelButton = document.getElementById('confirmCancel');
+  
+  if (okButton) {
+    okButton.addEventListener('click', () => {
+      confirmModal.classList.add('hidden');
+    });
+  }
+  
+  if (cancelButton) {
+    cancelButton.addEventListener('click', () => {
+      confirmModal.classList.add('hidden');
+    });
+  }
+}
+
   // Check if the homebridge object is available (basic check)
   if (typeof homebridge === 'undefined') {
     // Cannot use showToast here as it depends on homebridge

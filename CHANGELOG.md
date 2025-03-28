@@ -1,6 +1,12 @@
 # Changelog
 
-## 4.0.10-dev.17 (Current Development Version)
+## 4.0.11-dev.18 (Current Development Version)
+- Fixed confirmation modal appearing at startup and being unable to dismiss
+- Removed Server Logs section from the UI
+- Added safeguard to ensure confirmation modal is properly hidden by default
+- Added ability to close modal by clicking outside
+
+## 4.0.10-dev.17 (Previous Version)
 - Fixed confirmation modal appearing on startup issue
 - Improved modal event handling to prevent duplicate listeners
 - Enhanced UI initialization sequence
