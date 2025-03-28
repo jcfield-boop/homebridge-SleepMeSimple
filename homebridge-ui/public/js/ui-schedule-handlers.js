@@ -2,7 +2,53 @@
  * Schedule handling functions for SleepMe Simple UI
  * Handles adding, editing, and rendering schedules
  */
-
+/**
+ * Show a confirmation modal dialog
+ * @param {string} title - Modal title
+ * @param {string} message - Modal message
+ * @param {Function} callback - Function to call if confirmed
+ */
+window.showConfirmModal = function(title, message, callback) {
+  // Get modal elements
+  const modal = document.getElementById('confirmModal');
+  const titleElement = document.getElementById('confirmTitle');
+  const messageElement = document.getElementById('confirmMessage');
+  const okButton = document.getElementById('confirmOk');
+  const cancelButton = document.getElementById('confirmCancel');
+  
+  if (!modal || !titleElement || !messageElement || !okButton || !cancelButton) {
+    console.error('Modal elements not found in DOM');
+    // Fall back to toast if modal elements are missing
+    window.showToast('warning', message, title, callback);
+    return;
+  }
+  
+  // Set modal content
+  titleElement.textContent = title;
+  messageElement.textContent = message;
+  
+  // Show modal
+  modal.classList.remove('hidden');
+  
+  // Set up event listeners
+  const handleConfirm = () => {
+    modal.classList.add('hidden');
+    okButton.removeEventListener('click', handleConfirm);
+    cancelButton.removeEventListener('click', handleCancel);
+    if (typeof callback === 'function') {
+      callback();
+    }
+  };
+  
+  const handleCancel = () => {
+    modal.classList.add('hidden');
+    okButton.removeEventListener('click', handleConfirm);
+    cancelButton.removeEventListener('click', handleCancel);
+  };
+  
+  okButton.addEventListener('click', handleConfirm);
+  cancelButton.addEventListener('click', handleCancel);
+};
 /**
  * Exit edit mode and reset form fields
  */
@@ -497,11 +543,16 @@ function renderScheduleList() {
         removeBtn.addEventListener('click', () => {
           const index = parseInt(removeBtn.getAttribute('data-index'), 10);
           if (!isNaN(index) && index >= 0 && index < schedules.length) {
-            showToast('warning', 'Are you sure you want to remove this schedule?', 'Confirm Removal', () => {
-              schedules.splice(index, 1);
-              renderScheduleList();
-              showToast('success', 'Schedule removed successfully', 'Schedule Removed');
-            });
+            // Use the modal confirmation instead of toast
+            window.showConfirmModal(
+              'Confirm Removal',
+              'Are you sure you want to remove this schedule?',
+              () => {
+                schedules.splice(index, 1);
+                renderScheduleList();
+                window.showToast('success', 'Schedule removed successfully', 'Schedule Removed');
+              }
+            );
           }
         });
         

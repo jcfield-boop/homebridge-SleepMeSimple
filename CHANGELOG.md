@@ -1,6 +1,10 @@
 # Changelog
 
-## 4.0.10-dev.15 (Current Development Version)
+## 4.0.10-dev.16 (Current Development Version)
+- added confirmation modal to remove button
+- removed a lot of logging 
+
+## 4.0.10-dev.15 
 - Fixed custom UI configuration loading and saving functionality
 - Enhanced error handling in API client operations
 - Improved schedule management interface

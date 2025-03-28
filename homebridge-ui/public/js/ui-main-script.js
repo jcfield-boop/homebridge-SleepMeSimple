@@ -100,8 +100,6 @@ function safeGetElement(id, required = false) {
  * @returns {boolean} True if all required elements were found
  */
 function initializeDOMReferences() {
-  console.log('Initializing DOM element references');
-  
   try {
     // Get key DOM elements with safety checks
     window.scheduleTypeSelect = safeGetElement('scheduleType', true);
@@ -135,15 +133,12 @@ function initializeDOMReferences() {
     const missingElementCount = requiredElements.filter(el => !el).length;
     
     if (missingElementCount > 0) {
-      console.warn(`${missingElementCount} required DOM elements could not be found`);
       window.showToast('warning', `${missingElementCount} UI elements could not be found. The UI may not function correctly.`, 'UI Warning');
       return false;
     }
     
-    console.log('All DOM elements successfully initialized');
     return true;
   } catch (error) {
-    console.error('Error initializing DOM references:', error);
     window.showToast('error', 'Failed to initialize UI elements: ' + error.message, 'DOM Error');
     return false;
   }
@@ -154,8 +149,6 @@ function initializeDOMReferences() {
  * @returns {boolean} True if listeners were set up successfully
  */
 function initializeEventListeners() {
-  console.log('Setting up event listeners');
-  
   try {
     // Form submission handler
     const configForm = safeGetElement('configForm', true);
@@ -165,12 +158,10 @@ function initializeEventListeners() {
         if (typeof window.saveConfig === 'function') {
           await window.saveConfig();
         } else {
-          console.error('saveConfig function not available');
           window.showToast('error', 'Save function not available', 'Function Error');
         }
       });
     } else {
-      console.error('Config form not found in DOM');
       window.showToast('error', 'Config form not found in DOM', 'DOM Error');
       return false;
     }
@@ -182,7 +173,6 @@ function initializeEventListeners() {
         if (typeof window.testConnection === 'function') {
           window.testConnection();
         } else {
-          console.error('testConnection function not available');
           window.showToast('error', 'Test connection function not available', 'Function Error');
         }
       });
@@ -275,10 +265,8 @@ function initializeEventListeners() {
       });
     }
     
-    console.log('Event listeners successfully initialized');
     return true;
   } catch (error) {
-    console.error('Error setting up event listeners:', error);
     window.showToast('error', 'Error setting up event listeners: ' + error.message, 'Event Error');
     return false;
   }
@@ -322,7 +310,6 @@ window.showLoading = function(message) {
     homebridge.showSpinner();
   }
   window.showToast('info', message, 'Loading...');
-  console.log('Loading:', message);
 };
 
 /**
@@ -332,7 +319,6 @@ window.hideLoading = function() {
   if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
     homebridge.hideSpinner();
   }
-  console.log('Loading complete');
 };
 
 /**
@@ -368,7 +354,6 @@ window.testConnection = async function() {
     }
   } catch (error) {
     window.hideLoading();
-    console.error('Test connection error:', error);
     window.showToast('error', 'Error testing connection: ' + error.message, 'API Test Error');
   }
 };
@@ -379,18 +364,14 @@ window.testConnection = async function() {
  */
 async function waitForHomebridgeReady() {
   return new Promise((resolve, reject) => {
-    console.log('Checking Homebridge API readiness...');
-    
     // Check if homebridge object exists
     if (typeof homebridge === 'undefined') {
-      console.error('Homebridge API not available');
       reject(new Error('Homebridge object is not available'));
       return;
     }
     
     // If homebridge API methods are already available, resolve immediately
     if (typeof homebridge.getPluginConfig === 'function') {
-      console.log('Homebridge API already initialized');
       homebridgeReady = true;
       resolve();
       return;
@@ -398,27 +379,22 @@ async function waitForHomebridgeReady() {
     
     // Set a timeout to prevent hanging if the ready event never fires
     const timeout = setTimeout(() => {
-      console.error('Timed out waiting for Homebridge API');
       // Even though this is an error, we'll try to continue anyway
       homebridgeReady = false;
       resolve(); // Resolve instead of reject to allow initialization to continue
     }, 15000); // 15 second timeout
     
     // Listen for the 'ready' event from Homebridge
-    console.log('Waiting for Homebridge ready event...');
     homebridge.addEventListener('ready', () => {
-      console.log('Received Homebridge ready event');
       clearTimeout(timeout);
       
       // Add a small delay to ensure everything is fully initialized
       setTimeout(() => {
         // Double check methods are available
         if (typeof homebridge.getPluginConfig === 'function') {
-          console.log('Homebridge API successfully initialized with all required methods');
           homebridgeReady = true;
           resolve();
         } else {
-          console.error('Homebridge API methods not available after ready event');
           homebridgeReady = false;
           resolve(); // Resolve instead of reject to allow initialization to continue
         }
@@ -428,131 +404,21 @@ async function waitForHomebridgeReady() {
 }
 
 /**
- * Create logs section in the UI
- */
-function createLogsSection() {
-  // Create a container for logs
-  const container = document.createElement('div');
-  container.id = 'logsContainer';
-  container.className = 'container hidden';
-  
-  const title = document.createElement('h2');
-  title.textContent = 'Server Logs';
-  
-  const content = document.createElement('div');
-  content.id = 'logsContent';
-  content.className = 'logs-content';
-  
-  const refreshButton = document.createElement('button');
-  refreshButton.textContent = 'Refresh Logs';
-  refreshButton.className = 'secondary';
-  refreshButton.style.marginTop = '10px';
-  
-  // Add click handler to refresh logs
-  refreshButton.addEventListener('click', () => {
-    fetchServerLogs();
-  });
-  
-  // Assemble the logs UI
-  container.appendChild(title);
-  container.appendChild(content);
-  container.appendChild(refreshButton);
-  
-  // Add to the page
-  document.body.appendChild(container);
-}
-
-/**
- * Fetch server logs from the backend
- */
-window.fetchServerLogs = async function() {
-  try {
-    window.showLoading('Fetching server logs...');
-    
-    const response = await homebridge.request('/logs');
-    
-    window.hideLoading();
-    
-    if (response.success) {
-      const logsContent = safeGetElement('logsContent');
-      if (logsContent) {
-        logsContent.innerHTML = '';
-        
-        if (response.logs && response.logs.length > 0) {
-          response.logs.forEach(log => {
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            
-            const timestamp = document.createElement('div');
-            timestamp.className = 'log-timestamp';
-            timestamp.textContent = log.timestamp;
-            
-            const context = document.createElement('div');
-            context.className = 'log-context';
-            context.textContent = `[${log.context}] [${log.level.toUpperCase()}]`;
-            
-            const message = document.createElement('div');
-            message.textContent = log.message;
-            
-            logEntry.appendChild(timestamp);
-            logEntry.appendChild(context);
-            logEntry.appendChild(message);
-            
-            if (log.stack) {
-              const stack = document.createElement('div');
-              stack.className = 'log-stack';
-              stack.textContent = log.stack;
-              logEntry.appendChild(stack);
-            }
-            
-            logsContent.appendChild(logEntry);
-          });
-          
-          window.showToast('success', `Loaded ${response.logs.length} log entries`, 'Logs');
-        } else {
-          logsContent.innerHTML = '<p>No logs available.</p>';
-          window.showToast('info', 'No logs available', 'Logs');
-        }
-        
-        // Show the logs container
-        const logsContainer = safeGetElement('logsContainer');
-        if (logsContainer) {
-          logsContainer.classList.remove('hidden');
-        }
-      }
-    } else {
-      window.showToast('error', response.error || 'Failed to fetch logs', 'Logs Error');
-    }
-  } catch (error) {
-    window.hideLoading();
-    console.error('Fetch logs error:', error);
-    window.showToast('error', 'Error fetching logs: ' + error.message, 'Logs Error');
-  }
-};
-
-/**
  * Robust initialization sequence with better error handling and fallbacks
  */
 async function initApp() {
   try {
-    console.log('Starting UI initialization sequence');
     window.showToast('info', 'Initializing UI...', 'Startup');
-    
-    // Create logs section (can be done early)
-    createLogsSection();
     
     // Step 1: Ensure Homebridge API is ready
     try {
       await waitForHomebridgeReady();
       if (homebridgeReady) {
-        console.log('Homebridge API is ready');
         window.showToast('success', 'Homebridge API initialized', 'Startup');
       } else {
-        console.warn('Homebridge API may not be fully ready, continuing anyway');
         window.showToast('warning', 'Homebridge API may not be fully initialized', 'Startup Warning');
       }
     } catch (homebridgeError) {
-      console.error('Homebridge API initialization error:', homebridgeError);
       window.showToast('error', 'Homebridge API error: ' + homebridgeError.message, 'API Error');
       // Continue anyway - we'll try to recover
     }
@@ -562,27 +428,21 @@ async function initApp() {
     try {
       // Try multiple times with delay to ensure DOM is ready
       for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`DOM initialization attempt ${attempt}/3`);
-        
         domInitialized = initializeDOMReferences();
         if (domInitialized) {
-          console.log('DOM references successfully initialized');
           break;
         }
         
         if (attempt < 3) {
-          console.log('DOM not ready, waiting before retry...');
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
       if (!domInitialized) {
-        console.error('Failed to initialize DOM references after multiple attempts');
         window.showToast('error', 'Failed to initialize UI elements', 'DOM Error');
         // Continue anyway - we'll try to recover
       }
     } catch (domError) {
-      console.error('DOM initialization error:', domError);
       window.showToast('error', 'DOM initialization error: ' + domError.message, 'DOM Error');
       // Continue anyway - we'll try to recover
     }
@@ -594,29 +454,23 @@ async function initApp() {
     while (configLoadAttempts < 3) {
       try {
         if (typeof window.loadConfig === 'function' && homebridgeReady) {
-          console.log(`Config load attempt ${configLoadAttempts + 1}/3`);
           config = await window.loadConfig();
           configLoaded = true;
-          console.log('Configuration loaded successfully');
           window.showToast('success', 'Configuration loaded successfully', 'Config');
           break; // Exit loop on success
         } else {
           if (!window.loadConfig) {
-            console.error('loadConfig function not available');
             window.showToast('error', 'loadConfig function not available', 'Function Error');
           }
           if (!homebridgeReady) {
-            console.error('Cannot load config - Homebridge API not ready');
             window.showToast('error', 'Cannot load config - Homebridge API not ready', 'API Error');
           }
           break;
         }
       } catch (configError) {
         configLoadAttempts++;
-        console.error(`Config load attempt ${configLoadAttempts} failed:`, configError);
         
         if (configLoadAttempts < 3) {
-          console.log(`Waiting before retry ${configLoadAttempts}...`);
           window.showToast('warning', `Retrying config load (${configLoadAttempts}/3)`, 'Config Retry');
           await new Promise(resolve => setTimeout(resolve, 2000 * configLoadAttempts));
         } else {
@@ -628,62 +482,42 @@ async function initApp() {
     // Step 4: Setup event listeners
     try {
       const listenersInitialized = initializeEventListeners();
-      if (listenersInitialized) {
-        console.log('Event listeners successfully initialized');
-      } else {
-        console.error('Failed to initialize event listeners');
+      if (!listenersInitialized) {
         window.showToast('error', 'Failed to initialize event listeners', 'Event Error');
       }
     } catch (listenerError) {
-      console.error('Event listener initialization error:', listenerError);
       window.showToast('error', 'Event listener error: ' + listenerError.message, 'Event Error');
     }
     
     // Step 5: Initialize schedule UI if needed
     if (configLoaded && typeof window.renderScheduleList === 'function') {
       try {
-        console.log('Rendering schedule list');
         window.renderScheduleList();
       } catch (scheduleError) {
-        console.error('Error rendering schedule list:', scheduleError);
         window.showToast('error', 'Error rendering schedules: ' + scheduleError.message, 'Schedule Error');
       }
-    } else if (typeof window.renderScheduleList !== 'function') {
-      console.warn('renderScheduleList function not available');
     }
     
     // Mark as initialized
     initialized = true;
-    console.log('SleepMe Simple UI initialization complete');
     window.showToast('success', 'SleepMe Simple UI initialized', 'Ready');
-    
-    // Fetch server logs
-    if (typeof window.fetchServerLogs === 'function') {
-      window.fetchServerLogs().catch(err => {
-        console.error('Error fetching logs:', err);
-      });
-    }
   } catch (error) {
-    console.error('Fatal initialization error:', error);
-    window.showToast('error', 'Error initializing UI: ' + error.message, 'Initialization Error');
+    // Main try-catch block for initApp
+    window.showToast('error', 'Unhandled error during initialization: ' + error.message, 'Critical Error');
   }
 }
 
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOMContentLoaded event fired');
-  
   // Check if the homebridge object is available (basic check)
   if (typeof homebridge === 'undefined') {
     // Cannot use showToast here as it depends on homebridge
     alert('Error: Homebridge UI framework not detected. Please reload the page.');
-    console.error('Homebridge object not available at DOMContentLoaded');
     return;
   }
   
   // Global error handler for uncaught exceptions
   window.onerror = function(message, source, lineno, colno, error) {
-    console.error('Uncaught error:', message, 'at', source, ':', lineno);
     window.showToast('error', 'Uncaught error: ' + message, 'Error');
     return false;
   };
@@ -691,16 +525,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Wait for Homebridge's ready event or initialize if it's already ready
   if (typeof homebridge.getPluginConfig === 'function') {
     // Homebridge API already available
-    console.log('Homebridge API already available at DOMContentLoaded');
     homebridgeReady = true;
     // Small delay to ensure DOM is fully loaded
     setTimeout(initApp, 500);
   } else {
     // Wait for the ready event
-    console.log('Waiting for Homebridge ready event');
     homebridge.addEventListener('ready', () => {
       window.showToast('info', 'Homebridge ready event received', 'Homebridge Ready');
-      console.log('Homebridge ready event received');
       // Small delay to ensure Homebridge API is fully available
       setTimeout(initApp, 500);
     });
@@ -708,7 +539,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set a failsafe timeout in case the ready event doesn't fire
     setTimeout(() => {
       if (!initialized) {
-        console.warn('Homebridge ready event not received after 10 seconds, attempting fallback initialization');
         window.showToast('warning', 'Homebridge ready event timeout, attempting initialization anyway', 'Backup Init');
         initApp();
       }
