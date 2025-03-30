@@ -2,35 +2,37 @@
 <html>
 <head>
     <title>SleepMe Simple Configuration</title>
-     <!-- CRITICAL: Immediate log suppression - must be first script -->
      <script>
-        // Immediate execution - runs before anything else
-        (function() {
-            console.log('Installing earliest possible log suppression');
-            
-            // Block log fetch attempts before they can start
-            if (window.homebridge === undefined) {
-                // Create fake homebridge object if it doesn't exist yet
-                window.homebridge = {};
-            }
-            
-            // Pre-define fetchLogs to do nothing
-            window.homebridge.fetchLogs = function() {
-                console.log('Blocked log fetch attempt');
-                return Promise.resolve([]);
-            };
-            
-            // Create empty toast functions if needed
-            if (!window.homebridge.toast) {
-                window.homebridge.toast = {
-                    success: function() { console.log('Toast suppressed'); },
-                    error: function() { console.log('Toast suppressed'); },
-                    warning: function() { console.log('Toast suppressed'); },
-                    info: function() { console.log('Toast suppressed'); }
-                };
-            }
-        })();
-    </script>
+        // Pre-declare ALL global variables at the earliest possible moment
+        // This uses window as the global scope to ensure availability everywhere
+        window.isEditing = false;
+        window.editingScheduleIndex = -1;
+        window.schedules = [];
+        
+        // Also pre-declare these commonly accessed variables
+        window.scheduleTypeSelect = null;
+        window.daySelectContainer = null;
+        window.scheduleTimeInput = null;
+        window.scheduleTemperatureInput = null;
+        window.unitSelect = null;
+        window.warmHugInfo = null;
+        window.addScheduleBtn = null;
+        window.cancelEditBtn = null;
+        window.scheduleList = null;
+        
+        // Safety wrapper for any functions that might be called early
+        window.renderScheduleList = window.renderScheduleList || function() { 
+          console.log('renderScheduleList called before initialization'); 
+        };
+        window.validateScheduleTime = window.validateScheduleTime || function() { 
+          return true; 
+        };
+        window.validateTemperature = window.validateTemperature || function() { 
+          return true; 
+        };
+        
+        console.log('Global variables and safety functions initialized');
+      </script>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

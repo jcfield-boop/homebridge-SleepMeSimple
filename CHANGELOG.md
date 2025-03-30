@@ -1,7 +1,23 @@
 # Changelog
+## 5.0.6
 
-## 5.1.0 (current)
+### Fixed
+- **Critical Mobile Web View Bug**: Resolved "Can't find variable: isEditing" error that occurred specifically in mobile browsers
+  
+### Key Improvements:
+- **Pre-Declaration of Global Variables**: Implemented direct global variable initialization at the earliest possible point in HTML head
+- **Safety Function Stubs**: Added placeholder functions to prevent errors when methods are called before initialization
+- **Simplified Initialization**: Replaced IIFE with direct window object assignments for more reliable execution order
+- **Enhanced Mobile Compatibility**: Ensured variables are available regardless of script loading order
+- **Improved Error Prevention**: Pre-declared all commonly accessed DOM element references with null values
+- **Better Debug Visibility**: Added console logging to track initialization status
 
+### Technical
+- Moved variable initialization code to the very top of the HTML document in the head section
+- Applied a flat initialization approach instead of an encapsulated function for guaranteed execution
+- Pre-emptively declared common functions with safety fallbacks to prevent runtime errors
+- Added null initialization for DOM element references to ensure safe property access
+## 5.0.5
 ### Fixed
 - **Major Schedule Functionality Fix**: Resolved critical timing issue where schedules weren't being applied to devices
   - Restructured initialization sequence to ensure schedules are applied after device discovery completes
