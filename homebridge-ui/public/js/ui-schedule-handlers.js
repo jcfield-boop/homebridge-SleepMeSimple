@@ -310,13 +310,20 @@ window.applyScheduleTemplates = function() {
         adjustedTemp = Math.round(window.convertCtoF(adjustedTemp) * 10) / 10;
       }
       
+      // Create a proper schedule object with all necessary properties
       const schedule = {
         type: templateSchedule.type,
         time: templateSchedule.time,
         temperature: adjustedTemp,
-        unit: currentUnit,
-        description: templateSchedule.description
+        unit: currentUnit, // Always store current unit to enable proper editing
+        description: templateSchedule.description || null
       };
+      
+      // Add any day information if present
+      if (templateSchedule.day !== undefined) {
+        schedule.day = templateSchedule.day;
+      }
+      
       window.schedules.push(schedule);
       count++;
     });
@@ -334,13 +341,20 @@ window.applyScheduleTemplates = function() {
         adjustedTemp = Math.round(window.convertCtoF(adjustedTemp) * 10) / 10;
       }
       
+      // Create a proper schedule object with all necessary properties
       const schedule = {
         type: templateSchedule.type,
         time: templateSchedule.time,
         temperature: adjustedTemp,
-        unit: currentUnit,
-        description: templateSchedule.description
+        unit: currentUnit, // Always store current unit to enable proper editing
+        description: templateSchedule.description || null
       };
+      
+      // Add any day information if present
+      if (templateSchedule.day !== undefined) {
+        schedule.day = templateSchedule.day;
+      }
+      
       window.schedules.push(schedule);
       count++;
     });
@@ -567,17 +581,8 @@ window.renderScheduleList = function() {
         removeBtn.addEventListener('click', () => {
           const index = parseInt(removeBtn.getAttribute('data-index'), 10);
           if (!isNaN(index) && index >= 0 && index < window.schedules.length) {
-            // Use the modal confirmation
-            window.showConfirmModal(
-              'Confirm Removal',
-              'Are you sure you want to remove this schedule?',
-              () => {
-                window.schedules.splice(index, 1);
-                window.renderScheduleList();
-                window.showToast('success', 'Schedule removed successfully', 'Schedule Removed');
-                console.log('Schedule removed successfully');
-              }
-            );
+            // Use the removeSchedule function which handles the confirmation modal properly
+            window.removeSchedule(index);
           }
         });
         

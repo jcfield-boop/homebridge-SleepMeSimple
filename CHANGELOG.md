@@ -1,5 +1,19 @@
 # Changelog
-## 4.1.1 (Current)
+## 4.1.2 (Current)
+- **Fixed Schedule Editing Functionality**: Repaired both edit button and template schedule editing
+- **Key Improvements:**
+  - Fixed logical error in handleScheduleAction that prevented editing schedules
+  - Properly implemented update functionality for existing schedules
+  - Fixed remove confirmation dialog to use modal instead of toast notifications
+  - Enhanced template schedules to ensure they can be edited properly
+  - Improved unit conversion handling for template schedules
+  - Standardized schedule object structure between manual and template schedules
+  - Fixed event handler issues in schedule item rendering
+  - Ensured consistent property storage for all schedule types
+  - Improved console logging for debugging schedule operations
+  - Added proper day property handling for specific day schedules
+  - Fixed data-index attribute handling for edit and remove buttons
+## 4.1.1
 - **Fixed Edit Button Functionality**: Repaired the schedule editing feature
 - **Key Improvements:**
   - Fixed logical error in handleScheduleAction function that prevented editing schedules
@@ -8,7 +22,7 @@
   - Enhanced error handling for schedule operations
   - Fixed structural issues in schedule handler code
   - Ensured proper exit from edit mode after successful updates
-## 4.0.13 (In Development)
+## 4.0.13 
 - **Fixed Toast Notification Leak**: Implemented immediate toast suppression before any code executes
 - **Fixed Modal Not Appearing**: Complete rewrite of modal display code with multiple reliability techniques
 - **Key Improvements:**
