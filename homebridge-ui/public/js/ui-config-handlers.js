@@ -23,7 +23,7 @@ window.loadConfig = async function() {
     try {
       const configCheck = await homebridge.request('/config/check');
       if (configCheck.success) {
-        // Log to console only - no toast
+        // Log to console only
         console.log('Server can access config.json directly:', configCheck);
       } else {
         console.warn('Server cannot access config.json directly:', configCheck);
@@ -64,10 +64,15 @@ window.loadConfig = async function() {
     return config;
   } catch (error) {
     console.error('Configuration loading error:', error);
-    // Only show toast for critical config errors
-    if (error.message.includes('API') || error.message.includes('token')) {
-      window.showToast('error', 'Failed to load configuration: ' + error.message, 'Config Error');
+    
+    // Update status element
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      statusElement.textContent = 'Failed to load configuration: ' + error.message;
+      statusElement.className = 'status error';
+      statusElement.classList.remove('hidden');
     }
+    
     window.hideLoading();
     return {};
   }
@@ -199,6 +204,7 @@ function populateFormFields(config) {
   } else if (unitSelect) {
     unitSelect.value = 'C'; // Set default
   }
+  
   // Set polling interval if available
   if (pollingIntervalInput && config.pollingInterval) {
     pollingIntervalInput.value = config.pollingInterval;
@@ -291,14 +297,32 @@ window.saveConfig = async function() {
     
     // Validate required fields
     if (!apiToken) {
-      window.showToast('error', 'API token is required', 'Validation Error');
+      console.error('API token is required');
+      
+      // Update status element
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'API token is required';
+        statusElement.className = 'status error';
+        statusElement.classList.remove('hidden');
+      }
+      
       window.hideLoading();
       return;
     }
     
     // Validate polling interval
     if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
-      window.showToast('error', 'Polling interval must be between 60 and 300 seconds', 'Validation Error');
+      console.error('Polling interval must be between 60 and 300 seconds');
+      
+      // Update status element
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'Polling interval must be between 60 and 300 seconds';
+        statusElement.className = 'status error';
+        statusElement.classList.remove('hidden');
+      }
+      
       window.hideLoading();
       return;
     }
@@ -363,13 +387,22 @@ window.saveConfig = async function() {
       console.log('Creating new config array');
     }
     
-    // Update plugin config - IMPORTANT FIX HERE
+    // Update plugin config
     console.log('Updating plugin config...');
     try {
       const updateResult = await homebridge.updatePluginConfig(updatedConfig);
       console.log('Update result:', updateResult);
     } catch (updateError) {
       console.error('Error updating config:', updateError);
+      
+      // Update status element
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'Error updating config: ' + updateError.message;
+        statusElement.className = 'status error';
+        statusElement.classList.remove('hidden');
+      }
+      
       window.hideLoading();
       return;
     }
@@ -379,14 +412,38 @@ window.saveConfig = async function() {
     try {
       await homebridge.savePluginConfig();
       console.log('Config saved successfully');
+      
+      // Update status element
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'Configuration saved successfully';
+        statusElement.className = 'status success';
+        statusElement.classList.remove('hidden');
+      }
     } catch (saveError) {
       console.error('Error saving config to disk:', saveError);
-
+      
+      // Update status element
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'Error saving config to disk: ' + saveError.message;
+        statusElement.className = 'status error';
+        statusElement.classList.remove('hidden');
+      }
     }
     
     window.hideLoading();
   } catch (error) {
     console.error('Save configuration error:', error);
+    
+    // Update status element
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      statusElement.textContent = 'Save configuration error: ' + error.message;
+      statusElement.className = 'status error';
+      statusElement.classList.remove('hidden');
+    }
+    
     window.hideLoading();
   }
 };

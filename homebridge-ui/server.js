@@ -34,38 +34,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // This must be called after all request handlers are registered
     this.ready();
   }
-  /**
- * Override the pushEvent method to prevent unwanted toast notifications
- * @param {string} event - Event name
- * @param {any} data - Event data
- */
-pushEvent(event, data) {
-  // Comprehensive list of events that might trigger toasts
-  const blockedEvents = [
-    'log', 'logs', 'error', 'ready', 'config', 'server',
-    'server-logs', 'log-update', 'server-error', 'fetch',
-    'configSaved', 'configUpdated', 'statusUpdate', 'cacheUpdate',
-    'pluginStatus', 'loadConfig', 'saveConfig', 'testConnection'
-  ];
-  
-  // Block any event containing these substrings
-  if (blockedEvents.some(blocked => 
-      typeof event === 'string' && event.toLowerCase().includes(blocked.toLowerCase()))) {
-    console.log(`[Blocked Event] ${event}`);
-    return; // Don't send to UI
-  }
-  
-  // Also block events that might contain error messages about logs
-  if (typeof data === 'object' && data && 
-      (String(data.message || '').includes('log') || 
-       String(data.error || '').includes('log'))) {
-    console.log(`[Blocked Data Event] ${event}`);
-    return; // Don't send to UI
-  }
-  
-  // Allow other events to proceed normally
-  super.pushEvent(event, data);
-}
   
   /**
    * Server-side logging that never triggers UI notifications
@@ -81,8 +49,6 @@ pushEvent(event, data) {
     } else {
       console.log(`[SleepMeUI] ${message}`);
     }
-    
-    // IMPORTANT: No pushEvent calls that would trigger UI notifications
   }
   
   /**
@@ -92,8 +58,6 @@ pushEvent(event, data) {
    */
   logError(message, error) {
     console.error(`[SleepMeUI Error] ${message}:`, error);
-    
-    // IMPORTANT: No pushEvent calls that would trigger UI notifications
   }
   
   /**
@@ -103,7 +67,7 @@ pushEvent(event, data) {
   async checkConfigAndPush() {
     try {
       const configResult = await this.checkConfigFile();
-      // Only log to console, don't push events that might trigger toasts
+      // Only log to console, don't push events that might trigger UI notifications
       console.log('Config check result:', configResult);
       return configResult;
     } catch (error) {

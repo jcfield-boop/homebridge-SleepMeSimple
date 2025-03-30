@@ -5,35 +5,6 @@
  * of SleepMe devices and scheduling features
  */
 
-// IMMEDIATE TOAST SUPPRESSION: Must happen before anything else
-(function installToastBlocker() {
-  if (typeof window.homebridge !== 'undefined' && window.homebridge.toast) {
-    // Override all toast methods with console-only versions
-    window.homebridge.toast.success = function(message, title) {
-      console.log(`✅ [SUCCESS] ${title ? title + ': ' : ''}${message}`);
-    };
-    
-    window.homebridge.toast.error = function(message, title) {
-      console.error(`❌ [ERROR] ${title ? title + ': ' : ''}${message}`);
-    };
-    
-    window.homebridge.toast.warning = function(message, title) {
-      console.warn(`⚠️ [WARNING] ${title ? title + ': ' : ''}${message}`);
-    };
-    
-    window.homebridge.toast.info = function(message, title) {
-      console.info(`ℹ️ [INFO] ${title ? title + ': ' : ''}${message}`);
-    };
-    
-    console.log('🛡️ Early toast suppression installed');
-  }
-})();
-
-// Global variables with proper initialization
-window.schedules = [];           // Array to store schedules
-window.isEditing = false;        // Flag to track if we're in edit mode
-window.editingScheduleIndex = -1; // Index of schedule being edited
-
 // Global variables with proper initialization
 window.schedules = [];           // Array to store schedules
 window.isEditing = false;        // Flag to track if we're in edit mode
@@ -109,39 +80,6 @@ window.templates = {
 };
 
 /**
- * Complete toast suppression system
- * Redirects all toast notifications to console logs
- */
-function installCompleteToastSuppression() {
-  // Skip if homebridge not available
-  if (typeof homebridge === 'undefined' || !homebridge.toast) {
-    console.warn('Toast suppression: Homebridge toast API not available');
-    return;
-  }
-  
-  console.log('Installing complete toast suppression system');
-  
-  // Replace all toast methods with console-only versions
-  homebridge.toast.success = (message, title) => {
-    console.log(`✅ [SUCCESS] ${title ? title + ': ' : ''}${message}`);
-  };
-  
-  homebridge.toast.error = (message, title) => {
-    console.error(`❌ [ERROR] ${title ? title + ': ' : ''}${message}`);
-  };
-  
-  homebridge.toast.warning = (message, title) => {
-    console.warn(`⚠️ [WARNING] ${title ? title + ': ' : ''}${message}`);
-  };
-  
-  homebridge.toast.info = (message, title) => {
-    console.info(`ℹ️ [INFO] ${title ? title + ': ' : ''}${message}`);
-  };
-  
-  console.log('Complete toast suppression installed successfully');
-}
-
-/**
  * Helper function to safely get a DOM element with error handling
  * @param {string} id - The element ID to find
  * @param {boolean} required - Whether the element is required
@@ -208,24 +146,22 @@ function initializeDOMReferences() {
 }
 
 /**
- * Console-only logging function that replaces all showToast calls
+ * Console-only logging function 
  * @param {string} type - Log type: 'success', 'error', 'warning', 'info'
  * @param {string} message - Log message
  * @param {string} title - Optional log title
  */
-window.showToast = function(type, message, title = '') {
+window.logMessage = function(type, message, title = '') {
   // Always log to console with appropriate formatting
   if (type === 'error') {
-    console.error(`❌ ${title ? title + ': ' : ''}${message}`);
+    console.error(`${title ? title + ': ' : ''}${message}`);
   } else if (type === 'warning') {
-    console.warn(`⚠️ ${title ? title + ': ' : ''}${message}`);
+    console.warn(`${title ? title + ': ' : ''}${message}`);
   } else if (type === 'success') {
-    console.log(`✅ ${title ? title + ': ' : ''}${message}`);
+    console.log(`${title ? title + ': ' : ''}${message}`);
   } else {
-    console.info(`ℹ️ ${title ? title + ': ' : ''}${message}`);
+    console.info(`${title ? title + ': ' : ''}${message}`);
   }
-  
-  // No toast notifications are actually shown
 };
 
 /**
@@ -236,8 +172,8 @@ window.showLoading = function(message) {
   if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
     homebridge.showSpinner();
   }
-  // Log to console but don't show toast for loading messages
-  console.log(`⏳ Loading: ${message}`);
+  // Log to console
+  console.log(`Loading: ${message}`);
 };
 
 /**
@@ -247,7 +183,7 @@ window.hideLoading = function() {
   if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
     homebridge.hideSpinner();
   }
-  console.log('⏳ Loading complete');
+  console.log('Loading complete');
 };
 
 /**
@@ -258,13 +194,21 @@ window.testConnection = async function() {
   try {
     const apiTokenInput = safeGetElement('apiToken', true);
     if (!apiTokenInput) {
-      window.showToast('error', 'API token input field not found', 'Test Error');
+      console.error('API token input field not found');
       return;
     }
     
     const apiToken = apiTokenInput.value.trim();
     if (!apiToken) {
-      window.showToast('error', 'Please enter your API token', 'Validation Error');
+      console.error('Please enter your API token');
+      
+      // Update status element
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'Please enter your API token';
+        statusElement.className = 'status error';
+        statusElement.classList.remove('hidden');
+      }
       return;
     }
     
@@ -274,16 +218,35 @@ window.testConnection = async function() {
     
     window.hideLoading();
     
+    // Update status element based on test result
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      if (response.success) {
+        statusElement.textContent = `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`;
+        statusElement.className = 'status success';
+      } else {
+        statusElement.textContent = response.error || 'Unknown error testing connection';
+        statusElement.className = 'status error';
+      }
+      statusElement.classList.remove('hidden');
+    }
+    
     if (response.success) {
-      window.showToast('success', 
-        `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`, 
-        'API Test');
+      console.log(`Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`);
     } else {
-      window.showToast('error', response.error || 'Unknown error testing connection', 'API Test Failed');
+      console.error('API Test Failed:', response.error || 'Unknown error testing connection');
     }
   } catch (error) {
     window.hideLoading();
-    window.showToast('error', 'Error testing connection: ' + error.message, 'API Test Error');
+    console.error('Error testing connection:', error.message);
+    
+    // Update status element
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      statusElement.textContent = 'Error testing connection: ' + error.message;
+      statusElement.className = 'status error';
+      statusElement.classList.remove('hidden');
+    }
   }
 };
 
@@ -466,9 +429,6 @@ async function initApp() {
   try {
     // Skip toast for initialization - just log to console
     console.log('Initializing SleepMe Simple UI...');
-    
-    // Step 0: Install toast suppression system as early as possible
-    installCompleteToastSuppression();
     
     // Step 1: Ensure Homebridge API is ready
     try {

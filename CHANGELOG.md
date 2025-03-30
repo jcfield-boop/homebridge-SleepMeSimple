@@ -1,5 +1,21 @@
 # Changelog
-## 4.1.2 (Current)
+
+## 4.1.3 (Current)
+- **Complete Removal of Toast Notifications**: Removed all toast notification code and replaced with proper status UI elements
+- **Key Improvements:**
+  - Removed all references to toast notifications in all JavaScript files
+  - Replaced toast notifications with dedicated status element updates in the UI
+  - Removed toast suppression code and dependencies
+  - Improved error handling with console logging
+  - Enhanced server.js to avoid triggering UI notifications
+  - Updated status display to show both error and success messages properly
+  - Eliminated all toast-related debugging code
+  - Simplified messaging system to use native UI elements
+  - Improved API test results display using the status element
+  - Fixed modal confirmation for schedule removal to use native UI
+  - Enhanced code readability by simplifying notification logic
+  - Centralized status messages in standard UI elements
+  ## 4.1.2
 - **Fixed Schedule Editing Functionality**: Repaired both edit button and template schedule editing
 - **Key Improvements:**
   - Fixed logical error in handleScheduleAction that prevented editing schedules

@@ -85,8 +85,8 @@ window.removeSchedule = function(index) {
       window.schedules.splice(index, 1);
       window.renderScheduleList();
       
-      // Log to console only, avoid toast
-      console.log('✅ Schedule removed successfully');
+      // Log to console only
+      console.log('Schedule removed successfully');
     }
   );
 };
@@ -139,7 +139,7 @@ window.handleScheduleAction = function() {
   const isTempValid = window.validateTemperature();
   
   if (!isTimeValid || !isTempValid) {
-    window.showToast('error', 'Please correct the errors in the schedule form', 'Validation Error');
+    console.error('Please correct the errors in the schedule form');
     return;
   }
   
@@ -151,7 +151,7 @@ window.handleScheduleAction = function() {
   
   // Validate required fields have values
   if (!type || !time || isNaN(temperature)) {
-    window.showToast('error', 'All schedule fields are required', 'Validation Error');
+    console.error('All schedule fields are required');
     return;
   }
   
@@ -200,7 +200,6 @@ window.handleScheduleAction = function() {
     window.renderScheduleList();
   } catch (error) {
     console.error('Schedule action error:', error);
-    window.showToast('error', 'Error saving schedule: ' + error.message, 'Schedule Error');
   }
 };
 
@@ -365,7 +364,14 @@ window.applyScheduleTemplates = function() {
 
   if (count > 0) {
     console.log(`Applied ${count} schedules from templates`);
-    window.showToast('success', `Applied ${count} schedules from templates`, 'Templates Applied');
+    
+    // Update status element
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      statusElement.textContent = `Applied ${count} schedules from templates`;
+      statusElement.className = 'status success';
+      statusElement.classList.remove('hidden');
+    }
   } else {
     console.warn('No templates selected');
   }
@@ -603,6 +609,13 @@ window.renderScheduleList = function() {
     });
   } catch (error) {
     console.error('Render schedule error:', error);
-    window.showToast('error', `Error rendering schedule list: ${error.message}`, 'Render Error');
+    
+    // Update status element
+    const statusElement = document.getElementById('status');
+    if (statusElement) {
+      statusElement.textContent = `Error rendering schedule list: ${error.message}`;
+      statusElement.className = 'status error';
+      statusElement.classList.remove('hidden');
+    }
   }
 };
