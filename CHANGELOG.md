@@ -1,5 +1,17 @@
 # Changelog
-## 5.0.3 (current)
+## 5.0.4
+
+### Bug Fixes
+- Suppressed unwanted loading indicators in the custom UI (showspinner was the culprit)
+- Implemented minimal-impact solution to remove Homebridge UI's default loading spinners
+- Preserved existing code structure while neutralizing loading functionality
+- Added graceful handling of loading function calls to prevent UI interruptions
+
+### Technical Improvement
+- Replaced loading functions with no-op implementations
+- Maintained function signatures to prevent potential runtime errors
+- Simplified loading indicator management in custom UI configuration
+## 5.0.3
 - **Eliminated Unwanted Toast Notifications**: Completely removed "Fetching server logs" toasts and related error messages
 - **Key Improvements:**
   - Added early suppression script to index.html that executes before any other code

@@ -209,26 +209,15 @@ function logMessage(type, message, title = '') {
 }
 
 /**
- * Show loading indicator with message (console only)
+ * Show loading indicator with message (console only) to remove Toasts!
  * @param {string} message - Message to display
  */
-function showLoading(message) {
-    if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
-        homebridge.showSpinner();
-    }
-    // Log to console
-    console.log(`Loading: ${message}`);
-}
+function showLoading(message) {}
 
 /**
- * Hide loading indicator
+ * Hide loading indicator empty to remove toast spinners
  */
-function hideLoading() {
-    if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
-        homebridge.hideSpinner();
-    }
-    console.log('Loading complete');
-}
+function hideLoading() {}
 
 /**
  * Show confirmation modal with guaranteed visibility
