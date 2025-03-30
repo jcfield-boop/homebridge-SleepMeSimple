@@ -545,21 +545,21 @@
                 <small id="apiTokenHelp" class="form-text text-muted">Your SleepMe API token. Obtain this from your account at sleep.me</small>
             </div>
             
-            <!-- Combined row for temperature unit and polling interval -->
-            <div class="form-row">
-                <div class="form-group col-md-6">
-                    <label for="unit">Temperature Unit:</label>
-                    <select id="unit" name="unit">
-                        <option value="C">Celsius</option>
-                        <option value="F">Fahrenheit</option>
-                    </select>
-                </div>
-                
-                <div class="form-group col-md-6">
-                    <label for="pollingInterval">Polling Interval (seconds):</label>
-                    <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
-                </div>
-            </div>
+            <!-- Replace the existing two-column layout with this -->
+<div class="form-row">
+    <div class="form-group col-md-6">
+        <label for="unit">Temperature Unit:</label>
+        <select id="unit" name="unit">
+            <option value="C">Celsius</option>
+            <option value="F">Fahrenheit</option>
+        </select>
+    </div>
+    <div class="form-group col-md-6">
+        <label for="pollingInterval">Polling Interval (seconds):</label>
+        <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
+        <small class="form-text text-muted">Frequency of device status checks (60-300 seconds)</small>
+    </div>
+</div>
             
             <div class="form-group">
                 <label>
@@ -703,57 +703,23 @@
         <h4>Advanced Template Editing</h4>
         <p>Templates create predefined schedule patterns based on sleep science. There are three ways to customize templates:</p>
     </div>
-    <!-- Add this Advanced Options tab content after the templateHelpTab content -->
-    <div id="advancedOptionsTab" class="tab-content">
-    <div class="info-card">
-        <h4>Advanced Configuration Options</h4>
-        <p>Configure advanced settings for your SleepMe device integration. These settings allow you to fine-tune the behavior of special features.</p>
+   
+    <!-- Replace the existing two-column layout with this -->
+<div class="form-row">
+    <div class="form-group col-md-6">
+        <label for="unit">Temperature Unit:</label>
+        <select id="unit" name="unit">
+            <option value="C">Celsius</option>
+            <option value="F">Fahrenheit</option>
+        </select>
     </div>
-    
-    <div class="collapsible-section">
-        <div class="collapsible-header">
-            <h3>Logging Options</h3>
-            <span class="dropdown-indicator">▾</span>
-        </div>
-        <div class="collapsible-content">
-            <div class="form-group">
-                <label for="logLevel">Log Level:</label>
-                <select id="logLevel" name="logLevel">
-                    <option value="normal">Normal</option>
-                    <option value="debug">Debug</option>
-                    <option value="verbose">Verbose</option>
-                </select>
-                <small class="form-text text-muted">Controls the verbosity of logs in Homebridge</small>
-            </div>
-        </div>
+    <div class="form-group col-md-6">
+        <label for="pollingInterval">Polling Interval (seconds):</label>
+        <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
+        <small class="form-text text-muted">Frequency of device status checks (60-300 seconds)</small>
     </div>
-    
-    <div class="collapsible-section">
-        <div class="collapsible-header">
-            <h3>Warm Hug Wake-up Parameters</h3>
-            <span class="dropdown-indicator">▾</span>
-        </div>
-        <div class="collapsible-content">
-            <p>The Warm Hug feature gradually increases temperature over time for a gentle wake-up experience. Customize how it works below:</p>
-            
-            <div class="form-group">
-                <label for="warmHugIncrement">Temperature Increment (°C per minute):</label>
-                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.5" value="2">
-                <small class="form-text text-muted">How quickly the temperature increases each minute during warm-up (0.5-5°C)</small>
-            </div>
-            
-            <div class="form-group">
-                <label for="warmHugDuration">Duration (minutes):</label>
-                <input type="number" id="warmHugDuration" min="5" max="30" step="1" value="10">
-                <small class="form-text text-muted">How long before the scheduled time to start warming up (5-30 minutes)</small>
-            </div>
-            
-            <div class="form-group">
-                <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
-            </div>
-        </div>
-    </div>
-    
+</div>
+
     <div class="section-divider"></div>
     
     <div class="collapsible-section">
@@ -806,7 +772,7 @@
             </div>
         </div>
     </div>
-</div>
+}
     
     <div class="template-help-section">
         <h3>Option 1: Edit Individual Schedules</h3>
@@ -885,5 +851,6 @@
             </div>
         </div>
     </div>
+
 </body>
 </html>
