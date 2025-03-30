@@ -1,5 +1,23 @@
 # Changelog
-## 4.1.4 (Current)
+## 5.0.0 (Current)
+- **Complete Architectural Overhaul**: Significant code restructuring and modernization
+- **Key Improvements:**
+  - Adopted module pattern for better encapsulation and state management
+  - Eliminated all toast notification issues with a centralized status message system
+  - Fixed modal confirmation dialog reliability across all operations
+  - Properly implemented edit schedule functionality with clear state management
+  - Enhanced error handling with consistent patterns across the codebase
+  - Simplified initialization sequence with more robust fallbacks
+  - Improved schedule management with cleaner event handling
+  - Added extensive documentation and comments throughout the code
+  - Fixed memory leaks with proper event listener cleanup
+  - Enhanced code organization with logical function grouping
+  - Improved reliability of schedule template application
+  - Created reliable type conversion for temperature units
+  - Implemented automatic status updates for all operations
+  - Eliminated global namespace pollution where possible
+  - Added backward compatibility layer for legacy code
+## 4.1.4
 - **Config Saving Fix**: Corrected configuration structure for proper schedule persistence
 - **Key Improvements:**
   - Fixed configuration object structure to match Homebridge requirements
