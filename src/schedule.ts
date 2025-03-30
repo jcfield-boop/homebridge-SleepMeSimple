@@ -160,43 +160,72 @@ export class ScheduleManager {
     // Initial check
     this.checkSchedules();
   }
+  // In schedule.ts, modify the checkSchedules method to better handle schedule execution
+
+private checkSchedules(): void {
+  const now = Date.now();
+  this.logger.verbose(`Checking schedules at ${new Date(now).toLocaleString()}`);
   
-  /**
-   * Check all schedules and execute any that are due
-   */
-  private checkSchedules(): void {
-    const now = Date.now();
+  // Get current day to properly handle weekend/weekday schedules
+  const currentDay = new Date().getDay(); // 0 = Sunday, 6 = Saturday
+  const isWeekend = (currentDay === 0 || currentDay === 6);
+  const isWeekday = !isWeekend;
+  
+  this.schedules.forEach((deviceSchedules, deviceId) => {
+    this.logger.verbose(`Checking ${deviceSchedules.length} schedules for device ${deviceId}`);
     
-    this.logger.verbose('Checking schedules');
-    
-    this.schedules.forEach((deviceSchedules, deviceId) => {
-      deviceSchedules.forEach((schedule, index) => {
-        // Skip schedules without nextExecutionTime
-        if (!schedule.nextExecutionTime) {
-          this.logger.debug(`Schedule ${index} has no next execution time, recalculating`);
-          deviceSchedules[index].nextExecutionTime = this.calculateNextExecutionTime(schedule);
-          return;
+    deviceSchedules.forEach((schedule, index) => {
+      // Skip schedules without nextExecutionTime
+      if (!schedule.nextExecutionTime) {
+        this.logger.debug(`Schedule ${index} has no next execution time, recalculating`);
+        deviceSchedules[index].nextExecutionTime = this.calculateNextExecutionTime(schedule);
+        return;
+      }
+      
+      // Check if schedule should apply today based on type
+      let shouldRunToday = false;
+      if (schedule.type === ScheduleType.EVERYDAY) {
+        shouldRunToday = true;
+      } else if (schedule.type === ScheduleType.WEEKDAYS && isWeekday) {
+        shouldRunToday = true;
+      } else if (schedule.type === ScheduleType.WEEKEND && isWeekend) {
+        shouldRunToday = true;
+      } else if (schedule.type === ScheduleType.SPECIFIC_DAY && schedule.day === currentDay) {
+        shouldRunToday = true;
+      } else if (schedule.type === ScheduleType.WARM_HUG) {
+        // Warm hug follows same logic as other schedule types
+        if (schedule.day !== undefined) {
+          shouldRunToday = schedule.day === currentDay;
+        } else {
+          shouldRunToday = true; // Default to running every day
+        }
+      }
+      
+      // Add debug logging
+      this.logger.verbose(`Schedule ${index}: type=${schedule.type}, time=${schedule.time}, ` +
+        `nextExecution=${new Date(schedule.nextExecutionTime).toLocaleString()}, ` +
+        `shouldRunToday=${shouldRunToday}, now=${new Date(now).toLocaleString()}`);
+      
+      // Check if it's time to execute and schedule applies today
+      if (shouldRunToday && now >= schedule.nextExecutionTime) {
+        this.logger.info(`Executing schedule ${index} (${schedule.type}) at ${schedule.time} ` +
+          `for device ${deviceId}: ${schedule.temperature}°C`);
+        
+        if (schedule.type === ScheduleType.WARM_HUG) {
+          this.startWarmHug(deviceId, schedule);
+        } else {
+          this.executeSchedule(deviceId, schedule);
         }
         
-        // Check if it's time to execute
-        if (now >= schedule.nextExecutionTime) {
-          this.logger.debug(`Time to execute schedule ${index} for device ${deviceId}`);
-          
-          if (schedule.type === ScheduleType.WARM_HUG) {
-            this.startWarmHug(deviceId, schedule);
-          } else {
-            this.executeSchedule(deviceId, schedule);
-          }
-          
-          // Update last execution time and calculate next execution
-          deviceSchedules[index].lastExecutionTime = now;
-          deviceSchedules[index].nextExecutionTime = this.calculateNextExecutionTime(schedule);
-          
-          this.logger.debug(`Next execution for schedule ${index}: ${new Date(deviceSchedules[index].nextExecutionTime!).toLocaleString()}`);
-        }
-      });
+        // Update last execution time and calculate next execution
+        deviceSchedules[index].lastExecutionTime = now;
+        deviceSchedules[index].nextExecutionTime = this.calculateNextExecutionTime(schedule);
+        
+        this.logger.debug(`Next execution for schedule ${index}: ${new Date(deviceSchedules[index].nextExecutionTime!).toLocaleString()}`);
+      }
     });
-  }
+  });
+}
   
   /**
    * Execute a regular temperature schedule

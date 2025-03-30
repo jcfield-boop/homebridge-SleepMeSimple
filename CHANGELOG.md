@@ -1,6 +1,35 @@
 # Changelog
-## 5.0.4
 
+## 5.1.0 (current)
+
+### Fixed
+- **Major Schedule Functionality Fix**: Resolved critical timing issue where schedules weren't being applied to devices
+  - Restructured initialization sequence to ensure schedules are applied after device discovery completes
+  - Modified `platform.ts` to make device discovery properly asynchronous with awaitable Promise
+  - Fixed schedule application to happen only after devices are fully discovered and registered
+  - Added more detailed logging around schedule application for better troubleshooting
+  - Improved schedule execution logic in `schedule.ts` to correctly validate day-of-week conditions
+  - Enhanced debugging information in logs to show which schedules are being executed and when
+  - Added verification of schedule application to each discovered device
+  - Fixed race condition that caused "Schedules defined but no devices found to apply them to" error
+  - Ensured proper event sequencing for device discovery and schedule initialization
+
+### Improved
+- **Enhanced Logging**: Added more detailed logging for schedule operations
+  - Added timestamps to schedule execution logs
+  - Included detailed device ID references in schedule application logs
+  - Added day-of-week validation information to logs for better debugging
+- **Configuration Handling**: Better handling of schedule configuration data
+  - Ensured schedule data includes description field for better identification
+  - Added proper schedule type verification during application
+  - Improved error handling during schedule application
+
+### Technical
+- Made `discoverDevices()` method return a Promise to properly support asynchronous operations
+- Added proper async/await pattern to device discovery and schedule application
+- Improved data flow between device discovery and schedule manager
+- Enhanced error handling throughout schedule application process
+## 5.0.4
 ### Bug Fixes
 - Suppressed unwanted loading indicators in the custom UI (showspinner was the culprit)
 - Implemented minimal-impact solution to remove Homebridge UI's default loading spinners
