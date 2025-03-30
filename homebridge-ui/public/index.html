@@ -247,6 +247,90 @@
             color: #666;
             margin-bottom: 10px;
         }
+
+.template-badge {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-color: #0070c9;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 50%;
+    margin-left: 5px;
+    cursor: help;
+}
+
+.template-schedule {
+    border-left: 3px solid #0070c9;
+}
+
+.template-help-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.template-help-section h3 {
+    color: #0070c9;
+    margin-bottom: 10px;
+}
+
+.code-example {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 10px 0;
+    font-family: monospace;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+.code-example pre {
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.template-preview {
+    margin-top: 15px;
+    padding: 10px;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+.template-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.preview-item {
+    padding: 5px 10px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    background-color: #fff;
+    border-left: 3px solid #0070c9;
+    display: flex;
+    justify-content: space-between;
+}
+
+.copy-success {
+    color: #28a745;
+    font-size: 14px;
+    margin-left: 10px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.copy-success.visible {
+    opacity: 1;
+}
         .info-card {
             background-color: #e6f7ff;
             border: 1px solid #91d5ff;
@@ -489,6 +573,74 @@
             <h3>Current Schedules</h3>
             <div id="scheduleList"></div>
         </div>
+        <!-- Add this after the existing tabs in the index.html file -->
+<div class="tab" data-tab="templateHelp">Template Help</div>
+
+<!-- Add this tab content after the templatesTab content -->
+<div id="templateHelpTab" class="tab-content">
+    <div class="info-card">
+        <h4>Advanced Template Editing</h4>
+        <p>Templates create predefined schedule patterns based on sleep science. There are three ways to customize templates:</p>
+    </div>
+    
+    <div class="template-help-section">
+        <h3>Option 1: Edit Individual Schedules</h3>
+        <p>After applying templates, you can edit each schedule individually using the "Edit" button. Template-based schedules are marked with a "T" badge.</p>
+        <div class="code-example">
+            1. Apply a template
+            2. Click "Edit" on any schedule
+            3. Adjust values as needed
+            4. Click "Update Schedule"
+        </div>
+    </div>
+    
+    <div class="template-help-section">
+        <h3>Option 2: Edit Template Definitions</h3>
+        <p>You can modify template definitions directly in your Homebridge config.json file. This allows you to create custom templates.</p>
+        <div class="code-example">
+            <p>Templates are defined in the JavaScript code. The default templates are:</p>
+            <pre id="templateCodePreview">// Loading template definitions...</pre>
+            <button id="copyTemplateCode" class="secondary">Copy Template Code</button>
+        </div>
+    </div>
+    
+    <div class="template-help-section">
+        <h3>Option 3: Create Custom Templates</h3>
+        <p>Advanced users can create custom templates by editing the config.json file directly:</p>
+        <ol>
+            <li>Stop Homebridge</li>
+            <li>Open the config.json file (typically in ~/.homebridge/config.json)</li>
+            <li>Find the SleepMeSimple platform configuration</li>
+            <li>Add or modify the "templates" property</li>
+            <li>Save the file and restart Homebridge</li>
+        </ol>
+        <div class="code-example">
+            <p>Example of a custom template in config.json:</p>
+            <pre>{
+  "platform": "SleepMeSimple",
+  "name": "SleepMe Simple",
+  "apiToken": "your-token-here",
+  "unit": "C",
+  "pollingInterval": 90,
+  "enableSchedules": true,
+  "schedules": [...],
+  "templates": {
+    "myCustom": {
+      "name": "My Custom Template", 
+      "description": "Custom temperature profile",
+      "schedules": [
+        { "type": "Weekdays", "time": "22:00", "temperature": 21, "description": "Evening Cool Down" },
+        { "type": "Weekdays", "time": "23:30", "temperature": 19, "description": "Deep Sleep" },
+        { "type": "Weekdays", "time": "03:00", "temperature": 22, "description": "REM Support" },
+        { "type": "Weekdays", "time": "06:30", "temperature": 25, "description": "Warm Hug Wake-up" }
+      ]
+    }
+  }
+}</pre>
+            <button id="copyConfigExample" class="secondary">Copy Config Example</button>
+        </div>
+    </div>
+</div>
     </div>
 
     <!-- Scripts - corrected loading order -->

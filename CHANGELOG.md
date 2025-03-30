@@ -1,4 +1,32 @@
 # Changelog
+## 5.1.0
+### Added
+- **Enhanced Template Management**: Major improvements to template editing capabilities
+  - Added template identification in the UI with a badge for template-derived schedules
+  - Created a new "Template Help" tab with detailed guidance on modifying templates
+  - Added template preview functionality to see schedules before applying
+  - Added template export feature to copy template definitions
+  - Added ability to copy config.json examples for custom templates
+  - Included detailed documentation for direct config.json editing
+  - Added template source tracking to maintain relationships between templates and schedules
+
+### Improved
+- **Template Information**: Added clear identification of which schedules come from templates
+- **Schedule Grouping**: Better visual organization of schedules by type and timing
+- **Schedule Editing**: Preserved template information when editing schedules
+- **Template Selection**: Added descriptions and previews to template selection
+- **User Interface**: Added copy functionality for template definitions and config examples
+- **Documentation**: Added detailed instructions for advanced template customization
+- **Code Structure**: Better organization and error handling for template-related code
+
+### Technical
+- Added template source tracking in schedule objects
+- Enhanced renderScheduleList to show template badges
+- Added template preview functionality
+- Added code snippet copying functionality
+- Added dedicated tab for template editing guidance
+- Enhanced CSS for better template visualization
+- Added clear indication of template-based schedules in the UI
 ## 5.0.6
 
 ### Fixed
