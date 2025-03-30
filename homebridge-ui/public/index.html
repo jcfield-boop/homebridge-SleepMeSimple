@@ -697,31 +697,115 @@
             <span class="dropdown-indicator">▾</span>
         </div>
 
-<!-- Add this tab content after the templatesTab content -->
+        <!-- Add this tab content after the templatesTab content -->
 <div id="templateHelpTab" class="tab-content">
     <div class="info-card">
         <h4>Advanced Template Editing</h4>
         <p>Templates create predefined schedule patterns based on sleep science. There are three ways to customize templates:</p>
     </div>
-   
-    <!-- Replace the existing two-column layout with this -->
-<div class="form-row">
-    <div class="form-group col-md-6">
-        <label for="unit">Temperature Unit:</label>
-        <select id="unit" name="unit">
-            <option value="C">Celsius</option>
-            <option value="F">Fahrenheit</option>
-        </select>
+
+    <div class="template-help-section">
+        <h3>Option 1: Edit Individual Schedules</h3>
+        <p>After applying templates, you can edit each schedule individually using the "Edit" button. Template-based schedules are marked with a "T" badge.</p>
+        <div class="code-example">
+            1. Apply a template
+            2. Click "Edit" on any schedule
+            3. Adjust values as needed
+            4. Click "Update Schedule"
+        </div>
     </div>
-    <div class="form-group col-md-6">
-        <label for="pollingInterval">Polling Interval (seconds):</label>
-        <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
-        <small class="form-text text-muted">Frequency of device status checks (60-300 seconds)</small>
+    
+    <div class="template-help-section">
+        <h3>Option 2: Edit Template Definitions</h3>
+        <p>You can modify template definitions directly in your Homebridge config.json file. This allows you to create custom templates.</p>
+        <div class="code-example">
+            <p>Templates are defined in the JavaScript code. The default templates are:</p>
+            <pre id="templateCodePreview">// Loading template definitions...</pre>
+            <button id="copyTemplateCode" class="secondary">Copy Template Code</button>
+        </div>
+    </div>
+    
+    <div class="template-help-section">
+        <h3>Option 3: Create Custom Templates</h3>
+        <p>Advanced users can create custom templates by editing the config.json file directly:</p>
+        <ol>
+            <li>Stop Homebridge</li>
+            <li>Open the config.json file (typically in ~/.homebridge/config.json)</li>
+            <li>Find the SleepMeSimple platform configuration</li>
+            <li>Add or modify the "templates" property</li>
+            <li>Save the file and restart Homebridge</li>
+        </ol>
+        <div class="code-example">
+            <p>Example of a custom template in config.json:</p>
+            <pre>{
+  "platform": "SleepMeSimple",
+  "name": "SleepMe Simple",
+  "apiToken": "your-token-here",
+  "unit": "C",
+  "pollingInterval": 90,
+  "enableSchedules": true,
+  "schedules": [...],
+  "templates": {
+    "myCustom": {
+      "name": "My Custom Template", 
+      "description": "Custom temperature profile",
+      "schedules": [
+        { "type": "Weekdays", "time": "22:00", "temperature": 21, "description": "Evening Cool Down" },
+        { "type": "Weekdays", "time": "23:30", "temperature": 19, "description": "Deep Sleep" },
+        { "type": "Weekdays", "time": "03:00", "temperature": 22, "description": "REM Support" },
+        { "type": "Weekdays", "time": "06:30", "temperature": 25, "description": "Warm Hug Wake-up" }
+      ]
+    }
+  }
+}</pre>
+            <button id="copyConfigExample" class="secondary">Copy Config Example</button>
+        </div>
     </div>
 </div>
 
-    <div class="section-divider"></div>
+<!-- Advanced Options Tab -->
+<div id="advancedOptionsTab" class="tab-content">
+    <div class="info-card">
+        <h4>Advanced Configuration Options</h4>
+        <p>These settings provide further customization for power users. Most users should leave these at their default values.</p>
+    </div>
+
+    <div class="form-group">
+        <label for="logLevel">Log Level:</label>
+        <select id="logLevel" name="logLevel">
+            <option value="normal">Normal - Standard operation logs</option>
+            <option value="debug">Debug - Additional debugging information</option>
+            <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
+        </select>
+        <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+    </div>
     
+    <div class="collapsible-section">
+        <div class="collapsible-header">
+            <h3>Warm Hug Parameters</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div class="collapsible-content">
+            <p>Configure how the Warm Hug feature gradually increases temperature.</p>
+            
+            <div class="form-group">
+                <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
+                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
+                <small class="form-text text-muted">How quickly temperature increases (0.5-5°C per minute)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="warmHugDuration">Duration (minutes):</label>
+                <input type="number" id="warmHugDuration" min="5" max="30" step="1" value="10">
+                <small class="form-text text-muted">How long the warm-up process takes (5-30 minutes)</small>
+            </div>
+            
+            <div class="form-group">
+                <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
+            </div>
+        </div>
+    </div>
+
     <div class="collapsible-section">
         <div class="collapsible-header">
             <h3>Device-Specific Settings</h3>
@@ -746,33 +830,6 @@
         </div>
     </div>
 </div>
-    
-    <div class="section-divider"></div>
-    
-    <div class="collapsible-section">
-        <div class="collapsible-header">
-            <h3>Device-Specific Settings</h3>
-            <span class="dropdown-indicator">▾</span>
-        </div>
-        <div class="collapsible-content">
-            <p>Configure settings specific to different device models.</p>
-            
-            <div class="form-group">
-                <label for="deviceModel">Device Model:</label>
-                <select id="deviceModel">
-                    <option value="auto">Auto-detect (recommended)</option>
-                    <option value="dockpro">Dock Pro</option>
-                    <option value="ooler">OOLER Sleep System</option>
-                    <option value="chilipad">ChiliPad</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <button type="button" id="saveDeviceSettings" class="btn">Save Device Settings</button>
-            </div>
-        </div>
-    </div>
-}
     
     <div class="template-help-section">
         <h3>Option 1: Edit Individual Schedules</h3>

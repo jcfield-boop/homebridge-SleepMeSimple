@@ -9,7 +9,7 @@
  */
 
 /**
- * Handle collapsible sections throughout the UI
+ * Initialize collapsible sections throughout the UI
  * Manages toggle behavior and visual indicators
  */
 function initializeCollapsibleSections() {
@@ -17,7 +17,11 @@ function initializeCollapsibleSections() {
     const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
     
     collapsibleHeaders.forEach(header => {
-        header.addEventListener('click', function() {
+        // Remove any existing listeners first to avoid duplicates
+        const newHeader = header.cloneNode(true);
+        header.parentNode.replaceChild(newHeader, header);
+        
+        newHeader.addEventListener('click', function() {
             // Toggle the open class on the parent section
             const section = this.closest('.collapsible-section');
             section.classList.toggle('open');
@@ -26,31 +30,46 @@ function initializeCollapsibleSections() {
             const content = section.querySelector('.collapsible-content');
             const isOpen = section.classList.contains('open');
             
-            header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            this.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             content.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            
+            // Also toggle the dropdown indicator
+            const indicator = this.querySelector('.dropdown-indicator');
+            if (indicator) {
+                indicator.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+            }
         });
         
         // Set initial aria attributes
-        const section = header.closest('.collapsible-section');
+        const section = newHeader.closest('.collapsible-section');
         const content = section.querySelector('.collapsible-content');
         
-        header.setAttribute('aria-expanded', 'false');
+        newHeader.setAttribute('aria-expanded', 'false');
         content.setAttribute('aria-hidden', 'true');
     });
     
-    // Open the first section by default in the advanced options
-    const firstSection = document.querySelector('#advancedOptionsTab .collapsible-section');
-    if (firstSection) {
-        firstSection.classList.add('open');
-        
-        const header = firstSection.querySelector('.collapsible-header');
-        const content = firstSection.querySelector('.collapsible-content');
-        
-        if (header && content) {
-            header.setAttribute('aria-expanded', 'true');
-            content.setAttribute('aria-hidden', 'false');
+    // Open the first section by default in the advanced options if we're in that tab
+    const advancedTab = document.getElementById('advancedOptionsTab');
+    if (advancedTab && advancedTab.classList.contains('active')) {
+        const firstSection = advancedTab.querySelector('.collapsible-section');
+        if (firstSection) {
+            firstSection.classList.add('open');
+            
+            const header = firstSection.querySelector('.collapsible-header');
+            const content = firstSection.querySelector('.collapsible-content');
+            const indicator = header?.querySelector('.dropdown-indicator');
+            
+            if (header && content) {
+                header.setAttribute('aria-expanded', 'true');
+                content.setAttribute('aria-hidden', 'false');
+                if (indicator) {
+                    indicator.style.transform = 'rotate(180deg)';
+                }
+            }
         }
     }
+    
+    console.log('Collapsible sections initialized');
 }
 /**
  * Initialize tab handling with improved template code display
