@@ -1,6 +1,18 @@
 # Changelog
-
-## 5.0.2 (current)
+## 5.0.3 (current)
+- **Eliminated Unwanted Toast Notifications**: Completely removed "Fetching server logs" toasts and related error messages
+- **Key Improvements:**
+  - Added early suppression script to index.html that executes before any other code
+  - Identified root cause in Homebridge UI framework's automatic log fetching
+  - Implemented pre-emptive blocking of log-related network requests
+  - Override pushEvent in server.js constructor to prevent automatic events
+  - Fixed race condition where suppression code ran too late in the page load cycle
+  - Implemented immediate toast function overrides before DOM parsing
+  - Maintained existing suppression code as fallback defense
+  - Added detailed console logging for debugging toast suppression
+  - Used strategic constructor modification to stop unwanted events at the source
+  - Preserved all intended functionality while removing unwanted notifications
+## 5.0.2
 - **Fixed Schedule Saving**: Corrected issues with schedule data not being properly saved to config.json
 - **Key Improvements:**
   - Updated config.schema.json to properly define all schedule properties

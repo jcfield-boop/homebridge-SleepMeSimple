@@ -2,6 +2,35 @@
 <html>
 <head>
     <title>SleepMe Simple Configuration</title>
+     <!-- CRITICAL: Immediate log suppression - must be first script -->
+     <script>
+        // Immediate execution - runs before anything else
+        (function() {
+            console.log('Installing earliest possible log suppression');
+            
+            // Block log fetch attempts before they can start
+            if (window.homebridge === undefined) {
+                // Create fake homebridge object if it doesn't exist yet
+                window.homebridge = {};
+            }
+            
+            // Pre-define fetchLogs to do nothing
+            window.homebridge.fetchLogs = function() {
+                console.log('Blocked log fetch attempt');
+                return Promise.resolve([]);
+            };
+            
+            // Create empty toast functions if needed
+            if (!window.homebridge.toast) {
+                window.homebridge.toast = {
+                    success: function() { console.log('Toast suppressed'); },
+                    error: function() { console.log('Toast suppressed'); },
+                    warning: function() { console.log('Toast suppressed'); },
+                    info: function() { console.log('Toast suppressed'); }
+                };
+            }
+        })();
+    </script>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

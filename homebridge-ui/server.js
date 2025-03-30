@@ -9,12 +9,20 @@ const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * SleepMe UI Server class
- * Modified to prevent unnecessary UI message triggering
+ * Modified to prevent automatic log fetching that causes toast notifications
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     // Must call super first to initialize the parent class
     super();
+    
+    // CRITICAL: Immediately override pushEvent to block automatic events
+    // This prevents the parent class from triggering log fetching
+    const originalPushEvent = this.pushEvent;
+    this.pushEvent = function() {
+      console.log('[SleepMeUI] Event push suppressed');
+      return; // Do nothing
+    };
     
     // Register request handlers - ONLY add handlers for explicit UI requests
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
@@ -29,6 +37,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // This must be called after all request handlers are registered
     this.ready();
   }
+  
+  // Rest of your code...
   
   /**
    * Server-side logging that never triggers UI notifications
