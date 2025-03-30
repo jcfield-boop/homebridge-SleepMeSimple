@@ -841,55 +841,6 @@
             4. Click "Update Schedule"
         </div>
     </div>
-    
-    <div class="template-help-section">
-        <h3>Option 2: Edit Template Definitions</h3>
-        <p>You can modify template definitions directly in your Homebridge config.json file. This allows you to create custom templates.</p>
-        <div class="code-example">
-            <p>Templates are defined in the JavaScript code. The default templates are:</p>
-            <pre id="templateCodePreview">// Loading template definitions...</pre>
-            <button id="copyTemplateCode" class="secondary">Copy Template Code</button>
-        </div>
-    </div>
-    
-    <div class="template-help-section">
-        <h3>Option 3: Create Custom Templates</h3>
-        <p>Advanced users can create custom templates by editing the config.json file directly:</p>
-        <ol>
-            <li>Stop Homebridge</li>
-            <li>Open the config.json file (typically in ~/.homebridge/config.json)</li>
-            <li>Find the SleepMeSimple platform configuration</li>
-            <li>Add or modify the "templates" property</li>
-            <li>Save the file and restart Homebridge</li>
-        </ol>
-        <div class="code-example">
-            <p>Example of a custom template in config.json:</p>
-            <pre>{
-  "platform": "SleepMeSimple",
-  "name": "SleepMe Simple",
-  "apiToken": "your-token-here",
-  "unit": "C",
-  "pollingInterval": 90,
-  "enableSchedules": true,
-  "schedules": [...],
-  "templates": {
-    "myCustom": {
-      "name": "My Custom Template", 
-      "description": "Custom temperature profile",
-      "schedules": [
-        { "type": "Weekdays", "time": "22:00", "temperature": 21, "description": "Evening Cool Down" },
-        { "type": "Weekdays", "time": "23:30", "temperature": 19, "description": "Deep Sleep" },
-        { "type": "Weekdays", "time": "03:00", "temperature": 22, "description": "REM Support" },
-        { "type": "Weekdays", "time": "06:30", "temperature": 25, "description": "Warm Hug Wake-up" }
-      ]
-    }
-  }
-}</pre>
-            <button id="copyConfigExample" class="secondary">Copy Config Example</button>
-        </div>
-    </div>
-</div>
-    </div>
 
     <!-- Scripts - corrected loading order -->
     <script src="js/ui-validation-functions.js"></script>
@@ -907,7 +858,7 @@
                 <button id="confirmOk" class="danger">Confirm</button>
             </div>
         </div>
-    </div>
+    </div>}
 
 </body>
 </html>
