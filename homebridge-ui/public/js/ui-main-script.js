@@ -52,7 +52,77 @@ function initializeCollapsibleSections() {
         }
     }
 }
+/**
+ * Initialize tab handling with improved template code display
+ */
+function initializeTabs() {
+    const tabContainer = document.querySelector('.tabs');
+    if (tabContainer) {
+        tabContainer.addEventListener('click', (event) => {
+            // Find the closest tab element (handles clicks on child elements)
+            const tabElement = event.target.closest('.tab');
+            
+            if (tabElement) {
+                const tabId = tabElement.getAttribute('data-tab');
+                
+                // Remove active class from all tabs and contents
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to selected tab and content
+                tabElement.classList.add('active');
+                const tabContent = document.getElementById(tabId + 'Tab');
+                if (tabContent) {
+                    tabContent.classList.add('active');
+                    
+                    // Special handling for template help tab
+                    if (tabId === 'templateHelp') {
+                        populateTemplateCodePreview();
+                    }
+                    
+                    // Load advanced settings when that tab is selected
+                    if (tabId === 'advancedOptions') {
+                        loadAdvancedSettings();
+                        // Ensure collapsible sections are properly initialized
+                        setTimeout(() => {
+                            initializeCollapsibleSections();
+                        }, 100);
+                    }
+                } else {
+                    console.warn(`Tab content for ${tabId} not found`);
+                }
+            }
+        });
+    }
+}
 
+/**
+ * Populate template code preview with template data
+ */
+function populateTemplateCodePreview() {
+    const templateCodePreview = document.getElementById('templateCodePreview');
+    if (!templateCodePreview) {
+        console.warn('Template code preview element not found');
+        return;
+    }
+    
+    try {
+        // Make sure templates are defined
+        if (typeof templates === 'undefined' || templates === null) {
+            console.error('Templates object is not defined');
+            templateCodePreview.textContent = '// Templates not available';
+            return;
+        }
+        
+        // Format templates nicely for display
+        const templateJson = JSON.stringify(templates, null, 2);
+        templateCodePreview.textContent = templateJson;
+        console.log('Template code preview populated successfully');
+    } catch (error) {
+        console.error('Error populating template code preview:', error);
+        templateCodePreview.textContent = '// Error loading template definitions';
+    }
+}
 /**
  * Save Warm Hug parameters
  * Updates configuration with user-defined Warm Hug settings

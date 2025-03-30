@@ -1,5 +1,27 @@
 # Changelog
+## 5.3.0
+### Improved
+- **UI Layout Optimization**: Combined temperature unit and polling interval fields onto one line for better space efficiency
+- **Advanced Options Restructuring**: Moved Log Level setting into the Advanced Options section
+- **Visual Improvements**:
+  - Enlarged dropdown carets for better visibility
+  - Fixed collapsible section behavior in Advanced Options
+  - Improved responsive design for various screen sizes
+  - Enhanced form layout with better spacing and alignment
+  
+### Fixed
+- **Template Code Display**: Fixed issue where template code preview showed "Loading..." instead of actual template definitions
+- **Dropdown Behavior**: Corrected expansion/collapse functionality in Advanced Options sections
+- **Accessibility**: Added proper ARIA attributes to collapsible sections
+- **Console Errors**: Fixed JavaScript errors related to collapsible sections
+- **Mobile Experience**: Improved layout responsiveness on smaller screens
 
+### Technical
+- **Code Structure**: Better organized code with clearer section separation
+- **Event Handling**: Improved tab navigation with proper state management
+- **CSS Architecture**: Enhanced stylesheet with more consistent class naming
+- **Debug Logging**: Added detailed console logs for easier troubleshooting
+- **Performance**: Optimized collapsible section initialization
 ## 5.2.0
 ### Added
 - **Advanced Options Section**: New collapsible UI section for advanced configuration

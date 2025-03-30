@@ -292,7 +292,7 @@
 }
 
 .dropdown-indicator {
-    font-size: 12px;
+    font-size: 18px;
     transition: transform 0.3s;
     margin-left: 5px;
 }
@@ -300,14 +300,25 @@
 .tab.active .dropdown-indicator {
     transform: rotate(180deg);
 }
-
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: -15px;
+    margin-left: -15px;
+}
 .collapsible-section {
     margin-bottom: 20px;
     border: 1px solid #eee;
     border-radius: 4px;
     overflow: hidden;
 }
-
+.col-md-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+    padding-right: 15px;
+    padding-left: 15px;
+    box-sizing: border-box;
+}
 .collapsible-header {
     display: flex;
     justify-content: space-between;
@@ -364,18 +375,10 @@
 
 /* Add responsive improvements */
 @media (max-width: 768px) {
-    .tab {
-        padding: 8px 12px;
+    .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
     }
-    
-    .collapsible-header {
-        padding: 10px 12px;
-    }
-    
-    .collapsible-content {
-        padding: 12px;
-    }
-}
 .template-schedule {
     border-left: 3px solid #0070c9;
 }
@@ -542,26 +545,20 @@
                 <small id="apiTokenHelp" class="form-text text-muted">Your SleepMe API token. Obtain this from your account at sleep.me</small>
             </div>
             
-            <div class="form-group">
-                <label for="unit">Temperature Unit:</label>
-                <select id="unit" name="unit">
-                    <option value="C">Celsius</option>
-                    <option value="F">Fahrenheit</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="pollingInterval">Polling Interval (seconds):</label>
-                <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
-            </div>
-            
-            <div class="form-group">
-                <label for="logLevel">Log Level:</label>
-                <select id="logLevel" name="logLevel">
-                    <option value="normal">Normal</option>
-                    <option value="debug">Debug</option>
-                    <option value="verbose">Verbose</option>
-                </select>
+            <!-- Combined row for temperature unit and polling interval -->
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="unit">Temperature Unit:</label>
+                    <select id="unit" name="unit">
+                        <option value="C">Celsius</option>
+                        <option value="F">Fahrenheit</option>
+                    </select>
+                </div>
+                
+                <div class="form-group col-md-6">
+                    <label for="pollingInterval">Polling Interval (seconds):</label>
+                    <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
+                </div>
             </div>
             
             <div class="form-group">
@@ -707,10 +704,28 @@
         <p>Templates create predefined schedule patterns based on sleep science. There are three ways to customize templates:</p>
     </div>
     <!-- Add this Advanced Options tab content after the templateHelpTab content -->
-<div id="advancedOptionsTab" class="tab-content">
+    <div id="advancedOptionsTab" class="tab-content">
     <div class="info-card">
         <h4>Advanced Configuration Options</h4>
         <p>Configure advanced settings for your SleepMe device integration. These settings allow you to fine-tune the behavior of special features.</p>
+    </div>
+    
+    <div class="collapsible-section">
+        <div class="collapsible-header">
+            <h3>Logging Options</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="form-group">
+                <label for="logLevel">Log Level:</label>
+                <select id="logLevel" name="logLevel">
+                    <option value="normal">Normal</option>
+                    <option value="debug">Debug</option>
+                    <option value="verbose">Verbose</option>
+                </select>
+                <small class="form-text text-muted">Controls the verbosity of logs in Homebridge</small>
+            </div>
+        </div>
     </div>
     
     <div class="collapsible-section">
@@ -738,6 +753,33 @@
             </div>
         </div>
     </div>
+    
+    <div class="section-divider"></div>
+    
+    <div class="collapsible-section">
+        <div class="collapsible-header">
+            <h3>Device-Specific Settings</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div class="collapsible-content">
+            <p>Configure settings specific to different device models.</p>
+            
+            <div class="form-group">
+                <label for="deviceModel">Device Model:</label>
+                <select id="deviceModel">
+                    <option value="auto">Auto-detect (recommended)</option>
+                    <option value="dockpro">Dock Pro</option>
+                    <option value="ooler">OOLER Sleep System</option>
+                    <option value="chilipad">ChiliPad</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <button type="button" id="saveDeviceSettings" class="btn">Save Device Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
     
     <div class="section-divider"></div>
     
