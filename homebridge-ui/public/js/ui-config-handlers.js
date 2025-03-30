@@ -262,6 +262,7 @@ function populateFormFields(config) {
 }
 /**
  * Save configuration to Homebridge
+ * Fixed to ensure schedules are properly saved
  * @returns {Promise<void>}
  */
 window.saveConfig = async function() {
@@ -310,7 +311,7 @@ window.saveConfig = async function() {
       return;
     }
     
-    // Create updated config - critical to follow expected schema format
+    // Create updated config - follow exact structure from schema
     const config = {
       platform: 'SleepMeSimple',
       name: 'SleepMe Simple',
@@ -324,58 +325,77 @@ window.saveConfig = async function() {
     console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
     
     // Add schedules if enabled
-    if (enableSchedules && window.schedules && window.schedules.length > 0) {
-      // Clean schedules for storage - ensure proper format
+    if (enableSchedules && Array.isArray(window.schedules)) {
+      // Clean schedules for storage - strip UI-specific properties
       config.schedules = window.schedules.map(schedule => {
-        // Create a clean schedule object
+        // Create a clean schedule object with only schema-relevant properties
         const cleanSchedule = {
-          type: schedule.type,
-          time: schedule.time,
-          temperature: parseFloat(schedule.temperature)
+          type: String(schedule.type || ''),
+          time: String(schedule.time || ''),
+          temperature: Number(schedule.temperature || 0)
         };
         
-        // Add day property for Specific Day schedules
+        // Add day for Specific Day schedules only if present
         if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
           cleanSchedule.day = schedule.day;
         }
         
-        // Add optional description
+        // Add description if present (for Warm Hug, etc.)
         if (schedule.description) {
-          cleanSchedule.description = schedule.description;
+          cleanSchedule.description = String(schedule.description);
         }
         
         return cleanSchedule;
       });
       
-      console.log(`Adding ${config.schedules.length} schedules to config`);
+      console.log(`Adding ${config.schedules.length} schedules to config:`, config.schedules);
+    } else {
+      // Always explicitly set schedules to empty array when disabled
+      config.schedules = [];
+      console.log('Schedules disabled, setting empty array');
     }
     
-    // Find current config position and update
+    // Find current config position or create new entry
+    let updatedConfig;
     const existingConfigIndex = Array.isArray(pluginConfig) ? 
       pluginConfig.findIndex(cfg => cfg && cfg.platform === 'SleepMeSimple') : -1;
-
-    let updatedConfig;
+    
     if (existingConfigIndex >= 0) {
-      // Replace existing config
+      // Create a fresh array with the updated config
       updatedConfig = [...pluginConfig];
       updatedConfig[existingConfigIndex] = config;
       console.log(`Updating existing config at index ${existingConfigIndex}`);
     } else {
-      // Add new config to array
+      // Add new config
       updatedConfig = Array.isArray(pluginConfig) ? [...pluginConfig, config] : [config];
-      console.log('Adding new config to config array');
+      console.log('Adding new config entry');
     }
     
-    // First update plugin config - this is critical
-    console.log('Updating plugin config with:', updatedConfig);
+    // Double-check structure before saving
+    console.log('Final config structure before save:', 
+      JSON.stringify(updatedConfig, (k, v) => k === 'apiToken' ? '[REDACTED]' : v));
+    
     try {
-      // IMPORTANT: First update the config
+      // CRITICAL: First update plugin config in memory
       await homebridge.updatePluginConfig(updatedConfig);
-      console.log('Plugin config updated successfully, now saving to disk');
+      console.log('Plugin config updated in memory');
       
-      // IMPORTANT: Then save to disk
+      // Then save to disk
       await homebridge.savePluginConfig();
       console.log('Config saved to disk successfully');
+      
+      // Verify save was successful
+      const verifyConfig = await homebridge.getPluginConfig();
+      const verifyPlatform = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
+      
+      if (verifyPlatform && verifyPlatform.enableSchedules && 
+          Array.isArray(verifyPlatform.schedules)) {
+        console.log(`Verification: ${verifyPlatform.schedules.length} schedules saved`);
+      } else if (verifyPlatform) {
+        console.log('Verification: Platform saved but schedules not enabled');
+      } else {
+        console.warn('Verification: Platform config not found after save!');
+      }
       
       // Update status element with success message
       const statusElement = document.getElementById('status');
@@ -385,7 +405,7 @@ window.saveConfig = async function() {
         statusElement.classList.remove('hidden');
       }
     } catch (updateError) {
-      console.error('Error updating or saving config:', updateError);
+      console.error('Error saving config:', updateError);
       
       // Update status element
       const statusElement = document.getElementById('status');

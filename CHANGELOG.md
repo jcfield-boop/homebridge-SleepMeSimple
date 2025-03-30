@@ -1,5 +1,21 @@
 # Changelog
-## 5.0.0 (Current)
+## 5.0.1 (Current)
+Server.js Changes:
+
+Removed All Event Pushing: Eliminated any pushEvent calls to prevent toast notifications
+Console-Only Logging: Replaced all UI notifications with console-only logging
+Removed Automatic Operations: Server now only responds to explicit UI requests
+Simplified Response Format: Ensured responses only contain necessary data
+
+saveConfig Function Changes:
+
+Explicit Schedule Formatting: Added strict formatting to ensure schedule data matches schema
+Type Enforcement: Added explicit type conversions for all values
+Always Set Schedules Array: Ensures schedules property is always defined
+Verification After Save: Added verification step to confirm save was successful
+Improved Structure Handling: Better handling of config array structure
+Detailed Logging: Added comprehensive logging for debugging
+## 5.0.0 
 - **Complete Architectural Overhaul**: Significant code restructuring and modernization
 - **Key Improvements:**
   - Adopted module pattern for better encapsulation and state management

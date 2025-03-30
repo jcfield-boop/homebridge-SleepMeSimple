@@ -9,26 +9,21 @@ const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * SleepMe UI Server class
- * Handles server-side operations for the plugin's custom UI
+ * Modified to prevent unnecessary UI message triggering
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     // Must call super first to initialize the parent class
     super();
     
-    // Register request handlers
+    // Register request handlers - ONLY add handlers for explicit UI requests
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
     
-    // Log initialization
-    this.log('SleepMe UI Server initialized');
+    // Server-side logging that never triggers UI notifications
+    console.log('[SleepMeUI] Server initialized');
     
-    // Immediately check the config file but don't push events to UI
-    setTimeout(() => {
-      this.checkConfigAndPush().catch(err => 
-        this.logError('Failed initial config check', err)
-      );
-    }, 1000);
+    // NO automatic config check - only respond to direct requests
     
     // IMPORTANT: Signal that the server is ready to accept requests
     // This must be called after all request handlers are registered
@@ -41,38 +36,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    * @param {string} level - Log level
    */
   log(message, level = 'info') {
-    // Log to console only - no events pushed to UI
+    // Log to console only - NO events pushed to UI
     if (level === 'error') {
       console.error(`[SleepMeUI] ${message}`);
     } else if (level === 'warn') {
       console.warn(`[SleepMeUI] ${message}`);
     } else {
       console.log(`[SleepMeUI] ${message}`);
-    }
-  }
-  
-  /**
-   * Server-side error logging that never triggers UI notifications
-   * @param {string} message - Error message
-   * @param {Error} error - Error object
-   */
-  logError(message, error) {
-    console.error(`[SleepMeUI Error] ${message}:`, error);
-  }
-  
-  /**
-   * Check the config file and push status to UI
-   * This helps verify if we can read the config.json file directly
-   */
-  async checkConfigAndPush() {
-    try {
-      const configResult = await this.checkConfigFile();
-      // Only log to console, don't push events that might trigger UI notifications
-      console.log('Config check result:', configResult);
-      return configResult;
-    } catch (error) {
-      console.error('Failed to check config file', error);
-      return { success: false, error: error.message };
     }
   }
   
@@ -149,7 +119,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         path: configPath
       };
     } catch (error) {
-      this.logError(`Error checking config file: ${error.message}`, error);
+      this.log(`Error checking config file: ${error.message}`, 'error');
       return {
         success: false,
         error: error.message,
@@ -221,7 +191,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const statusCode = error.response?.status;
       const errorMessage = error.response?.data?.message || error.message;
       
-      this.logError(`API connection test failed with status ${statusCode}`, error);
+      this.log(`API connection test failed with status ${statusCode}`, 'error');
       
       return {
         success: false,
