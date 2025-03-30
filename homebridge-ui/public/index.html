@@ -262,7 +262,120 @@
     margin-left: 5px;
     cursor: help;
 }
+.tab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-right: 5px;
+    border-radius: 4px 4px 0 0;
+    transition: background-color 0.2s;
+}
 
+.tab:hover {
+    background-color: #f8f9fa;
+}
+
+.tab.active {
+    background-color: #fff;
+    border-color: #ddd;
+    border-bottom-color: #fff;
+    margin-bottom: -1px;
+    font-weight: bold;
+}
+
+.tab-title {
+    flex: 1;
+}
+
+.dropdown-indicator {
+    font-size: 12px;
+    transition: transform 0.3s;
+    margin-left: 5px;
+}
+
+.tab.active .dropdown-indicator {
+    transform: rotate(180deg);
+}
+
+.collapsible-section {
+    margin-bottom: 20px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+    background-color: #e9ecef;
+}
+
+.collapsible-header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.collapsible-content {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: none;
+}
+
+.collapsible-section.open .collapsible-content {
+    display: block;
+}
+
+.collapsible-section.open .dropdown-indicator {
+    transform: rotate(180deg);
+}
+
+.btn {
+    background-color: #0070c9;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-right: 5px;
+}
+
+.btn:hover {
+    background-color: #00559b;
+}
+
+.form-text {
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+/* Add responsive improvements */
+@media (max-width: 768px) {
+    .tab {
+        padding: 8px 12px;
+    }
+    
+    .collapsible-header {
+        padding: 10px 12px;
+    }
+    
+    .collapsible-content {
+        padding: 12px;
+    }
+}
 .template-schedule {
     border-left: 3px solid #0070c9;
 }
@@ -469,10 +582,14 @@
         <h2>Temperature Schedules</h2>
         
         <div class="tabs">
-            <div class="tab active" data-tab="manual">Manual Schedule</div>
-            <div class="tab" data-tab="templates">Schedule Templates</div>
+            <div class="tab active" data-tab="manual">
+                <span class="tab-title">Manual Schedule</span>
+            </div>
+            <div class="tab" data-tab="templates">
+                <span class="tab-title">Schedule Templates</span>
+            </div>
+            <!-- Our new tabs are already updated -->
         </div>
-        
         <!-- Manual Schedule Tab -->
         <div id="manualTab" class="tab-content active">
             <p>Create schedules to automatically adjust your device temperature.</p>
@@ -574,7 +691,14 @@
             <div id="scheduleList"></div>
         </div>
         <!-- Add this after the existing tabs in the index.html file -->
-<div class="tab" data-tab="templateHelp">Template Help</div>
+        <div class="tab" data-tab="templateHelp">
+            <span class="tab-title">Template Help</span>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div class="tab" data-tab="advancedOptions">
+            <span class="tab-title">Advanced Options</span>
+            <span class="dropdown-indicator">▾</span>
+        </div>
 
 <!-- Add this tab content after the templatesTab content -->
 <div id="templateHelpTab" class="tab-content">
@@ -582,6 +706,65 @@
         <h4>Advanced Template Editing</h4>
         <p>Templates create predefined schedule patterns based on sleep science. There are three ways to customize templates:</p>
     </div>
+    <!-- Add this Advanced Options tab content after the templateHelpTab content -->
+<div id="advancedOptionsTab" class="tab-content">
+    <div class="info-card">
+        <h4>Advanced Configuration Options</h4>
+        <p>Configure advanced settings for your SleepMe device integration. These settings allow you to fine-tune the behavior of special features.</p>
+    </div>
+    
+    <div class="collapsible-section">
+        <div class="collapsible-header">
+            <h3>Warm Hug Wake-up Parameters</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div class="collapsible-content">
+            <p>The Warm Hug feature gradually increases temperature over time for a gentle wake-up experience. Customize how it works below:</p>
+            
+            <div class="form-group">
+                <label for="warmHugIncrement">Temperature Increment (°C per minute):</label>
+                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.5" value="2">
+                <small class="form-text text-muted">How quickly the temperature increases each minute during warm-up (0.5-5°C)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="warmHugDuration">Duration (minutes):</label>
+                <input type="number" id="warmHugDuration" min="5" max="30" step="1" value="10">
+                <small class="form-text text-muted">How long before the scheduled time to start warming up (5-30 minutes)</small>
+            </div>
+            
+            <div class="form-group">
+                <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section-divider"></div>
+    
+    <div class="collapsible-section">
+        <div class="collapsible-header">
+            <h3>Device-Specific Settings</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div class="collapsible-content">
+            <p>Configure settings specific to different device models.</p>
+            
+            <div class="form-group">
+                <label for="deviceModel">Device Model:</label>
+                <select id="deviceModel">
+                    <option value="auto">Auto-detect (recommended)</option>
+                    <option value="dockpro">Dock Pro</option>
+                    <option value="ooler">OOLER Sleep System</option>
+                    <option value="chilipad">ChiliPad</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <button type="button" id="saveDeviceSettings" class="btn">Save Device Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
     
     <div class="template-help-section">
         <h3>Option 1: Edit Individual Schedules</h3>

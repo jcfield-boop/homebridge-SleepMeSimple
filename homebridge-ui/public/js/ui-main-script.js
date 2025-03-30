@@ -8,6 +8,209 @@
  * and improve code organization
  */
 
+/**
+ * Handle collapsible sections throughout the UI
+ * Manages toggle behavior and visual indicators
+ */
+function initializeCollapsibleSections() {
+    // Initialize all collapsible headers
+    const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
+    
+    collapsibleHeaders.forEach(header => {
+        header.addEventListener('click', function() {
+            // Toggle the open class on the parent section
+            const section = this.closest('.collapsible-section');
+            section.classList.toggle('open');
+            
+            // Update aria attributes for accessibility
+            const content = section.querySelector('.collapsible-content');
+            const isOpen = section.classList.contains('open');
+            
+            header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            content.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        });
+        
+        // Set initial aria attributes
+        const section = header.closest('.collapsible-section');
+        const content = section.querySelector('.collapsible-content');
+        
+        header.setAttribute('aria-expanded', 'false');
+        content.setAttribute('aria-hidden', 'true');
+    });
+    
+    // Open the first section by default in the advanced options
+    const firstSection = document.querySelector('#advancedOptionsTab .collapsible-section');
+    if (firstSection) {
+        firstSection.classList.add('open');
+        
+        const header = firstSection.querySelector('.collapsible-header');
+        const content = firstSection.querySelector('.collapsible-content');
+        
+        if (header && content) {
+            header.setAttribute('aria-expanded', 'true');
+            content.setAttribute('aria-hidden', 'false');
+        }
+    }
+}
+
+/**
+ * Save Warm Hug parameters
+ * Updates configuration with user-defined Warm Hug settings
+ */
+async function saveWarmHugParameters() {
+    try {
+        const incrementInput = document.getElementById('warmHugIncrement');
+        const durationInput = document.getElementById('warmHugDuration');
+        
+        if (!incrementInput || !durationInput) {
+            console.error('Warm Hug parameter inputs not found');
+            return;
+        }
+        
+        // Validate inputs
+        const increment = parseFloat(incrementInput.value);
+        const duration = parseInt(durationInput.value);
+        
+        if (isNaN(increment) || increment < 0.5 || increment > 5) {
+            logMessage('error', 'Increment must be between 0.5 and 5°C per minute');
+            return;
+        }
+        
+        if (isNaN(duration) || duration < 5 || duration > 30) {
+            logMessage('error', 'Duration must be between 5 and 30 minutes');
+            return;
+        }
+        
+        // Get current config
+        const pluginConfig = await homebridge.getPluginConfig();
+        let config = findPlatformConfig(pluginConfig);
+        
+        if (!config) {
+            console.error('Platform configuration not found');
+            return;
+        }
+        
+        // Ensure advanced section exists
+        if (!config.advanced) {
+            config.advanced = {};
+        }
+        
+        // Update Warm Hug parameters
+        config.advanced.warmHugIncrement = increment;
+        config.advanced.warmHugDuration = duration;
+        
+        // Update config in memory
+        await homebridge.updatePluginConfig(pluginConfig);
+        
+        // Log success
+        logMessage('success', 'Warm Hug parameters saved successfully');
+    } catch (error) {
+        console.error('Error saving Warm Hug parameters:', error);
+        logMessage('error', `Error saving parameters: ${error.message}`);
+    }
+}
+
+/**
+ * Save device-specific settings
+ * Updates configuration with user-defined device settings
+ */
+async function saveDeviceSettings() {
+    try {
+        const deviceModelSelect = document.getElementById('deviceModel');
+        
+        if (!deviceModelSelect) {
+            console.error('Device model select not found');
+            return;
+        }
+        
+        // Get selected model
+        const deviceModel = deviceModelSelect.value;
+        
+        // Get current config
+        const pluginConfig = await homebridge.getPluginConfig();
+        let config = findPlatformConfig(pluginConfig);
+        
+        if (!config) {
+            console.error('Platform configuration not found');
+            return;
+        }
+        
+        // Ensure advanced section exists
+        if (!config.advanced) {
+            config.advanced = {};
+        }
+        
+        // Update device model preference
+        config.advanced.deviceModel = deviceModel;
+        
+        // Update config in memory
+        await homebridge.updatePluginConfig(pluginConfig);
+        
+        // Log success
+        logMessage('success', 'Device settings saved successfully');
+    } catch (error) {
+        console.error('Error saving device settings:', error);
+        logMessage('error', `Error saving settings: ${error.message}`);
+    }
+}
+
+/**
+ * Find the SleepMeSimple platform config in the Homebridge config
+ * @param {Array} pluginConfig - The plugin configuration array
+ * @returns {Object|null} - The platform configuration or null if not found
+ */
+function findPlatformConfig(pluginConfig) {
+    if (!Array.isArray(pluginConfig)) {
+        return null;
+    }
+    
+    return pluginConfig.find(cfg => cfg && cfg.platform === 'SleepMeSimple') || null;
+}
+
+/**
+ * Load advanced settings from config
+ * Populates form fields with current configuration values
+ */
+async function loadAdvancedSettings() {
+    try {
+        // Get form elements
+        const incrementInput = document.getElementById('warmHugIncrement');
+        const durationInput = document.getElementById('warmHugDuration');
+        const deviceModelSelect = document.getElementById('deviceModel');
+        
+        if (!incrementInput || !durationInput || !deviceModelSelect) {
+            console.warn('Some advanced settings form elements not found');
+            return;
+        }
+        
+        // Get current config
+        const pluginConfig = await homebridge.getPluginConfig();
+        const config = findPlatformConfig(pluginConfig);
+        
+        if (!config) {
+            console.warn('Platform configuration not found');
+            return;
+        }
+        
+        // Set values if they exist in config
+        if (config.advanced) {
+            if (config.advanced.warmHugIncrement !== undefined) {
+                incrementInput.value = config.advanced.warmHugIncrement;
+            }
+            
+            if (config.advanced.warmHugDuration !== undefined) {
+                durationInput.value = config.advanced.warmHugDuration;
+            }
+            
+            if (config.advanced.deviceModel) {
+                deviceModelSelect.value = config.advanced.deviceModel;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading advanced settings:', error);
+    }
+}
+
 // Main application module using IIFE pattern for encapsulation
 const SleepMeUI = (function() {
     // Private module variables
@@ -635,34 +838,41 @@ const SleepMeUI = (function() {
              });
          }
       
-         // Tab navigation - use event delegation for better performance
-         const tabContainer = document.querySelector('.tabs');
-         if (tabContainer) {
-             tabContainer.addEventListener('click', (event) => {
-                 // Check if a tab was clicked
-                 if (event.target.classList.contains('tab')) {
-                     const tabId = event.target.getAttribute('data-tab');
-                     
-                     // Remove active class from all tabs and contents
-                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                     
-                     // Add active class to selected tab and content
-                     event.target.classList.add('active');
-                     const tabContent = document.getElementById(tabId + 'Tab');
-                     if (tabContent) {
-                         tabContent.classList.add('active');
-                         
-                         // Initialize template code preview if needed
-                         if (tabId === 'templateHelp' && elements.templateCodePreview) {
-                             elements.templateCodePreview.textContent = JSON.stringify(templates, null, 2);
-                         }
-                     } else {
-                         console.warn(`Tab content for ${tabId} not found`);
-                     }
-                 }
-             });
-         }
+// Tab navigation - use event delegation for better performance
+const tabContainer = document.querySelector('.tabs');
+if (tabContainer) {
+    tabContainer.addEventListener('click', (event) => {
+        // Find the closest tab element (handles clicks on child elements)
+        const tabElement = event.target.closest('.tab');
+        
+        if (tabElement) {
+            const tabId = tabElement.getAttribute('data-tab');
+            
+            // Remove active class from all tabs and contents
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            // Add active class to selected tab and content
+            tabElement.classList.add('active');
+            const tabContent = document.getElementById(tabId + 'Tab');
+            if (tabContent) {
+                tabContent.classList.add('active');
+                
+                // Initialize template code preview if needed
+                if (tabId === 'templateHelp' && elements.templateCodePreview) {
+                    elements.templateCodePreview.textContent = JSON.stringify(templates, null, 2);
+                }
+                
+                // Load advanced settings when that tab is selected
+                if (tabId === 'advancedOptions') {
+                    setTimeout(loadAdvancedSettings, 100);
+                }
+            } else {
+                console.warn(`Tab content for ${tabId} not found`);
+            }
+        }
+    });
+}
       
          // Initialize modal event listeners
          if (elements.confirmModal) {
@@ -674,7 +884,28 @@ const SleepMeUI = (function() {
                  }
              });
          }
-      
+      // Initialize collapsible sections
+initializeCollapsibleSections();
+
+// Add save button handlers for advanced options
+const saveWarmHugBtn = document.getElementById('saveWarmHugParams');
+if (saveWarmHugBtn) {
+    saveWarmHugBtn.addEventListener('click', saveWarmHugParameters);
+}
+
+const saveDeviceSettingsBtn = document.getElementById('saveDeviceSettings');
+if (saveDeviceSettingsBtn) {
+    saveDeviceSettingsBtn.addEventListener('click', saveDeviceSettings);
+}
+
+// Load advanced settings when the advanced tab is selected
+const advancedTab = document.querySelector('.tab[data-tab="advancedOptions"]');
+if (advancedTab) {
+    advancedTab.addEventListener('click', () => {
+        // Small delay to allow tab content to be displayed
+        setTimeout(loadAdvancedSettings, 100);
+    });
+}
          return true;
      } catch (error) {
          console.error('Error setting up event listeners:', error);
@@ -880,10 +1111,17 @@ const SleepMeUI = (function() {
                   console.error('Error initializing template code preview:', templateError.message);
               }
           }
-          
-          // Mark as initialized
-          state.initialized = true;
-          console.log('SleepMe Simple UI initialization complete');
+// Initialize collapsible sections
+try {
+    initializeCollapsibleSections();
+    console.log('Collapsible sections initialized');
+} catch (error) {
+    console.error('Error initializing collapsible sections:', error);
+}
+
+// Mark as initialized
+state.initialized = true;
+console.log('SleepMe Simple UI initialization complete');
       } catch (error) {
           // Main try-catch block for initApp
           console.error('Unhandled error during initialization:', error.message);

@@ -1,4 +1,31 @@
 # Changelog
+
+## 5.2.0
+### Added
+- **Advanced Options Section**: New collapsible UI section for advanced configuration
+  - Added dedicated tab with visual dropdown indicators
+  - Implemented Warm Hug parameter configuration (temperature increment and duration)
+  - Added device-specific settings for different SleepMe models
+  - Created a more intuitive collapsible section design
+
+### Improved
+- **Template Help UI**: Enhanced with better visual indicators for dropdown functionality
+  - Added arrow indicators that rotate to show open/closed state
+  - Improved section header styling for better visibility
+  - Added clear visual feedback for interactive elements
+  - Made tab navigation more intuitive with consistent styling
+- **Responsive Design**: Improved mobile experience with better padding and spacing
+- **Accessibility**: Added aria attributes to collapsible sections
+- **Configuration Management**: Better handling of advanced configuration options
+- **User Experience**: More intuitive UI for navigating between sections
+
+### Technical
+- Added collapsible section component with proper event handling
+- Implemented configuration persistence for advanced settings
+- Created form validation for Warm Hug parameters
+- Enhanced tab navigation with proper state indicators
+- Improved error handling for configuration operations
+- Added responsive styling for better mobile experience
 ## 5.1.0
 ### Added
 - **Enhanced Template Management**: Major improvements to template editing capabilities
