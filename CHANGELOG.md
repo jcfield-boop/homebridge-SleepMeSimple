@@ -1,4 +1,13 @@
 # Changelog
+## 4.1.1 (Current)
+- **Fixed Edit Button Functionality**: Repaired the schedule editing feature
+- **Key Improvements:**
+  - Fixed logical error in handleScheduleAction function that prevented editing schedules
+  - Properly implemented update functionality for existing schedules
+  - Improved edit mode handling with correct state transitions
+  - Enhanced error handling for schedule operations
+  - Fixed structural issues in schedule handler code
+  - Ensured proper exit from edit mode after successful updates
 ## 4.0.13 (In Development)
 - **Fixed Toast Notification Leak**: Implemented immediate toast suppression before any code executes
 - **Fixed Modal Not Appearing**: Complete rewrite of modal display code with multiple reliability techniques
