@@ -1,5 +1,17 @@
 # Changelog
-## 5.0.1 (Current)
+
+## 5.0.2 (current)
+- **Fixed Schedule Saving**: Corrected issues with schedule data not being properly saved to config.json
+- **Key Improvements:**
+  - Updated config.schema.json to properly define all schedule properties
+  - Added "Warm Hug" to the schedule types enum in the schema
+  - Improved schedule data formatting in saveConfig function
+  - Added explicit type conversions for schedule properties
+  - Enhanced verification after save to confirm schedules were saved
+  - Added detailed logging throughout the save process
+  - Ensured proper structure of schedules array even when empty
+  - Fixed unit handling in schedules
+## 5.0.1
 Server.js Changes:
 
 Removed All Event Pushing: Eliminated any pushEvent calls to prevent toast notifications

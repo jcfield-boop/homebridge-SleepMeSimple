@@ -260,11 +260,6 @@ function populateFormFields(config) {
     console.warn('updateTemperatureValidation function not available');
   }
 }
-/**
- * Save configuration to Homebridge
- * Fixed to ensure schedules are properly saved
- * @returns {Promise<void>}
- */
 window.saveConfig = async function() {
   try {
     window.showLoading('Saving configuration...');
@@ -324,29 +319,35 @@ window.saveConfig = async function() {
     
     console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
     
-    // Add schedules if enabled
+    // Add schedules if enabled - CRITICAL SECTION
     if (enableSchedules && Array.isArray(window.schedules)) {
-      // Clean schedules for storage - strip UI-specific properties
-      config.schedules = window.schedules.map(schedule => {
-        // Create a clean schedule object with only schema-relevant properties
-        const cleanSchedule = {
-          type: String(schedule.type || ''),
-          time: String(schedule.time || ''),
-          temperature: Number(schedule.temperature || 0)
-        };
-        
-        // Add day for Specific Day schedules only if present
-        if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-          cleanSchedule.day = schedule.day;
-        }
-        
-        // Add description if present (for Warm Hug, etc.)
-        if (schedule.description) {
-          cleanSchedule.description = String(schedule.description);
-        }
-        
-        return cleanSchedule;
-      });
+      // Ensure schedules is always an array even if empty
+      config.schedules = [];
+      
+      // Only add valid schedules
+      if (window.schedules.length > 0) {
+        // Clean schedules for storage - strict formatting
+        config.schedules = window.schedules.map(schedule => {
+          // Create a clean schedule object with explicit type conversions
+          const cleanSchedule = {
+            type: String(schedule.type || 'Everyday'),
+            time: String(schedule.time || '00:00'),
+            temperature: Number(schedule.temperature || 21)
+          };
+          
+          // Add day for Specific Day schedules only if present
+          if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+            cleanSchedule.day = Number(schedule.day);
+          }
+          
+          // Add description if present (for Warm Hug, etc.)
+          if (schedule.description) {
+            cleanSchedule.description = String(schedule.description);
+          }
+          
+          return cleanSchedule;
+        });
+      }
       
       console.log(`Adding ${config.schedules.length} schedules to config:`, config.schedules);
     } else {
@@ -371,7 +372,7 @@ window.saveConfig = async function() {
       console.log('Adding new config entry');
     }
     
-    // Double-check structure before saving
+    // Critical: Log the exact structure being saved
     console.log('Final config structure before save:', 
       JSON.stringify(updatedConfig, (k, v) => k === 'apiToken' ? '[REDACTED]' : v));
     

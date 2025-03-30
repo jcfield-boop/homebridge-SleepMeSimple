@@ -644,7 +644,34 @@ try {
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM content loaded - starting initialization');
+    // Add this inside your DOMContentLoaded event handler
+// Block log fetching that causes the "Fetching server logs..." toast
+if (typeof homebridge !== 'undefined') {
+    // Method 1: Override the log fetching function if it exists
+    if (typeof homebridge.fetchLogs === 'function') {
+      const originalFetchLogs = homebridge.fetchLogs;
+      homebridge.fetchLogs = function() {
+        console.log('Log fetching suppressed');
+        return Promise.resolve(); // Return empty promise
+      };
+    }
     
+    // Method 2: Intercept network requests that might be fetching logs
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+      // Check if this is a log-related fetch
+      if (url && typeof url === 'string' && 
+          (url.includes('/log') || url.includes('logs'))) {
+        console.log(`Suppressed fetch to: ${url}`);
+        return Promise.resolve(new Response('[]', { 
+          status: 200, 
+          headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+      // Otherwise, proceed with normal fetch
+      return originalFetch.apply(this, arguments);
+    };
+  }
     // Initialize the confirmation modal at startup
     const confirmModal = document.getElementById('confirmModal');
     if (confirmModal) {
