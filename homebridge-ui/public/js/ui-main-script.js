@@ -12,7 +12,6 @@ window.editingScheduleIndex = -1; // Index of schedule being edited
 let initialized = false;         // Flag to track initialization state
 let configLoaded = false;        // Flag to track if config has been loaded
 let homebridgeReady = false;     // Flag to track Homebridge API readiness
-let debugLogging = false;        // Flag to control debug message output
 
 // DOM element references - initialize as null to avoid undeclared variable issues
 window.scheduleTypeSelect = null;       // Schedule type dropdown
@@ -163,7 +162,6 @@ window.logMessage = function(type, message, title = '') {
     console.info(`${title ? title + ': ' : ''}${message}`);
   }
 };
-
 /**
  * Show loading indicator with message (console only)
  * @param {string} message - Message to display
@@ -427,7 +425,7 @@ async function waitForHomebridgeReady() {
  */
 async function initApp() {
   try {
-    // Skip toast for initialization - just log to console
+  
     console.log('Initializing SleepMe Simple UI...');
     
     // Step 1: Ensure Homebridge API is ready

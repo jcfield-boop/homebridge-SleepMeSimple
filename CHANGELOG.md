@@ -1,6 +1,17 @@
 # Changelog
-
-## 4.1.3 (Current)
+## 4.1.4 (Current)
+- **Config Saving Fix**: Corrected configuration structure for proper schedule persistence
+- **Key Improvements:**
+  - Fixed configuration object structure to match Homebridge requirements
+  - Ensured proper API call sequence (updatePluginConfig followed by savePluginConfig)
+  - Removed any remaining toast notification references
+  - Improved error handling during config operations
+  - Enhanced schedule formatting for storage
+  - Added better status element feedback throughout the UI
+  - Implemented console-only logging to avoid unwanted notifications
+  - Fixed configuration object handling to maintain proper structure
+  - Added detailed debugging information via console logs
+## 4.1.3
 - **Complete Removal of Toast Notifications**: Removed all toast notification code and replaced with proper status UI elements
 - **Key Improvements:**
   - Removed all references to toast notifications in all JavaScript files

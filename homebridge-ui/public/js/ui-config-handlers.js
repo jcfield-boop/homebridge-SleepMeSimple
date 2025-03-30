@@ -260,7 +260,6 @@ function populateFormFields(config) {
     console.warn('updateTemperatureValidation function not available');
   }
 }
-
 /**
  * Save configuration to Homebridge
  * @returns {Promise<void>}
@@ -311,23 +310,7 @@ window.saveConfig = async function() {
       return;
     }
     
-    // Validate polling interval
-    if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
-      console.error('Polling interval must be between 60 and 300 seconds');
-      
-      // Update status element
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-        statusElement.textContent = 'Polling interval must be between 60 and 300 seconds';
-        statusElement.className = 'status error';
-        statusElement.classList.remove('hidden');
-      }
-      
-      window.hideLoading();
-      return;
-    }
-    
-    // Create updated config
+    // Create updated config - critical to follow expected schema format
     const config = {
       platform: 'SleepMeSimple',
       name: 'SleepMe Simple',
@@ -342,7 +325,7 @@ window.saveConfig = async function() {
     
     // Add schedules if enabled
     if (enableSchedules && window.schedules && window.schedules.length > 0) {
-      // Clean schedules for storage
+      // Clean schedules for storage - ensure proper format
       config.schedules = window.schedules.map(schedule => {
         // Create a clean schedule object
         const cleanSchedule = {
@@ -353,7 +336,7 @@ window.saveConfig = async function() {
         
         // Add day property for Specific Day schedules
         if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-          cleanSchedule.day = parseInt(schedule.day, 10);
+          cleanSchedule.day = schedule.day;
         }
         
         // Add optional description
@@ -377,56 +360,37 @@ window.saveConfig = async function() {
       updatedConfig = [...pluginConfig];
       updatedConfig[existingConfigIndex] = config;
       console.log(`Updating existing config at index ${existingConfigIndex}`);
-    } else if (Array.isArray(pluginConfig)) {
-      // Add new config to array
-      updatedConfig = [...pluginConfig, config];
-      console.log('Adding new config to existing array');
     } else {
-      // Create new config array
-      updatedConfig = [config];
-      console.log('Creating new config array');
+      // Add new config to array
+      updatedConfig = Array.isArray(pluginConfig) ? [...pluginConfig, config] : [config];
+      console.log('Adding new config to config array');
     }
     
-    // Update plugin config
-    console.log('Updating plugin config...');
+    // First update plugin config - this is critical
+    console.log('Updating plugin config with:', updatedConfig);
     try {
-      const updateResult = await homebridge.updatePluginConfig(updatedConfig);
-      console.log('Update result:', updateResult);
-    } catch (updateError) {
-      console.error('Error updating config:', updateError);
+      // IMPORTANT: First update the config
+      await homebridge.updatePluginConfig(updatedConfig);
+      console.log('Plugin config updated successfully, now saving to disk');
       
-      // Update status element
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-        statusElement.textContent = 'Error updating config: ' + updateError.message;
-        statusElement.className = 'status error';
-        statusElement.classList.remove('hidden');
-      }
-      
-      window.hideLoading();
-      return;
-    }
-    
-    // Save changes to disk
-    console.log('Saving config to disk...');
-    try {
+      // IMPORTANT: Then save to disk
       await homebridge.savePluginConfig();
-      console.log('Config saved successfully');
+      console.log('Config saved to disk successfully');
       
-      // Update status element
+      // Update status element with success message
       const statusElement = document.getElementById('status');
       if (statusElement) {
         statusElement.textContent = 'Configuration saved successfully';
         statusElement.className = 'status success';
         statusElement.classList.remove('hidden');
       }
-    } catch (saveError) {
-      console.error('Error saving config to disk:', saveError);
+    } catch (updateError) {
+      console.error('Error updating or saving config:', updateError);
       
       // Update status element
       const statusElement = document.getElementById('status');
       if (statusElement) {
-        statusElement.textContent = 'Error saving config to disk: ' + saveError.message;
+        statusElement.textContent = 'Error saving config: ' + updateError.message;
         statusElement.className = 'status error';
         statusElement.classList.remove('hidden');
       }
