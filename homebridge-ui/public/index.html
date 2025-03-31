@@ -83,6 +83,7 @@
   /* Colors */
   --primary-color: #0070c9;
   --primary-color-dark: #00559b;
+  --primary-color-light: #e6f7ff;
   --secondary-color: #6c757d;
   --secondary-color-dark: #5a6268;
   --success-color: #28a745;
@@ -94,6 +95,12 @@
   --border-color: #ddd;
   --text-color: #333;
   --text-muted: #6c757d;
+  
+  /* Sleep Phase Colors */
+  --cool-down-color: #5bc0de;
+  --deep-sleep-color: #0275d8;
+  --rem-color: #5cb85c;
+  --wakeup-color: #f0ad4e;
   
   /* Spacing */
   --spacing-xs: 5px;
@@ -225,6 +232,7 @@ button {
   cursor: pointer;
   font-size: 16px;
   margin-right: var(--spacing-xs);
+  transition: background-color var(--transition-fast);
 }
 
 button:hover {
@@ -389,6 +397,7 @@ button.edit:hover {
   font-size: 16px;
   font-weight: 600;
   color: var(--primary-color);
+  text-align: left;
 }
 
 .collapsible-content {
@@ -415,68 +424,125 @@ button.edit:hover {
   color: var(--primary-color);
 }
 
-/* Schedule Styles */
+/* ===== IMPROVED SCHEDULE STYLES ===== */
+
+/* Schedule Container */
 .schedule-container {
   margin-top: var(--spacing-lg);
 }
 
+/* Schedule Form */
 .schedule-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 15px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
   align-items: flex-end;
+  background-color: var(--light-gray);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--border-color);
 }
 
 .schedule-form .form-group {
-  flex: 1;
-  min-width: 150px;
   margin-bottom: 0;
 }
 
+.schedule-form button {
+  align-self: flex-end;
+  height: 38px;
+}
+
+/* Schedule List */
 .schedule-list {
   margin-top: var(--spacing-lg);
-  max-height: 300px;
+  max-height: 500px; /* Increased height for better visibility */
   overflow-y: auto;
   border: 1px solid var(--border-color);
   padding: var(--spacing-sm);
   border-radius: var(--border-radius-sm);
+  background-color: white;
 }
 
+/* Schedule Group */
+.schedule-group {
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--light-gray);
+  box-shadow: var(--shadow-sm);
+}
+
+.schedule-group:last-child {
+  margin-bottom: 0;
+}
+
+.schedule-group-title {
+  font-weight: bold;
+  margin-bottom: var(--spacing-md);
+  color: var(--primary-color);
+  font-size: 18px;
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: var(--spacing-xs);
+}
+
+/* Schedule Items */
 .schedule-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--border-color);
+  padding: var(--spacing-md);
   border-radius: var(--border-radius-sm);
   margin-bottom: var(--spacing-sm);
+  background-color: white;
+  box-shadow: var(--shadow-sm);
+  border-left: 3px solid var(--primary-color);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.schedule-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.schedule-item:last-child {
+  margin-bottom: 0;
 }
 
 .schedule-item button {
   margin-left: var(--spacing-sm);
-  padding: 5px 10px;
+  padding: 6px 12px;
   font-size: 14px;
 }
 
 .schedule-item-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
 
-.schedule-group {
-  margin-bottom: var(--spacing-lg);
-  border-left: 3px solid var(--primary-color);
-  padding-left: var(--spacing-sm);
-}
-
-.schedule-group-title {
+.schedule-time {
   font-weight: bold;
-  margin-bottom: var(--spacing-sm);
-  color: var(--primary-color);
+  font-size: 16px;
 }
 
+.schedule-temp {
+  display: flex;
+  align-items: center;
+}
+
+.temp-indicator {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin-right: var(--spacing-xs);
+}
+
+/* Sleep phase styling */
 .schedule-phase {
-  margin-left: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
   padding: 3px 8px;
   border-radius: var(--border-radius-sm);
   font-size: 12px;
@@ -487,38 +553,68 @@ button.edit:hover {
 }
 
 .phase-cooldown {
-  background-color: #5bc0de;
+  background-color: var(--cool-down-color);
 }
 
 .phase-deep {
-  background-color: #0275d8;
+  background-color: var(--deep-sleep-color);
 }
 
 .phase-rem {
-  background-color: #5cb85c;
+  background-color: var(--rem-color);
 }
 
 .phase-wakeup {
-  background-color: #f0ad4e;
+  background-color: var(--wakeup-color);
 }
 
+/* Template styling */
 .template-schedule {
-  border-left: 3px solid var(--primary-color);
+  border-left: 3px solid var(--primary-color-dark);
+  background-color: var(--primary-color-light);
 }
 
 .template-badge {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   background-color: var(--primary-color);
   color: white;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: bold;
-  line-height: 16px;
-  text-align: center;
   border-radius: 50%;
   margin-left: var(--spacing-xs);
   cursor: help;
+}
+
+/* Temperature Visual Indicator */
+.temp-scale {
+  margin-top: var(--spacing-sm);
+  height: 8px;
+  width: 100%;
+  background: linear-gradient(to right, #00aaff, #ffaa00);
+  border-radius: 4px;
+  position: relative;
+}
+
+.temp-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background-color: white;
+  border: 2px solid black;
+  border-radius: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+/* Warm Hug Info Card */
+.warm-hug-info {
+  background-color: #FFF3E0;
+  border-left: 4px solid var(--wakeup-color);
 }
 
 /* Template Sections */
@@ -546,7 +642,7 @@ button.edit:hover {
 }
 
 .info-card {
-  background-color: #e6f7ff;
+  background-color: var(--primary-color-light);
   border: 1px solid #91d5ff;
   border-radius: var(--border-radius-sm);
   padding: var(--spacing-sm);
@@ -702,7 +798,7 @@ button.edit:hover {
   }
   
   .schedule-form {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
   
   .schedule-item {
@@ -812,7 +908,6 @@ button.edit:hover {
             <div class="tab" data-tab="templates">
                 <span class="tab-title">Schedule Templates</span>
             </div>
-            <!-- Our new tabs are already updated -->
             <div class="tab" data-tab="templateHelp">
                 <span class="tab-title">Template Help</span>
                 <span class="dropdown-indicator">▾</span>
@@ -863,11 +958,13 @@ button.edit:hover {
                     <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
                 </div>
                 
-                <button type="button" id="addSchedule">Add Schedule</button>
-                <button type="button" id="cancelEdit" class="secondary hidden">Cancel</button>
+                <div class="form-group">
+                    <button type="button" id="addSchedule">Add Schedule</button>
+                    <button type="button" id="cancelEdit" class="secondary hidden">Cancel</button>
+                </div>
             </div>
             
-            <div id="warmHugInfo" class="info-card hidden">
+            <div id="warmHugInfo" class="info-card warm-hug-info hidden">
                 <h4>Warm Hug Feature</h4>
                 <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled time, for a gentle wake-up experience. When selected, your device will begin warming <strong>before</strong> the time you set to ensure it reaches your target temperature exactly at your scheduled time.</p>
                 <p>For detailed configuration of Warm Hug parameters, please see the "Warm Hug Options" tab.</p>
@@ -1005,7 +1102,7 @@ button.edit:hover {
   </div>
 <!-- Warm Hug Options Tab -->
 <div id="warmHugOptionsTab" class="tab-content">
-    <div class="info-card">
+    <div class="info-card warm-hug-info">
       <h4>Warm Hug Configuration</h4>
       <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled wake-up time.</p>
     </div>
