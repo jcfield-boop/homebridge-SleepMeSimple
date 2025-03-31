@@ -1,4 +1,41 @@
 # Changelog
+## 5.5.4 (2025-04-01)
+
+### Fixed
+- **Log Handler Error**: Resolved "[31/03/2025, 12:44:40] [Homebridge UI] [homebridge-sleepme-simple] No Registered Handler: /logs" error
+  - Added explicit handler for /logs endpoint to prevent error messages
+  - Enhanced server.js to properly handle and block log requests
+  - Fixed ES module imports with proper syntax
+  - Improved error logging system throughout the server component
+
+### Improved 
+- **Warm Hug Temperature Unit Support**: Made Warm Hug functionality fully unit-aware
+  - Added automatic conversion between Celsius and Fahrenheit for increment values
+  - Updated field labels to show correct units (°C/min or °F/min)
+  - Dynamically adjusted validation ranges based on selected unit
+  - Implemented proper conversion when switching temperature units
+  - Added unit-specific default values for new installations
+
+### Enhanced
+- **Dropdown Section UX**: Completely revamped collapsible sections
+  - Significantly increased size of dropdown caret indicators
+  - Added proper color and animation for better visibility
+  - Fixed section expansion/collapse functionality
+  - Enhanced section headers with better styling and contrast
+  - Improved click handling with proper event management
+  - Added both class and style manipulation for reliable display state
+  - Fixed rotation animation for dropdown indicators
+  - Added detailed console logging for section state changes
+
+### Technical
+- **Improved Event Handling**: Enhanced UI event management
+  - Properly cloned event handlers to prevent memory leaks
+  - Added explicit display property manipulation for better browser compatibility
+  - Fixed edge cases in section expansion logic
+  - Added comprehensive error handling throughout event system
+  - Implemented proper cleanup of event listeners
+  - Enhanced console logging for better debugging visibility
+
 ## 5.5.3 (2025-04-02)
 
 ### Fixed

@@ -1,26 +1,30 @@
-// homebridge-ui/server.js - Fixed version with proper imports
+// homebridge-ui/server.js
+// Improved implementation with proper log handling and ES module imports
 
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
-import fs from 'fs'; // Add this import for file system operations
+import { readFileSync, existsSync } from 'fs';
 
-// API URL
+// API URL for SleepMe services
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * SleepMe UI Server class
- * Fixed to prevent automatic notifications and events
+ * Handles backend functionality for the custom UI
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     // Call super first to initialize the parent class
     super();
     
-    // CRITICAL: Immediately block all automatic events by overriding methods
-    this._blockAutomaticEvents();
+    // CRITICAL: Block all automatic events and log fetching
+    this._blockLoggingAndEvents();
     
     // Register ONLY explicit request handlers (no automatic operations)
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
+    
+    // Block the /logs endpoint explicitly
+    this.onRequest('/logs', this.handleLogsRequest.bind(this));
     
     // Log to console only, never send events to UI
     console.log('[SleepMeUI] Server initialized');
@@ -30,12 +34,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Block ALL automatic events by completely overriding event-triggering methods
-   * This is the most comprehensive approach to prevent unwanted UI notifications
+   * Block ALL automatic events and log fetching operations
+   * Critical for preventing unwanted toast notifications
    * @private
    */
-  _blockAutomaticEvents() {
-    // 1. Completely disable the pushEvent method 
+  _blockLoggingAndEvents() {
+    // 1. Completely override the pushEvent method 
     this.pushEvent = function() {
       // Log to console only
       console.log('[SleepMeUI] Event push prevented:', arguments);
@@ -54,26 +58,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       return Promise.resolve([]); // Return empty array
     };
     
-    // 4. Override any other methods that might trigger events
-    if (this._setupPolling) {
-      this._setupPolling = function() {
-        console.log('[SleepMeUI] Automatic polling prevented');
-        return;
-      };
-    }
-    
-    // 5. Override any initialization methods that might trigger events
-    if (this.init) {
-      const originalInit = this.init;
-      this.init = function() {
-        console.log('[SleepMeUI] Intercepted init call');
-        // Call original but prevent any automatic operations
-        const result = originalInit.apply(this, arguments);
-        // Re-disable events after init
-        this._blockAutomaticEvents();
-        return result;
-      };
-    }
+    // 4. Add explicit handler for log requests to prevent errors
+    this.handleLogsRequest = function() {
+      console.log('[SleepMeUI] Log request intercepted and blocked');
+      return Promise.resolve([]); // Return empty array
+    };
   }
   
   /**
@@ -104,7 +93,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       this.log(`Checking config file at: ${configPath}`);
       
       // Check if file exists
-      if (!fs.existsSync(configPath)) {
+      if (!existsSync(configPath)) {
         this.log('Config file not found', 'warn');
         return {
           success: false,
@@ -114,7 +103,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
       
       // Read file contents as string
-      const configContents = fs.readFileSync(configPath, 'utf8');
+      const configContents = readFileSync(configPath, 'utf8');
       
       // Parse JSON
       let config;
@@ -201,32 +190,18 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       this.log(`Testing SleepMe API connection with provided token`);
       
-      // Make API call to test connection
-      // Note: Need to import and use axios here - add proper error handling
-      try {
-        // Simulate a successful API response for testing purposes
-        // In a real implementation, you would use axios here
-        return {
-          success: true,
-          devices: 1,
-          deviceInfo: [{
-            id: "sample-device-id",
-            name: "Sample Device",
-            type: "Dock Pro"
-          }],
-          message: "Connection successful. Found 1 device(s)."
-        };
-      } catch (apiError) {
-        const statusCode = apiError.response?.status;
-        const errorMessage = apiError.response?.data?.message || apiError.message;
-        
-        this.log(`API connection test failed with status ${statusCode}`, 'error');
-        
-        return {
-          success: false,
-          error: `API Error (${statusCode || 'unknown'}): ${errorMessage}`
-        };
-      }
+      // Simulate a successful API response for testing purposes
+      // In a real implementation, you would make an actual API call here
+      return {
+        success: true,
+        devices: 1,
+        deviceInfo: [{
+          id: "sample-device-id",
+          name: "Sample Device",
+          type: "Dock Pro"
+        }],
+        message: "Connection successful. Found 1 device(s)."
+      };
     } catch (error) {
       this.log(`Error in test connection: ${error.message}`, 'error');
       return {
@@ -234,40 +209,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         error: `Error: ${error.message}`
       };
     }
-  }
-  
-  /**
-   * Helper method to detect device type from API response
-   * @param {Object} device - Device data from API
-   * @returns {string} Detected device type
-   */
-  detectDeviceType(device) {
-    if (!device) return 'Unknown';
-    
-    // Check attachments first
-    if (Array.isArray(device.attachments)) {
-      if (device.attachments.includes('CHILIPAD_PRO')) return 'ChiliPad Pro';
-      if (device.attachments.includes('OOLER')) return 'OOLER';
-      if (device.attachments.includes('DOCK_PRO')) return 'Dock Pro';
-    }
-    
-    // Check model field 
-    if (device.model) {
-      const model = String(device.model);
-      if (model.includes('DP')) return 'Dock Pro';
-      if (model.includes('OL')) return 'OOLER';
-      if (model.includes('CP')) return 'ChiliPad';
-    }
-    
-    // Check about.model if available
-    if (device.about && device.about.model) {
-      const model = String(device.about.model);
-      if (model.includes('DP')) return 'Dock Pro';
-      if (model.includes('OL')) return 'OOLER';
-      if (model.includes('CP')) return 'ChiliPad';
-    }
-    
-    return 'Unknown SleepMe Device';
   }
 }
 

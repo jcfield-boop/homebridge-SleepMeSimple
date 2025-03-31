@@ -72,6 +72,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up schedule-specific event listeners
     setupScheduleListeners();
+
+     // Set up schedule-specific event listeners
+     setupScheduleListeners();
     
     // Wait for Homebridge to be ready
     initializeHomebridge();
@@ -242,23 +245,28 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
   })();
- /**
+/**
  * Initialize collapsible sections throughout the UI
- * Fixed event handling to ensure proper expansion/collapse
+ * Enhanced to ensure proper opening/closing and larger indicators
  */
 function initializeCollapsibleSections() {
     // Get all collapsible headers
     const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
+    
+    console.log(`Found ${collapsibleHeaders.length} collapsible sections`);
     
     if (!collapsibleHeaders || collapsibleHeaders.length === 0) {
       console.warn('No collapsible sections found');
       return;
     }
     
+    // Process each header
     collapsibleHeaders.forEach(header => {
-      // Clear existing listeners by cloning
+      // Clear existing listeners by cloning and replacing
       const newHeader = header.cloneNode(true);
-      header.parentNode.replaceChild(newHeader, header);
+      if (header.parentNode) {
+        header.parentNode.replaceChild(newHeader, header);
+      }
       
       // Add click handler to toggle content visibility
       newHeader.addEventListener('click', function() {
@@ -272,248 +280,257 @@ function initializeCollapsibleSections() {
         const content = section.querySelector('.collapsible-content');
         if (!content) return;
         
-        // Explicitly set display style - this is crucial
+        // Explicitly set display style with both methods
         if (section.classList.contains('open')) {
           content.style.display = 'block';
+          content.classList.remove('hidden');
         } else {
           content.style.display = 'none';
+          content.classList.add('hidden');
         }
         
-        // Update the dropdown indicator
+        // Update the dropdown indicator with rotation
         const indicator = this.querySelector('.dropdown-indicator');
         if (indicator) {
           indicator.style.transform = section.classList.contains('open') ? 
             'rotate(180deg)' : 'rotate(0deg)';
         }
+        
+        console.log(`Section ${section.querySelector('h3')?.textContent || 'unknown'} toggled to ${section.classList.contains('open') ? 'open' : 'closed'}`);
       });
     });
+    
+    console.log('Collapsible sections initialized successfully');
   }
- /**
- * Initialize tab handling with improved template code display
- * Updated to handle the warmHugOptions tab
- */
-function initializeTabs() {
-    console.log('Initializing tabs...');
-    const tabContainer = document.querySelector('.tabs');
-    if (!tabContainer) {
-        // Silently fail if tab container doesn't exist
-        console.warn('Tab container not found');
+  
+  /**
+   * Load Warm Hug settings from configuration with proper unit conversion
+   * Enhanced to handle both Celsius and Fahrenheit units
+   */
+  async function loadWarmHugSettings() {
+    try {
+      console.log('Loading Warm Hug settings...');
+      
+      // Get form elements
+      const incrementInput = document.getElementById('warmHugIncrement');
+      const durationInput = document.getElementById('warmHugDuration');
+      const unitSelect = document.getElementById('unit');
+      
+      // Only proceed if homebridge is ready
+      if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
+        console.error('Homebridge API not ready');
         return;
+      }
+      
+      // Get current config
+      const pluginConfig = await homebridge.getPluginConfig();
+      const config = findPlatformConfig(pluginConfig);
+      
+      if (!config) {
+        console.warn('Platform configuration not found in plugin config');
+        return;
+      }
+      
+      // Get current temperature unit
+      const currentUnit = unitSelect ? unitSelect.value : 'C';
+      
+      // Set values if they exist in config.advanced
+      if (config.advanced) {
+        if (incrementInput && config.advanced.warmHugIncrement !== undefined) {
+          // Apply proper unit conversion for increment
+          let incrementValue = config.advanced.warmHugIncrement;
+          
+          // If stored in Celsius but displaying in Fahrenheit, convert
+          if (config.unit === 'C' && currentUnit === 'F') {
+            // Fahrenheit increments are 9/5 times larger than Celsius increments
+            incrementValue = incrementValue * (9/5);
+          } 
+          // If stored in Fahrenheit but displaying in Celsius, convert
+          else if (config.unit === 'F' && currentUnit === 'C') {
+            // Celsius increments are 5/9 times smaller than Fahrenheit increments
+            incrementValue = incrementValue * (5/9);
+          }
+          
+          // Round to one decimal place for display
+          incrementValue = Math.round(incrementValue * 10) / 10;
+          incrementInput.value = incrementValue;
+        } else if (incrementInput) {
+          // Default value if not in config
+          // Use appropriate default based on unit
+          incrementInput.value = currentUnit === 'C' ? "2" : "3.6";
+        }
+        
+        if (durationInput && config.advanced.warmHugDuration !== undefined) {
+          durationInput.value = config.advanced.warmHugDuration;
+        } else if (durationInput) {
+          // Default value if not in config
+          durationInput.value = "15";
+        }
+      } else {
+        // Set default values if advanced section doesn't exist
+        if (incrementInput) {
+          incrementInput.value = currentUnit === 'C' ? "2" : "3.6";
+        }
+        if (durationInput) durationInput.value = "15";
+      }
+      
+      console.log('Warm Hug settings loaded successfully');
+      
+      // Update unit-specific labels
+      updateWarmHugUnitLabels(currentUnit);
+    } catch (error) {
+      console.error('Error loading Warm Hug settings:', error);
+    }
+  }
+  
+  /**
+   * Update Warm Hug form labels based on current temperature unit
+   * @param {string} unit - Current temperature unit ('C' or 'F')
+   */
+  function updateWarmHugUnitLabels(unit) {
+    const incrementLabel = document.querySelector('label[for="warmHugIncrement"]');
+    const incrementHelp = document.querySelector('#warmHugIncrement + .form-text');
+    
+    if (incrementLabel) {
+      incrementLabel.textContent = `Temperature Increment (°${unit}/min):`;
     }
     
-    tabContainer.addEventListener('click', (event) => {
-        // Find the closest tab element (handles clicks on child elements)
-        const tabElement = event.target.closest('.tab');
-        
-        if (tabElement) {
-            const tabId = tabElement.getAttribute('data-tab');
-            if (!tabId) return; // Skip if no tab ID
-            
-            console.log(`Tab clicked: ${tabId}`);
-            
-            // Remove active class from all tabs and contents
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            // Add active class to selected tab and content
-            tabElement.classList.add('active');
-            const tabContent = document.getElementById(tabId + 'Tab');
-            if (tabContent) {
-                tabContent.classList.add('active');
-                
-                // Special handling for template help tab
-                if (tabId === 'templateHelp') {
-                    try {
-                        populateTemplateCodePreview();
-                    } catch (error) {
-                        console.error('Failed to populate template code preview:', error);
-                    }
-                }
-                
-                // Load Warm Hug settings when that tab is selected
-                // Changed from advancedOptions to warmHugOptions
-                if (tabId === 'warmHugOptions') {
-                    try {
-                        loadWarmHugSettings();
-                    } catch (error) {
-                        console.error('Failed to load Warm Hug settings:', error);
-                    }
-                }
-            } else {
-                console.warn(`Tab content for ${tabId} not found`);
-            }
-        }
-    });
-    
-    console.log('Tab initialization complete');
-}
-/**
- * Load Warm Hug settings from configuration
- * Specific function to handle Warm Hug parameters
- */
-async function loadWarmHugSettings() {
-    try {
-        console.log('Loading Warm Hug settings...');
-        // Get form elements
-        const incrementInput = document.getElementById('warmHugIncrement');
-        const durationInput = document.getElementById('warmHugDuration');
-        
-        // Only proceed if homebridge is ready
-        if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
-            console.error('Homebridge API not ready');
-            return;
-        }
-        
-        // Get current config
-        const pluginConfig = await homebridge.getPluginConfig();
-        
-        const config = findPlatformConfig(pluginConfig);
-        
-        if (!config) {
-            console.warn('Platform configuration not found in plugin config');
-            return;
-        }
-        
-        // Set values if they exist in config.advanced
-        if (config.advanced) {
-            if (incrementInput && config.advanced.warmHugIncrement !== undefined) {
-                incrementInput.value = config.advanced.warmHugIncrement;
-            } else if (incrementInput) {
-                // Default value if not in config
-                incrementInput.value = "2";
-            }
-            
-            if (durationInput && config.advanced.warmHugDuration !== undefined) {
-                durationInput.value = config.advanced.warmHugDuration;
-            } else if (durationInput) {
-                // Default value if not in config
-                durationInput.value = "15";
-            }
-        } else {
-            // Set default values if advanced section doesn't exist
-            if (incrementInput) incrementInput.value = "2";
-            if (durationInput) durationInput.value = "15";
-        }
-        
-        console.log('Warm Hug settings loaded successfully');
-    } catch (error) {
-        console.error('Error loading Warm Hug settings:', error);
+    if (incrementHelp) {
+      if (unit === 'C') {
+        incrementHelp.textContent = 'How quickly temperature increases (0.5-5°C per minute)';
+      } else {
+        incrementHelp.textContent = 'How quickly temperature increases (1-9°F per minute)';
+      }
     }
-}
-/**
- * Save Warm Hug parameters to config
- * Enhanced with better error handling
- */
-async function saveWarmHugParameters() {
+  }
+  
+  /**
+   * Save Warm Hug parameters with proper unit conversion
+   * Enhanced to handle both Celsius and Fahrenheit
+   */
+  async function saveWarmHugParameters() {
     try {
-        console.log('Saving Warm Hug parameters...');
-        const incrementInput = document.getElementById('warmHugIncrement');
-        const durationInput = document.getElementById('warmHugDuration');
+      console.log('Saving Warm Hug parameters...');
+      const incrementInput = document.getElementById('warmHugIncrement');
+      const durationInput = document.getElementById('warmHugDuration');
+      const unitSelect = document.getElementById('unit');
+      
+      if (!incrementInput || !durationInput || !unitSelect) {
+        console.error('Warm Hug input elements not found');
+        return;
+      }
+      
+      // Get current unit
+      const currentUnit = unitSelect.value;
+      
+      // Validate inputs with appropriate ranges based on unit
+      const increment = parseFloat(incrementInput.value);
+      const duration = parseInt(durationInput.value);
+      
+      // Different validation ranges based on unit
+      const minIncrement = currentUnit === 'C' ? 0.5 : 1.0;
+      const maxIncrement = currentUnit === 'C' ? 5.0 : 9.0;
+      
+      if (isNaN(increment) || increment < minIncrement || increment > maxIncrement) {
+        console.error('Invalid increment value:', increment);
         
-        if (!incrementInput || !durationInput) {
-            console.error('Warm Hug input elements not found');
-            return;
-        }
-        
-        // Validate inputs
-        const increment = parseFloat(incrementInput.value);
-        const duration = parseInt(durationInput.value);
-        
-        if (isNaN(increment) || increment < 0.5 || increment > 5) {
-            console.error('Invalid increment value:', increment);
-            
-            // Update status element
-            const statusElement = document.getElementById('status');
-            if (statusElement) {
-                statusElement.textContent = 'Error: Increment must be between 0.5 and 5';
-                statusElement.className = 'status error';
-                statusElement.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        if (isNaN(duration) || duration < 5 || duration > 30) {
-            console.error('Invalid duration value:', duration);
-            
-            // Update status element
-            const statusElement = document.getElementById('status');
-            if (statusElement) {
-                statusElement.textContent = 'Error: Duration must be between 5 and 30 minutes';
-                statusElement.className = 'status error';
-                statusElement.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        // Only proceed if homebridge is ready
-        if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
-            console.error('Homebridge API not ready');
-            return;
-        }
-        
-        // Get current config
-        const pluginConfig = await homebridge.getPluginConfig();
-        
-        // Find platform config
-        let config = null;
-        if (Array.isArray(pluginConfig)) {
-            config = pluginConfig.find(cfg => cfg && cfg.platform === 'SleepMeSimple');
-        }
-        
-        if (!config) {
-            console.error('Platform configuration not found');
-            
-            // Update status element
-            const statusElement = document.getElementById('status');
-            if (statusElement) {
-                statusElement.textContent = 'Error: Configuration not found';
-                statusElement.className = 'status error';
-                statusElement.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        // Ensure advanced section exists
-        if (!config.advanced) {
-            config.advanced = {};
-        }
-        
-        // Update Warm Hug parameters
-        config.advanced.warmHugIncrement = increment;
-        config.advanced.warmHugDuration = duration;
-        
-        // Update config in memory
-        await homebridge.updatePluginConfig(pluginConfig);
-        
-        // Save to disk
-        await homebridge.savePluginConfig();
-        
-        console.log('Warm Hug parameters saved successfully');
-        
-        // Update status element with success message
+        // Update status element
         const statusElement = document.getElementById('status');
         if (statusElement) {
-            statusElement.textContent = 'Warm Hug parameters saved successfully';
-            statusElement.className = 'status success';
-            statusElement.classList.remove('hidden');
-            
-            // Auto-hide after a few seconds
-            setTimeout(() => {
-                statusElement.classList.add('hidden');
-            }, 3000);
+          statusElement.textContent = `Error: Increment must be between ${minIncrement} and ${maxIncrement}°${currentUnit}`;
+          statusElement.className = 'status error';
+          statusElement.classList.remove('hidden');
         }
-    } catch (error) {
-        console.error('Error saving Warm Hug parameters:', error);
+        return;
+      }
+      
+      if (isNaN(duration) || duration < 5 || duration > 30) {
+        console.error('Invalid duration value:', duration);
         
-        // Update status element with error
+        // Update status element
         const statusElement = document.getElementById('status');
         if (statusElement) {
-            statusElement.textContent = `Error saving parameters: ${error.message}`;
-            statusElement.className = 'status error';
-            statusElement.classList.remove('hidden');
+          statusElement.textContent = 'Error: Duration must be between 5 and 30 minutes';
+          statusElement.className = 'status error';
+          statusElement.classList.remove('hidden');
         }
+        return;
+      }
+      
+      // Only proceed if homebridge is ready
+      if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
+        console.error('Homebridge API not ready');
+        return;
+      }
+      
+      // Get current config
+      const pluginConfig = await homebridge.getPluginConfig();
+      
+      // Find platform config
+      let config = findPlatformConfig(pluginConfig);
+      
+      if (!config) {
+        console.error('Platform configuration not found');
+        
+        // Update status element
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+          statusElement.textContent = 'Error: Configuration not found';
+          statusElement.className = 'status error';
+          statusElement.classList.remove('hidden');
+        }
+        return;
+      }
+      
+      // Convert increment to Celsius for storage if needed
+      let storageIncrement = increment;
+      if (currentUnit === 'F') {
+        // Convert Fahrenheit increment to Celsius increment
+        storageIncrement = increment * (5/9);
+        console.log(`Converting increment from ${increment}°F/min to ${storageIncrement}°C/min for storage`);
+      }
+      
+      // Ensure advanced section exists
+      if (!config.advanced) {
+        config.advanced = {};
+      }
+      
+      // Update Warm Hug parameters with converted values if needed
+      config.advanced.warmHugIncrement = storageIncrement;
+      config.advanced.warmHugDuration = duration;
+      
+      // Update config in memory
+      await homebridge.updatePluginConfig(pluginConfig);
+      
+      // Save to disk
+      await homebridge.savePluginConfig();
+      
+      console.log('Warm Hug parameters saved successfully');
+      
+      // Update status element with success message
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = 'Warm Hug parameters saved successfully';
+        statusElement.className = 'status success';
+        statusElement.classList.remove('hidden');
+        
+        // Auto-hide after a few seconds
+        setTimeout(() => {
+          statusElement.classList.add('hidden');
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Error saving Warm Hug parameters:', error);
+      
+      // Update status element with error
+      const statusElement = document.getElementById('status');
+      if (statusElement) {
+        statusElement.textContent = `Error saving parameters: ${error.message}`;
+        statusElement.className = 'status error';
+        statusElement.classList.remove('hidden');
+      }
     }
-}
+  }
 /**
  * Populate template code preview with template data
  * Enhanced with direct access to the global templates object

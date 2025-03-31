@@ -221,13 +221,104 @@
     display: block;
 }
 
+/* Add to the <style> section of index.html or your CSS file */
+
+/* Larger dropdown indicators */
 .dropdown-indicator {
-    transition: transform 0.3s ease;
-    font-size: 16px;
+  font-size: 24px !important; /* Significantly increased size */
+  transition: transform 0.3s ease;
+  font-weight: bold;
+  display: inline-block;
+  margin-left: 8px;
+  color: #0070c9; /* Colored indicator for better visibility */
 }
 
+/* Add animation for better UX */
 .collapsible-section.open .dropdown-indicator {
-    transform: rotate(180deg);
+  transform: rotate(180deg);
+}
+
+/* Enhanced section headers for better visibility */
+.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px; /* Increased padding */
+  background-color: #f0f5f9; /* Slightly bluer background */
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+  border: 1px solid #dae2ea;
+}
+
+.collapsible-header:hover {
+  background-color: #e0eaf5; /* Darker hover state */
+}
+
+.collapsible-header h3 {
+  margin: 0;
+  font-size: 17px; /* Larger font size */
+  font-weight: 600; /* Bolder */
+  color: #0070c9; /* Themed color */
+}
+
+/* Ensure content is properly visible when open */
+.collapsible-section {
+  margin-bottom: 20px;
+  border: 1px solid #dee5ec;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.collapsible-content {
+  padding: 18px;
+  border-top: 1px solid #eef2f7;
+  display: none;
+  background-color: #ffffff;
+}
+
+.collapsible-section.open .collapsible-content {
+  display: block;
+}
+
+/* Tab indicators should also be larger */
+.tab .dropdown-indicator {
+  font-size: 20px !important;
+  margin-left: 6px;
+}
+
+/* Ensure all form elements have proper spacing */
+.form-group {
+  margin-bottom: 18px;
+}
+
+/* More distinct status messages */
+.status {
+  margin-top: 20px;
+  padding: 12px 15px;
+  border-radius: 6px;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.status.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.status.error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+/* Ensure modal is properly hidden */
+#confirmModal.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 /* Fix for DOM initialization error - ensure script loading */
 body {
