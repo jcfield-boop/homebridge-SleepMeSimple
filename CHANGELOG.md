@@ -1,5 +1,33 @@
 # Changelog
+## 5.5.3 (2025-04-02)
 
+### Fixed
+- **Collapsible Sections**: Made all sections consistently collapsible
+  - Fixed Template Help sections to properly expand/collapse
+  - Added collapsible behavior to Warm Hug Options sections
+  - Ensured all sections start in closed state by default
+  - Added proper dropdown indicators for all collapsible sections
+
+### Fixed
+- **Template Code Display**: Fixed issue where template code wasn't displaying properly
+  - Ensured templates are initialized at the earliest possible moment in script execution
+  - Added direct global initialization of window.templates
+  - Improved template code preview function to properly display JSON
+  - Fixed timing issues with template data availability
+
+### Improved
+- **Event Handling**: Enhanced collapsible section event handling
+  - Properly cloned event handlers to prevent memory leaks
+  - Added explicit style manipulation for better browser compatibility
+  - Fixed dropdown indicator rotation animations
+  - Improved error handling in initialization functions
+
+### Changed
+- **UI Structure**: Reorganized Template Help and Warm Hug sections
+  - Converted flat sections to proper collapsible components
+  - Made interface more consistent across all tabs
+  - Enhanced visual indication of expandable content
+  - Improved spacing and visual hierarchy
 ## 5.5.2 (2025-04-01)
 
 ### Fixed

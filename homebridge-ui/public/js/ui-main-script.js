@@ -242,8 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
   })();
-  
-/**
+ /**
  * Initialize collapsible sections throughout the UI
  * Fixed event handling to ensure proper expansion/collapse
  */
@@ -289,7 +288,6 @@ function initializeCollapsibleSections() {
       });
     });
   }
-  
  /**
  * Initialize tab handling with improved template code display
  * Updated to handle the warmHugOptions tab
