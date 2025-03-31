@@ -754,50 +754,70 @@
             </div>
         </div>
 
-        <!-- Advanced Options Tab -->
-        <div id="advancedOptionsTab" class="tab-content">
-            <div class="info-card">
-                <h4>Advanced Configuration Options</h4>
-                <p>These settings provide further customization for power users. Most users should leave these at their default values.</p>
-            </div>
+      <!-- Advanced Options Tab -->
+<div id="advancedOptionsTab" class="tab-content">
+    <div class="info-card">
+        <h4>Advanced Configuration Options</h4>
+        <p>These settings provide further customization for power users. Most users should leave these at their default values.</p>
+    </div>
 
+    <div class="form-group">
+        <label for="logLevel">Log Level:</label>
+        <select id="logLevel" name="logLevel">
+            <option value="normal">Normal - Standard operation logs</option>
+            <option value="debug">Debug - Additional debugging information</option>
+            <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
+        </select>
+        <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+    </div>
+    
+    <div class="collapsible-section">
+        <div class="collapsible-header" aria-expanded="false" aria-controls="warmHugParamsContent">
+            <h3>Warm Hug Parameters</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div id="warmHugParamsContent" class="collapsible-content" aria-hidden="true">
+            <p>Configure how the Warm Hug feature gradually increases temperature.</p>
+            
             <div class="form-group">
-                <label for="logLevel">Log Level:</label>
-                <select id="logLevel" name="logLevel">
-                    <option value="normal">Normal - Standard operation logs</option>
-                    <option value="debug">Debug - Additional debugging information</option>
-                    <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
-                </select>
-                <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+                <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
+                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
+                <small class="form-text text-muted">How quickly temperature increases (0.5-5°C per minute)</small>
             </div>
             
-            <div class="collapsible-section">
-                <div class="collapsible-header" aria-expanded="false" aria-controls="warmHugParamsContent">
-                    <h3>Warm Hug Parameters</h3>
-                    <span class="dropdown-indicator">▾</span>
-                </div>
-                <div id="warmHugParamsContent" class="collapsible-content" aria-hidden="true">
-                    <p>Configure how the Warm Hug feature gradually increases temperature.</p>
-                    
-                    <div class="form-group">
-                        <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
-                        <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
-                        <small class="form-text text-muted">How quickly temperature increases (0.5-5°C per minute)</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="warmHugDuration">Warm Hug Duration (minutes):</label>
-                        <input type="number" id="warmHugDuration" min="5" max="60" value="15">
-                        <small class="form-text text-muted">Total duration of the Warm Hug feature (5-60 minutes)</small>
-                    </div>
-                </div>
-            </div>    
-                <button type="button" id="saveDeviceSettings" class="btn">Save Device Settings</button>
+            <div class="form-group">
+                <label for="warmHugDuration">Warm Hug Duration (minutes):</label>
+                <input type="number" id="warmHugDuration" min="5" max="60" value="15">
+                <small class="form-text text-muted">Total duration of the Warm Hug feature (5-60 minutes)</small>
             </div>
+            
+            <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
+        </div>
+    </div>
+    
+    <div class="collapsible-section">
+        <div class="collapsible-header" aria-expanded="false" aria-controls="deviceSettingsContent">
+            <h3>Device Settings</h3>
+            <span class="dropdown-indicator">▾</span>
+        </div>
+        <div id="deviceSettingsContent" class="collapsible-content" aria-hidden="true">
+            <p>Configure device-specific settings.</p>
+            
+            <div class="form-group">
+                <label for="deviceModel">Preferred Device Model:</label>
+                <select id="deviceModel">
+                    <option value="auto">Auto-detect</option>
+                    <option value="dockpro">Dock Pro</option>
+                    <option value="ooler">OOLER</option>
+                    <option value="chilipad">ChiliPad</option>
+                </select>
+                <small class="form-text text-muted">Select your device model for optimized control</small>
+            </div>
+            
+            <button type="button" id="saveDeviceSettings" class="btn">Save Device Settings</button>
         </div>
     </div>
 </div>
-    
 
     <!-- Scripts - corrected loading order -->
     <script src="js/ui-validation-functions.js"></script>

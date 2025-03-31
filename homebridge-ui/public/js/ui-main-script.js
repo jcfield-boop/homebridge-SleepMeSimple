@@ -13,10 +13,15 @@
  * Manages toggle behavior and visual indicators
  */
 function initializeCollapsibleSections() {
+    console.log('Initializing collapsible sections...');
+    
     // Initialize all collapsible headers
     const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
+    console.log(`Found ${collapsibleHeaders.length} collapsible headers`);
     
-    collapsibleHeaders.forEach(header => {
+    collapsibleHeaders.forEach((header, index) => {
+        console.log(`Initializing header ${index + 1}:`, header.textContent.trim());
+        
         // Remove any existing listeners first to avoid duplicates
         const newHeader = header.cloneNode(true);
         header.parentNode.replaceChild(newHeader, header);
@@ -26,9 +31,11 @@ function initializeCollapsibleSections() {
             const section = this.closest('.collapsible-section');
             section.classList.toggle('open');
             
+            const isOpen = section.classList.contains('open');
+            console.log(`Section ${index + 1} toggled ${isOpen ? 'open' : 'closed'}`);
+            
             // Update aria attributes for accessibility
             const content = section.querySelector('.collapsible-content');
-            const isOpen = section.classList.contains('open');
             
             this.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             content.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -38,6 +45,9 @@ function initializeCollapsibleSections() {
             if (indicator) {
                 indicator.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
             }
+            
+            // Force display style on the content div
+            content.style.display = isOpen ? 'block' : 'none';
         });
         
         // Set initial aria attributes
@@ -46,11 +56,16 @@ function initializeCollapsibleSections() {
         
         newHeader.setAttribute('aria-expanded', 'false');
         content.setAttribute('aria-hidden', 'true');
+        
+        // Explicitly set display style
+        content.style.display = 'none';
     });
     
     // Open the first section by default in the advanced options if we're in that tab
     const advancedTab = document.getElementById('advancedOptionsTab');
     if (advancedTab && advancedTab.classList.contains('active')) {
+        console.log('Advanced tab is active, opening first section');
+        
         const firstSection = advancedTab.querySelector('.collapsible-section');
         if (firstSection) {
             firstSection.classList.add('open');
@@ -62,10 +77,16 @@ function initializeCollapsibleSections() {
             if (header && content) {
                 header.setAttribute('aria-expanded', 'true');
                 content.setAttribute('aria-hidden', 'false');
+                content.style.display = 'block'; // Explicitly set display style
+                
                 if (indicator) {
                     indicator.style.transform = 'rotate(180deg)';
                 }
+                
+                console.log('First section opened successfully');
             }
+        } else {
+            console.warn('No collapsible sections found in advanced tab');
         }
     }
     
@@ -148,11 +169,15 @@ function populateTemplateCodePreview() {
  */
 async function saveWarmHugParameters() {
     try {
+        console.log('Saving Warm Hug parameters...');
+        
         const incrementInput = document.getElementById('warmHugIncrement');
         const durationInput = document.getElementById('warmHugDuration');
         
         if (!incrementInput || !durationInput) {
-            console.error('Warm Hug parameter inputs not found');
+            console.error('Warm Hug parameter inputs not found:',
+                         'incrementInput:', !!incrementInput,
+                         'durationInput:', !!durationInput);
             return;
         }
         
@@ -161,23 +186,29 @@ async function saveWarmHugParameters() {
         const duration = parseInt(durationInput.value);
         
         if (isNaN(increment) || increment < 0.5 || increment > 5) {
+            console.error('Invalid increment value:', increment);
             logMessage('error', 'Increment must be between 0.5 and 5°C per minute');
             return;
         }
         
         if (isNaN(duration) || duration < 5 || duration > 30) {
+            console.error('Invalid duration value:', duration);
             logMessage('error', 'Duration must be between 5 and 30 minutes');
             return;
         }
         
         // Get current config
         const pluginConfig = await homebridge.getPluginConfig();
+        console.log('Retrieved plugin config for saving Warm Hug params:', pluginConfig);
+        
         let config = findPlatformConfig(pluginConfig);
         
         if (!config) {
             console.error('Platform configuration not found');
             return;
         }
+        
+        console.log('Original config advanced section:', config.advanced);
         
         // Ensure advanced section exists
         if (!config.advanced) {
@@ -188,8 +219,15 @@ async function saveWarmHugParameters() {
         config.advanced.warmHugIncrement = increment;
         config.advanced.warmHugDuration = duration;
         
+        console.log('Updated config advanced section:', config.advanced);
+        
         // Update config in memory
         await homebridge.updatePluginConfig(pluginConfig);
+        console.log('Updated plugin config in memory');
+        
+        // Save to disk
+        await homebridge.savePluginConfig();
+        console.log('Saved plugin config to disk');
         
         // Log success
         logMessage('success', 'Warm Hug parameters saved successfully');
@@ -198,7 +236,6 @@ async function saveWarmHugParameters() {
         logMessage('error', `Error saving parameters: ${error.message}`);
     }
 }
-
 /**
  * Save device-specific settings
  * Updates configuration with user-defined device settings
@@ -262,44 +299,82 @@ function findPlatformConfig(pluginConfig) {
  */
 async function loadAdvancedSettings() {
     try {
+        console.log('Loading advanced settings from config...');
+        
         // Get form elements
         const incrementInput = document.getElementById('warmHugIncrement');
         const durationInput = document.getElementById('warmHugDuration');
         const deviceModelSelect = document.getElementById('deviceModel');
+        const logLevelSelect = document.getElementById('logLevel');
         
-        if (!incrementInput || !durationInput || !deviceModelSelect) {
-            console.warn('Some advanced settings form elements not found');
-            return;
+        if (!incrementInput || !durationInput) {
+            console.warn('Warm Hug parameter inputs not found in DOM:',
+                         'incrementInput:', !!incrementInput,
+                         'durationInput:', !!durationInput);
+        }
+        
+        if (!deviceModelSelect) {
+            console.warn('Device model select not found in DOM');
         }
         
         // Get current config
         const pluginConfig = await homebridge.getPluginConfig();
+        console.log('Retrieved plugin config for advanced settings:', pluginConfig);
+        
         const config = findPlatformConfig(pluginConfig);
         
         if (!config) {
-            console.warn('Platform configuration not found');
+            console.warn('Platform configuration not found in plugin config');
             return;
         }
         
-        // Set values if they exist in config
-        if (config.advanced) {
-            if (config.advanced.warmHugIncrement !== undefined) {
-                incrementInput.value = config.advanced.warmHugIncrement;
-            }
-            
-            if (config.advanced.warmHugDuration !== undefined) {
-                durationInput.value = config.advanced.warmHugDuration;
-            }
-            
-            if (config.advanced.deviceModel) {
-                deviceModelSelect.value = config.advanced.deviceModel;
-            }
+        console.log('Found platform config:', {
+            hasAdvanced: !!config.advanced,
+            advancedProps: config.advanced ? Object.keys(config.advanced) : 'none'
+        });
+        
+        // Set log level if available
+        if (logLevelSelect && config.logLevel) {
+            logLevelSelect.value = config.logLevel;
+            console.log('Set log level to:', config.logLevel);
         }
+        
+        // Set values if they exist in config.advanced
+        if (config.advanced) {
+            if (incrementInput && config.advanced.warmHugIncrement !== undefined) {
+                incrementInput.value = config.advanced.warmHugIncrement;
+                console.log('Set warm hug increment to:', config.advanced.warmHugIncrement);
+            } else if (incrementInput) {
+                // Default value if not in config
+                incrementInput.value = "2";
+                console.log('Using default warm hug increment: 2');
+            }
+            
+            if (durationInput && config.advanced.warmHugDuration !== undefined) {
+                durationInput.value = config.advanced.warmHugDuration;
+                console.log('Set warm hug duration to:', config.advanced.warmHugDuration);
+            } else if (durationInput) {
+                // Default value if not in config
+                durationInput.value = "15";
+                console.log('Using default warm hug duration: 15');
+            }
+            
+            if (deviceModelSelect && config.advanced.deviceModel) {
+                deviceModelSelect.value = config.advanced.deviceModel;
+                console.log('Set device model to:', config.advanced.deviceModel);
+            }
+        } else {
+            console.log('No advanced settings found in config, using defaults');
+            // Set default values if advanced section doesn't exist
+            if (incrementInput) incrementInput.value = "2";
+            if (durationInput) durationInput.value = "15";
+        }
+        
+        console.log('Advanced settings loaded successfully');
     } catch (error) {
         console.error('Error loading advanced settings:', error);
     }
 }
-
 // Main application module using IIFE pattern for encapsulation
 const SleepMeUI = (function() {
     // Private module variables

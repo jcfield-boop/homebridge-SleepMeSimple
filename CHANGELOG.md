@@ -1,4 +1,36 @@
 # Changelog
+## 5.3.3
+
+### Fixed
+- **Schedule Loading Issue**: Fixed critical bug where schedules weren't being properly loaded from config.json
+  - Enhanced schedule parsing with improved error handling
+  - Added detailed logging for schedule loading process
+  - Fixed unit conversion for loaded schedules
+  - Added validation and sanity checks for schedule data
+  - Improved error reporting for schedule loading failures
+
+- **Warm Hug Parameters Visibility**: Resolved issue where Warm Hug parameters weren't visible in Advanced config
+  - Fixed collapsible section initialization for Advanced options tab
+  - Improved CSS/display handling for section visibility
+  - Added explicit style and class manipulation for reliable display
+  - Enhanced event handling for section toggles
+  - Added comprehensive logging for UI element initialization
+
+- **Advanced Options Tab**: General improvements to the Advanced Options user interface
+  - Fixed event delegation for tab visibility
+  - Improved initialization sequence for UI elements
+  - Added proper display state management for collapsible sections
+  - Fixed ARIA attributes for better accessibility
+  - Enhanced logging to track element state changes
+
+### Technical Improvements
+- Added detailed console logging throughout the configuration loading process
+- Enhanced error handling with proper fallbacks for missing configuration
+- Improved type checking and validation for schedule properties
+- Fixed DOM element references and error checking
+- Added loading sequence verification
+- Enhanced UI state management with proper CSS and display property handling
+- Fixed event handler management to prevent memory leaks
 ##5.3.1
 Major Changes
 
