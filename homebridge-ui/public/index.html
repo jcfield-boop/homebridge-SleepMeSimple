@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script>
+        // Block ALL log-related toast notifications
+        window.addEventListener('DOMContentLoaded', function() {
+          if (typeof homebridge !== 'undefined') {
+            // Block log fetching completely
+            if (typeof homebridge.fetchLogs === 'function') {
+              homebridge.fetchLogs = function() {
+                console.log('Log fetching suppressed');
+                return Promise.resolve([]); // Return empty logs
+              };
+            }
+            
+            // Intercept fetch requests related to logs
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+              if (typeof url === 'string' && (url.includes('/log') || url.includes('/logs'))) {
+                console.log('Suppressed fetch to:', url);
+                return Promise.resolve(new Response('[]', {
+                  status: 200,
+                  headers: {'Content-Type': 'application/json'}
+                }));
+              }
+              return originalFetch.apply(this, arguments);
+            };
+            
+            // Override toast methods for log-related messages
+            if (homebridge.toast) {
+              const originalToast = {};
+              ['success', 'error', 'warning', 'info'].forEach(type => {
+                originalToast[type] = homebridge.toast[type];
+                homebridge.toast[type] = function(message, title) {
+                  // Block specific log-related error messages
+                  if (title === 'Logs Error' || 
+                      (message && (message.includes('logs') || message.includes('log')))) {
+                    console.log(`Suppressed ${type} toast:`, title, message);
+                    return;
+                  }
+                  return originalToast[type].call(this, message, title);
+                };
+              });
+            }
+          }
+        });
+      </script>
+    <title>SleepMe Simple Configuration</title>
+     <script>
+        // Pre-declare ALL global variables at the earliest possible moment
+        // This uses window as the global scope to ensure availability everywhere
+        window.isEditing = false;
+        window.editingScheduleIndex = -1;
+        window.schedules = [];
+        
+        // Also pre-declare these commonly accessed variables
+        window.scheduleTypeSelect = null;
+        window.daySelectContainer = null;
+        window.scheduleTimeInput = null;
+        window.scheduleTemperatureInput = null;
+        window.unitSelect = null;
+        window.warmHugInfo = null;
+        window.addScheduleBtn = null;
+        window.cancelEditBtn = null;
+        window.scheduleList = null;
+        
+        // Safety wrapper for any functions that might be called early
+        window.renderScheduleList = window.renderScheduleList || function() { 
+          console.log('renderScheduleList called before initialization'); 
+        };
+        window.validateScheduleTime = window.validateScheduleTime || function() { 
+          return true; 
+        };
+        window.validateTemperature = window.validateTemperature || function() { 
+          return true; 
+        };
+        
+        console.log('Global variables and safety functions initialized');
+      </script>
+   <style>
+    /* Core Variables */
+:root {
+  /* Colors */
+  --primary-color: #0070c9;
+  --primary-color-dark: #00559b;
+  --secondary-color: #6c757d;
+  --secondary-color-dark: #5a6268;
+  --success-color: #28a745;
+  --success-color-dark: #218838;
+  --danger-color: #dc3545;
+  --danger-color-dark: #c82333;
+  --light-gray: #f8f9fa;
+  --medium-gray: #e9ecef;
+  --border-color: #ddd;
+  --text-color: #333;
+  --text-muted: #6c757d;
+  
+  /* Spacing */
+  --spacing-xs: 5px;
+  --spacing-sm: 10px;
+  --spacing-md: 15px;
+  --spacing-lg: 20px;
+  --spacing-xl: 30px;
+  
+  /* Border Radius */
+  --border-radius-sm: 4px;
+  --border-radius-md: 6px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.1);
+  
+  /* Transitions */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.3s;
+}
+
+/* Base Styles */
+body { 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  max-width: 800px; 
+  margin: 0 auto;
+  padding: 20px;
+  color: var(--text-color);
+}
+
+.container {
+  background-color: #fff;
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-lg);
+  max-height: none;
+  overflow: visible;
+}
+
+h1, h2, h3 {
+  color: var(--text-color);
+  text-align: center;
+}
+
+h1 {
+  margin-bottom: var(--spacing-lg);
+}
+
+h2 {
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+}
+
+h3 {
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+  font-size: 18px;
+}
+
+/* Header & Layout */
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.logo {
+  width: 100px;
+  height: 100px;
+  margin-bottom: var(--spacing-md);
+}
+
+.section-divider {
+  border-top: 1px solid var(--border-color);
+  margin: var(--spacing-xl) 0 var(--spacing-md);
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: var(--spacing-md);
+  position: relative;
+}
+
+label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: bold;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  box-sizing: border-box;
+}
+
+input.invalid {
+  border-color: var(--danger-color);
+}
+
+input[type="checkbox"] {
+  width: auto;
+}
+
+/* Field Row Layout */
+.fields-row {
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 0 -10px;
+  gap: var(--spacing-lg);
+}
+
+.field-column {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+/* Buttons */
+button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: 16px;
+  margin-right: var(--spacing-xs);
+}
+
+button:hover {
+  background-color: var(--primary-color-dark);
+}
+
+button.secondary {
+  background-color: var(--secondary-color);
+}
+
+button.secondary:hover {
+  background-color: var(--secondary-color-dark);
+}
+
+button.danger {
+  background-color: var(--danger-color);
+}
+
+button.danger:hover {
+  background-color: var(--danger-color-dark);
+}
+
+button.edit {
+  background-color: var(--success-color);
+}
+
+button.edit:hover {
+  background-color: var(--success-color-dark);
+}
+
+.button-group {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Status Messages */
+.status {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+}
+
+.status.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.status.error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.status.info {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #bbdefb;
+}
+
+.status.warning {
+  background-color: #fff8e1;
+  color: #f57f17;
+  border: 1px solid #ffecb3;
+}
+
+.status.hidden {
+  display: none;
+}
+
+/* Error Text */
+.error-text {
+  color: var(--danger-color);
+  font-size: 14px;
+  margin-bottom: var(--spacing-xs);
+  display: none;
+}
+
+.error-text.visible {
+  display: block;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--spacing-lg);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 15px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  margin-right: var(--spacing-xs);
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+  transition: background-color var(--transition-fast);
+}
+
+.tab:hover {
+  background-color: var(--light-gray);
+}
+
+.tab.active {
+  background-color: #fff;
+  border-color: var(--border-color);
+  border-bottom-color: #fff;
+  margin-bottom: -1px;
+  font-weight: bold;
+}
+
+.tab-title {
+  flex: 1;
+}
+
+.dropdown-indicator {
+  font-size: 18px;
+  transition: transform var(--transition-normal);
+  margin-left: var(--spacing-xs);
+}
+
+.tab.active .dropdown-indicator {
+  transform: rotate(180deg);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Collapsible Sections */
+.collapsible-section {
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background-color: var(--light-gray);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.collapsible-header:hover {
+  background-color: var(--medium-gray);
+}
+
+.collapsible-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.collapsible-content {
+  padding: 15px;
+  border-top: 1px solid var(--border-color);
+  display: none;
+}
+
+.collapsible-section.open .collapsible-content {
+  display: block;
+}
+
+.collapsible-section.open .dropdown-indicator {
+  transform: rotate(180deg);
+}
+
+/* Larger dropdown indicators */
+.dropdown-indicator {
+  font-size: 24px !important;
+  transition: transform var(--transition-normal);
+  font-weight: bold;
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--primary-color);
+}
+
+/* Schedule Styles */
+.schedule-container {
+  margin-top: var(--spacing-lg);
+}
+
+.schedule-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+  align-items: flex-end;
+}
+
+.schedule-form .form-group {
+  flex: 1;
+  min-width: 150px;
+  margin-bottom: 0;
+}
+
+.schedule-list {
+  margin-top: var(--spacing-lg);
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+}
+
+.schedule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.schedule-item button {
+  margin-left: var(--spacing-sm);
+  padding: 5px 10px;
+  font-size: 14px;
+}
+
+.schedule-item-info {
+  flex: 1;
+}
+
+.schedule-group {
+  margin-bottom: var(--spacing-lg);
+  border-left: 3px solid var(--primary-color);
+  padding-left: var(--spacing-sm);
+}
+
+.schedule-group-title {
+  font-weight: bold;
+  margin-bottom: var(--spacing-sm);
+  color: var(--primary-color);
+}
+
+.schedule-phase {
+  margin-left: var(--spacing-sm);
+  padding: 3px 8px;
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  font-weight: normal;
+  color: white;
+  display: inline-block;
+  margin-right: var(--spacing-xs);
+}
+
+.phase-cooldown {
+  background-color: #5bc0de;
+}
+
+.phase-deep {
+  background-color: #0275d8;
+}
+
+.phase-rem {
+  background-color: #5cb85c;
+}
+
+.phase-wakeup {
+  background-color: #f0ad4e;
+}
+
+.template-schedule {
+  border-left: 3px solid var(--primary-color);
+}
+
+.template-badge {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  margin-left: var(--spacing-xs);
+  cursor: help;
+}
+
+/* Template Sections */
+.template-section {
+  background-color: var(--light-gray);
+  border-radius: var(--border-radius-sm);
+  padding: 15px;
+  margin-bottom: var(--spacing-lg);
+}
+
+.template-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.template-col {
+  flex: 1;
+}
+
+.template-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-sm);
+}
+
+.info-card {
+  background-color: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.info-card h4 {
+  margin-top: 0;
+  margin-bottom: var(--spacing-xs);
+  color: var(--primary-color);
+}
+
+.info-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Code Examples */
+.code-example {
+  background-color: var(--light-gray);
+  border: 1px solid var(--medium-gray);
+  border-radius: var(--border-radius-sm);
+  padding: 15px;
+  margin: 10px 0;
+  font-family: monospace;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.code-example pre {
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Template Preview */
+.template-preview {
+  margin-top: 15px;
+  padding: 10px;
+  border: 1px dashed #ccc;
+  border-radius: var(--border-radius-sm);
+  background-color: #f9f9f9;
+}
+
+.template-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.preview-item {
+  padding: 5px 10px;
+  margin-bottom: 5px;
+  border-radius: var(--border-radius-sm);
+  background-color: #fff;
+  border-left: 3px solid var(--primary-color);
+  display: flex;
+  justify-content: space-between;
+}
+
+.copy-success {
+  color: var(--success-color);
+  font-size: 14px;
+  margin-left: var(--spacing-sm);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.copy-success.visible {
+  opacity: 1;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #fff;
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--shadow-md);
+  max-width: 400px;
+  width: 100%;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--spacing-lg);
+  gap: var(--spacing-sm);
+}
+
+#confirmModal.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Form Text */
+.form-text {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: var(--spacing-xs);
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  /* Tab styles */
+  .tabs {
+    flex-wrap: wrap;
+  }
+  
+  .tab {
+    flex: 0 0 50%; /* Two tabs per row on mobile */
+    box-sizing: border-box;
+    margin-right: 0;
+    border-radius: 0;
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+  
+  .tab:nth-child(1), .tab:nth-child(2) {
+    border-top-left-radius: var(--border-radius-sm);
+    border-top-right-radius: var(--border-radius-sm);
+  }
+  
+  /* Column styles */
+  .col-md-6 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+  
+  /* Form layout */
+  .button-group {
+    flex-direction: column;
+  }
+  
+  button {
+    margin-bottom: var(--spacing-xs);
+    width: 100%;
+    margin-right: 0;
+  }
+  
+  .schedule-form {
+    flex-direction: column;
+  }
+  
+  .schedule-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .schedule-item-actions {
+    margin-top: var(--spacing-xs);
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .schedule-item button {
+    flex: 1;
+    margin-left: 0;
+    margin-right: var(--spacing-xs);
+  }
+  
+  .schedule-item button:last-child {
+    margin-right: 0;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .fields-row {
+    flex-wrap: wrap;
+  }
+  
+  .field-column {
+    flex: 0 0 100%;
+  }
+  
+  .container {
+    padding: var(--spacing-sm);
+  }
+  
+  .modal-content {
+    max-width: 85%;
+    padding: var(--spacing-sm);
+  }
+}
+   </style> <
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
+            <h1>SleepMe Simple Configuration</h1>
+        </div>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <form id="configForm">
+            <div class="form-group">
+                <label for="apiToken">API Token:</label>
+                <input type="text" id="apiToken" name="apiToken" required>
+                <small id="apiTokenHelp" class="form-text text-muted">Your SleepMe API token. Obtain this from your account at sleep.me</small>
+            </div>
+            
+<!-- Replace the existing two-column layout with this -->
+<div class="fields-row">
+    <div class="field-column">
+        <label for="unit">Temperature Unit:</label>
+        <select id="unit" name="unit">
+            <option value="C">Celsius</option>
+            <option value="F">Fahrenheit</option>
+        </select>
+    </div>
+    <div class="field-column">
+        <label for="pollingInterval">Polling Interval (seconds):</label>
+        <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
+        <small class="form-text text-muted">Frequency of device status checks (60-300 seconds)</small>
+    </div>
+</div>
+<div class="form-group">
+    <label for="logLevel">Log Level:</label>
+    <select id="logLevel" name="logLevel">
+        <option value="normal">Normal - Standard operation logs</option>
+        <option value="debug">Debug - Additional debugging information</option>
+        <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
+    </select>
+    <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+</div>            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="enableSchedules" name="enableSchedules">
+                    Enable Schedules
+                </label>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" id="testConnection">Test Connection</button>
+                <button type="submit">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="schedulesContainer" class="container hidden">
+        <h2>Temperature Schedules</h2>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="manual">
+                <span class="tab-title">Manual Schedule</span>
+            </div>
+            <div class="tab" data-tab="templates">
+                <span class="tab-title">Schedule Templates</span>
+            </div>
+            <!-- Our new tabs are already updated -->
+            <div class="tab" data-tab="templateHelp">
+                <span class="tab-title">Template Help</span>
+                <span class="dropdown-indicator">▾</span>
+            </div>
+            <div class="tab" data-tab="warmHugOptions">
+                <span class="tab-title">Warm Hug Options</span>
+                <span class="dropdown-indicator">▾</span>
+            </div>
+        </div>
+        <!-- Manual Schedule Tab -->
+        <div id="manualTab" class="tab-content active">
+            <p>Create schedules to automatically adjust your device temperature.</p>
+            
+            <div class="schedule-form">
+                <div class="form-group">
+                    <label for="scheduleType">Schedule Type:</label>
+                    <select id="scheduleType">
+                        <option value="Everyday">Everyday</option>
+                        <option value="Weekdays">Weekdays</option>
+                        <option value="Weekend">Weekend</option>
+                        <option value="Specific Day">Specific Day</option>
+                        <option value="Warm Hug">Warm Hug</option>
+                    </select>
+                </div>
+                
+                <div id="daySelectContainer" class="form-group hidden">
+                    <label for="scheduleDay">Day:</label>
+                    <select id="scheduleDay">
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="scheduleTime">Time (24h):</label>
+                    <div id="timeError" class="error-text">Please enter a valid 24-hour time (HH:MM)</div>
+                    <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="scheduleTemperature">Temperature:</label>
+                    <div id="tempError" class="error-text">Temperature must be between 55-115°F</div>
+                    <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
+                </div>
+                
+                <button type="button" id="addSchedule">Add Schedule</button>
+                <button type="button" id="cancelEdit" class="secondary hidden">Cancel</button>
+            </div>
+            
+            <div id="warmHugInfo" class="info-card hidden">
+                <h4>Warm Hug Feature</h4>
+                <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled time, for a gentle wake-up experience. When selected, your device will begin warming <strong>before</strong> the time you set to ensure it reaches your target temperature exactly at your scheduled time.</p>
+                <p>For detailed configuration of Warm Hug parameters, please see the "Warm Hug Options" tab.</p>
+            </div>
+            <div id="scheduleList" class="schedule-list">
+                <!-- Schedules will be rendered here -->
+                <p>No schedules configured.</p>
+            </div>
+        </div>
+        
+        <!-- Template Tab -->
+        <div id="templatesTab" class="tab-content">
+            <div class="info-card">
+                <h4>About Schedule Templates</h4>
+                <p>These templates are designed based on sleep science to optimize your sleep experience throughout the night. Choose a template for weekdays and weekends to automatically create multiple schedule entries.</p>
+            </div>
+            
+            <div class="template-section">
+                <h3>Weekday Template</h3>
+                <div class="template-row">
+                    <div class="template-col">
+                        <label for="weekdayTemplate">Select Template:</label>
+                        <select id="weekdayTemplate">
+                            <option value="">None</option>
+                            <option value="optimal">Optimal Sleep Cycle</option>
+                            <option value="nightOwl">Night Owl</option>
+                            <option value="earlyBird">Early Bird</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="weekdayTemplateDesc" class="template-desc"></div>
+            </div>
+            
+            <div class="template-section">
+                <h3>Weekend Template</h3>
+                <div class="template-row">
+                    <div class="template-col">
+                        <label for="weekendTemplate">Select Template:</label>
+                        <select id="weekendTemplate">
+                            <option value="">None</option>
+                            <option value="recovery">Weekend Recovery</option>
+                            <option value="relaxed">Relaxed Weekend</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="weekendTemplateDesc" class="template-desc"></div>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" id="applyTemplates">Apply Templates</button>
+            </div>
+        </div>
+<!-- Template Help Tab -->
+<div id="templateHelpTab" class="tab-content">
+    <div class="info-card">
+      <h4>Advanced Template Editing</h4>
+      <p>Templates create predefined schedule patterns based on sleep science. There are three ways to customize templates:</p>
+    </div>
+  
+    <!-- Option 1 as a collapsible section -->
+    <div class="collapsible-section">
+      <div class="collapsible-header">
+        <h3>Option 1: Edit Individual Schedules</h3>
+        <span class="dropdown-indicator">▾</span>
+      </div>
+      <div class="collapsible-content">
+        <p>After applying templates, you can edit each schedule individually using the "Edit" button. Template-based schedules are marked with a "T" badge.</p>
+        <div class="code-example">
+          1. Apply a template
+          2. Click "Edit" on any schedule
+          3. Adjust values as needed
+          4. Click "Update Schedule"
+        </div>
+      </div>
+    </div>
+    
+    <!-- Option 2 as a collapsible section -->
+    <div class="collapsible-section">
+      <div class="collapsible-header">
+        <h3>Option 2: Edit Template Definitions</h3>
+        <span class="dropdown-indicator">▾</span>
+      </div>
+      <div class="collapsible-content">
+        <p>You can modify template definitions directly in your Homebridge config.json file. This allows you to create custom templates.</p>
+        <div class="code-example">
+          <p>Templates are defined in the JavaScript code. The default templates are:</p>
+          <pre id="templateCodePreview">// Loading template definitions...</pre>
+          <button id="copyTemplateCode" class="secondary">Copy Template Code</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Option 3 as a collapsible section -->
+    <div class="collapsible-section">
+      <div class="collapsible-header">
+        <h3>Option 3: Create Custom Templates</h3>
+        <span class="dropdown-indicator">▾</span>
+      </div>
+      <div class="collapsible-content">
+        <p>Advanced users can create custom templates by editing the config.json file directly:</p>
+        <ol>
+          <li>Stop Homebridge</li>
+          <li>Open the config.json file (typically in ~/.homebridge/config.json)</li>
+          <li>Find the SleepMeSimple platform configuration</li>
+          <li>Add or modify the "templates" property</li>
+          <li>Save the file and restart Homebridge</li>
+        </ol>
+        <div class="code-example">
+          <p>Example of a custom template in config.json:</p>
+          <pre>{
+    "platform": "SleepMeSimple",
+    "name": "SleepMe Simple",
+    "apiToken": "your-token-here",
+    "unit": "C",
+    "pollingInterval": 90,
+    "enableSchedules": true,
+    "schedules": [...],
+    "templates": {
+      "myCustom": {
+        "name": "My Custom Template", 
+        "description": "Custom temperature profile",
+        "schedules": [
+          { "type": "Weekdays", "time": "22:00", "temperature": 21, "description": "Evening Cool Down" },
+          { "type": "Weekdays", "time": "23:30", "temperature": 19, "description": "Deep Sleep" },
+          { "type": "Weekdays", "time": "03:00", "temperature": 22, "description": "REM Support" },
+          { "type": "Weekdays", "time": "06:30", "temperature": 25, "description": "Warm Hug Wake-up" }
+        ]
+      }
+    }
+  }</pre>
+          <button id="copyConfigExample" class="secondary">Copy Config Example</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<!-- Warm Hug Options Tab -->
+<div id="warmHugOptionsTab" class="tab-content">
+    <div class="info-card">
+      <h4>Warm Hug Configuration</h4>
+      <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled wake-up time.</p>
+    </div>
+  
+    <div class="collapsible-section">
+      <div class="collapsible-header">
+        <h3>Temperature Parameters</h3>
+        <span class="dropdown-indicator">▾</span>
+      </div>
+      <div class="collapsible-content">
+        <div class="form-group">
+          <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
+          <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
+          <small class="form-text text-muted">How quickly temperature increases (0.5-5°C per minute)</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="warmHugDuration">Warm Hug Duration (minutes):</label>
+          <input type="number" id="warmHugDuration" min="5" max="60" value="15">
+          <small class="form-text text-muted">Total duration of the Warm Hug (5-60 minutes before scheduled time)</small>
+        </div>
+      </div>
+    </div>
+  
+    <div class="collapsible-section">
+      <div class="collapsible-header">
+        <h3>How Warm Hug Works</h3>
+        <span class="dropdown-indicator">▾</span>
+      </div>
+      <div class="collapsible-content">
+        <p>When you create a "Warm Hug" schedule type, the device will:</p>
+        <ol>
+          <li>Start at your current temperature</li>
+          <li>Begin warming up gradually <strong>before</strong> your scheduled time (based on the duration setting)</li>
+          <li>Increase temperature at the specified rate until reaching your target temperature</li>
+          <li>Reach the exact target temperature at precisely your scheduled time</li>
+        </ol>
+        <p>This creates a gentle, natural wake-up experience similar to sunrise, helping you start your day refreshed.</p>
+      </div>
+    </div>
+    
+    <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
+  </div>
+    </div>
+
+</div>
+
+    <!-- Scripts - corrected loading order -->
+    <script src="js/ui-validation-functions.js"></script>
+    <script src="js/ui-config-handlers.js"></script>
+    <script src="js/ui-schedule-handlers.js"></script>
+    <script src="js/ui-main-script.js"></script>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal-overlay hidden" style="display: none;">
+        <div class="modal-content">
+            <h3 id="confirmTitle">Confirm Action</h3>
+            <p id="confirmMessage">Are you sure you want to perform this action?</p>
+            <div class="modal-buttons">
+                <button id="confirmCancel" class="secondary">Cancel</button>
+                <button id="confirmOk" class="danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

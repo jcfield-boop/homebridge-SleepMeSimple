@@ -1,0 +1,80 @@
+{
+  "pluginAlias": "SleepMeSimple",
+  "pluginType": "platform",
+  "customUi": true,
+  "footerDisplay": "SleepMe Simple Homebridge Plugin v4.0.3",
+  "customIcon": "icons/sleepmebasic.png",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "SleepMe Simple",
+        "required": true
+      },
+      "apiToken": {
+        "title": "API Token",
+        "type": "string",
+        "format": "password",
+        "description": "Your SleepMe API token",
+        "required": true
+      },
+      "unit": {
+        "title": "Temperature Unit",
+        "type": "string",
+        "enum": ["C", "F"],
+        "default": "C",
+        "description": "Temperature display unit"
+      },
+      "pollingInterval": {
+        "title": "Polling Interval",
+        "type": "integer",
+        "minimum": 60,
+        "maximum": 300,
+        "default": 90,
+        "description": "Device status check interval (seconds)"
+      },
+      "enableSchedules": {
+        "title": "Enable Schedules",
+        "type": "boolean",
+        "default": false
+      },
+"schedules": {
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"]
+      },
+      "time": {
+        "type": "string",
+        "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
+      },
+      "temperature": {
+        "type": "number",
+        "minimum": 13,
+        "maximum": 46
+      },
+      "day": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 6
+      },
+      "description": {
+        "type": "string"
+      },
+      "unit": {
+        "type": "string",
+        "enum": ["C", "F"]
+      }
+    },
+    "required": ["type", "time", "temperature"]
+  }
+}
+    },
+    "required": ["apiToken"]
+  }
+}
