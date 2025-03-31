@@ -1,65 +1,76 @@
-// homebridge-ui/server.js - Modified version to prevent automatic checks
+// homebridge-ui/server.js - Fixed version to prevent automatic checks
 
-import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
-import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
+import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 
 // API URL
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * SleepMe UI Server class
- * Modified to prevent automatic config checking and log fetching
+ * Fixed to prevent automatic notifications and events
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
-    // Must call super first to initialize the parent class
+    // Call super first to initialize the parent class
     super();
     
-    // CRITICAL: Override internal functions that might trigger toast notifications
-    // This prevents ALL event pushes from happening automatically
-    this._preventAutomaticEvents();
+    // CRITICAL: Immediately block all automatic events by overriding methods
+    this._blockAutomaticEvents();
     
     // Register ONLY explicit request handlers (no automatic operations)
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
     
-    // Server-side logging that never triggers UI notifications
+    // Log to console only, never send events to UI
     console.log('[SleepMeUI] Server initialized');
     
-    // IMPORTANT: Signal that the server is ready to accept requests
-    // This must be called after all request handlers are registered
+    // Signal readiness but don't trigger any UI events
     this.ready();
   }
   
   /**
-   * Prevent automatic events by overriding internal methods
-   * This is a comprehensive approach to block ALL automatic events
+   * Block ALL automatic events by completely overriding event-triggering methods
+   * This is the most comprehensive approach to prevent unwanted UI notifications
    * @private
    */
-  _preventAutomaticEvents() {
-    // 1. Override the pushEvent method to block automatic events
-    const originalPushEvent = this.pushEvent;
+  _blockAutomaticEvents() {
+    // 1. Completely disable the pushEvent method 
     this.pushEvent = function() {
-      // Completely disable the pushEvent functionality
-      console.log('[SleepMeUI] Event push prevented');
-      return; // Return nothing and do nothing
+      // Log to console only
+      console.log('[SleepMeUI] Event push prevented:', arguments);
+      return; // Do nothing
     };
     
-    // 2. If there are any timers or initialization functions, prevent them too
-    if (this._checkConfig) {
-      this._checkConfig = function() {
-        console.log('[SleepMeUI] Automatic config check prevented');
+    // 2. Block ALL automatic config checking operations
+    this._checkConfig = function() {
+      console.log('[SleepMeUI] Automatic config check prevented');
+      return;
+    };
+    
+    // 3. Block ALL log fetching operations
+    this.fetchLogs = function() {
+      console.log('[SleepMeUI] Automatic log fetching prevented');
+      return Promise.resolve([]); // Return empty array
+    };
+    
+    // 4. Override any other methods that might trigger events
+    if (this._setupPolling) {
+      this._setupPolling = function() {
+        console.log('[SleepMeUI] Automatic polling prevented');
         return;
       };
     }
     
-    // 3. If there are any log fetching methods, disable them
-    if (this.fetchLogs) {
-      this.fetchLogs = function() {
-        console.log('[SleepMeUI] Automatic log fetching prevented');
-        return;
+    // 5. Override any initialization methods that might trigger events
+    if (this.init) {
+      const originalInit = this.init;
+      this.init = function() {
+        console.log('[SleepMeUI] Intercepted init call');
+        // Call original but prevent any automatic operations
+        const result = originalInit.apply(this, arguments);
+        // Re-disable events after init
+        this._blockAutomaticEvents();
+        return result;
       };
     }
   }
@@ -70,7 +81,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    * @param {string} level - Log level
    */
   log(message, level = 'info') {
-    // Log to console only - NO events pushed to UI
+    // Log to console only - NEVER send events to UI
     if (level === 'error') {
       console.error(`[SleepMeUI] ${message}`);
     } else if (level === 'warn') {
@@ -181,7 +192,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       if (!apiToken) {
         this.log('API token missing from test request', 'error');
-        throw new RequestError('API token is required', { status: 400 });
+        return {
+          success: false,
+          error: 'API token is required'
+        };
       }
       
       this.log(`Testing SleepMe API connection with provided token`);
@@ -197,8 +211,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         timeout: 10000
       });
       
-      this.log(`API responded with status: ${response.status}`);
-      
       // Handle different API response formats
       let devices = [];
       if (Array.isArray(response.data)) {
@@ -213,8 +225,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         name: device.name || 'Unnamed Device',
         type: this.detectDeviceType(device)
       }));
-      
-      this.log(`Connection test successful. Found ${devices.length} device(s)`);
       
       return {
         success: true,

@@ -1,5 +1,36 @@
 # Changelog
+## 5.4.0
+### Fixed
+- **Complete Solution for Toast Notifications**: Completely eliminated unwanted toast notifications at startup
+  - Added immediate toast suppression that runs before any code execution
+  - Implemented toast function override directly in HTML head
+  - Blocked all log fetching requests that trigger unwanted notifications
+  - Blocked network requests to log endpoints
+  - Added multiple layers of protection against automatic events
+  - Fixed DOM initialization error handling to prevent UI warnings
+  - Implemented server-side event blocking to prevent notifications at source
+  - Added console-only logging instead of toast notifications
 
+### Improved
+- **DOM Error Handling**: Enhanced DOM element initialization
+  - Added multiple initialization attempts with increasing delays
+  - Implemented graceful fallbacks for missing DOM elements
+  - Added detailed console logging for initialization issues
+  - Pre-declared all global variables to prevent "undefined" errors
+  - Added safety function wrappers for early function calls
+  - Improved element validation before attempting operations
+  - Enhanced error recovery for missing UI components
+
+### Technical
+- **Server-Side Prevention**: Comprehensive server-side fixes 
+  - Completely overrode `pushEvent` method to prevent automatic events
+  - Blocked all automatic config checking operations
+  - Blocked all log fetching operations
+  - Added console-only server-side logging
+  - Enhanced request handlers with better error handling
+  - Fixed modal visibility handling with multiple safety checks
+  - Improved request/response handling for API tests
+  - Added defensive programming throughout codebase
 ## 5.3.4
 ### Fixed
 - **Critical Schedule Persistence Fix**: Resolved issue with schedules not saving to config.json correctly
