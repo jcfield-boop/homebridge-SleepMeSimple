@@ -190,68 +190,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   })();
   
-  /**
-   * Initialize collapsible sections throughout the UI
-   * Manages toggle behavior and visual indicators
-   */
-  function initializeCollapsibleSections() {
-      // Skip verbose logging during initialization
+ /**
+ * Initialize collapsible sections throughout the UI
+ * Fixed event handling to ensure proper expansion/collapse
+ */
+function initializeCollapsibleSections() {
+    // Get all collapsible headers
+    const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
+    
+    if (!collapsibleHeaders || collapsibleHeaders.length === 0) {
+      console.warn('No collapsible sections found');
+      return;
+    }
+    
+    collapsibleHeaders.forEach(header => {
+      // Clear existing listeners by cloning
+      const newHeader = header.cloneNode(true);
+      header.parentNode.replaceChild(newHeader, header);
       
-      // Initialize all collapsible headers - safely handle missing elements
-      const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
-      if (!collapsibleHeaders || collapsibleHeaders.length === 0) {
-        // Silently return - don't log errors during initialization
-        return;
-      }
-      
-      collapsibleHeaders.forEach((header, index) => {
-          // Remove any existing listeners first to avoid duplicates
-          const newHeader = header.cloneNode(true);
-          if (header.parentNode) {
-            header.parentNode.replaceChild(newHeader, header);
-          } else {
-            return; // Skip if parent doesn't exist
-          }
-          
-          newHeader.addEventListener('click', function() {
-              // Toggle the open class on the parent section
-              const section = this.closest('.collapsible-section');
-              if (!section) return; // Gracefully handle missing parent
-              
-              section.classList.toggle('open');
-              
-              const isOpen = section.classList.contains('open');
-              
-              // Update aria attributes for accessibility
-              const content = section.querySelector('.collapsible-content');
-              if (!content) return; // Gracefully handle missing content
-              
-              this.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-              content.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-              
-              // Also toggle the dropdown indicator
-              const indicator = this.querySelector('.dropdown-indicator');
-              if (indicator) {
-                  indicator.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-              }
-              
-              // Force display style on the content div
-              content.style.display = isOpen ? 'block' : 'none';
-          });
-          
-          // Set initial aria attributes
-          const section = newHeader.closest('.collapsible-section');
-          if (!section) return; // Gracefully handle missing parent
-          
-          const content = section.querySelector('.collapsible-content');
-          if (!content) return; // Gracefully handle missing content
-          
-          newHeader.setAttribute('aria-expanded', 'false');
-          content.setAttribute('aria-hidden', 'true');
-          
-          // Explicitly set display style
+      // Add click handler to toggle content visibility
+      newHeader.addEventListener('click', function() {
+        const section = this.closest('.collapsible-section');
+        if (!section) return;
+        
+        // Toggle the open class
+        section.classList.toggle('open');
+        
+        // Get the content section
+        const content = section.querySelector('.collapsible-content');
+        if (!content) return;
+        
+        // Explicitly set display style - this is crucial
+        if (section.classList.contains('open')) {
+          content.style.display = 'block';
+        } else {
           content.style.display = 'none';
+        }
+        
+        // Update the dropdown indicator
+        const indicator = this.querySelector('.dropdown-indicator');
+        if (indicator) {
+          indicator.style.transform = section.classList.contains('open') ? 
+            'rotate(180deg)' : 'rotate(0deg)';
+        }
       });
+    });
   }
   
   /**
@@ -421,74 +404,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
   }
   
-  /**
-   * Save device-specific settings
-   * Updates configuration with user-defined device settings
-   * Added proper error handling
-   */
-  async function saveDeviceSettings() {
-      try {
-          const deviceModelSelect = document.getElementById('deviceModel');
-          
-          if (!deviceModelSelect) {
-              // Silently fail without error toasts
-              return;
-          }
-          
-          // Only proceed if homebridge is ready
-          if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
-              console.error('Homebridge API not ready');
-              return;
-          }
-          
-          // Get selected model
-          const deviceModel = deviceModelSelect.value;
-          
-          // Get current config
-          const pluginConfig = await homebridge.getPluginConfig();
-          
-          // Find platform config
-          let config = null;
-          if (Array.isArray(pluginConfig)) {
-              config = pluginConfig.find(cfg => cfg && cfg.platform === 'SleepMeSimple');
-          }
-          
-          if (!config) {
-              console.error('Platform configuration not found');
-              return;
-          }
-          
-          // Ensure advanced section exists
-          if (!config.advanced) {
-              config.advanced = {};
-          }
-          
-          // Update device model preference
-          config.advanced.deviceModel = deviceModel;
-          
-          // Update config in memory
-          await homebridge.updatePluginConfig(pluginConfig);
-          // Save to disk
-          await homebridge.savePluginConfig();
-          
-          // Update status element instead of showing toast
-          const statusElement = document.getElementById('status');
-          if (statusElement) {
-              statusElement.textContent = 'Device settings saved successfully';
-              statusElement.className = 'status success';
-              statusElement.classList.remove('hidden');
-          }
-      } catch (error) {
-          console.error('Error saving device settings:', error);
-          // Update status element with error
-          const statusElement = document.getElementById('status');
-          if (statusElement) {
-              statusElement.textContent = `Error saving settings: ${error.message}`;
-              statusElement.className = 'status error';
-              statusElement.classList.remove('hidden');
-          }
-      }
-  }
   
   /**
    * Find the SleepMeSimple platform config in the Homebridge config
@@ -1258,10 +1173,6 @@ if (saveWarmHugBtn) {
     saveWarmHugBtn.addEventListener('click', saveWarmHugParameters);
 }
 
-const saveDeviceSettingsBtn = document.getElementById('saveDeviceSettings');
-if (saveDeviceSettingsBtn) {
-    saveDeviceSettingsBtn.addEventListener('click', saveDeviceSettings);
-}
 
 // Load advanced settings when the advanced tab is selected
 const advancedTab = document.querySelector('.tab[data-tab="advancedOptions"]');
