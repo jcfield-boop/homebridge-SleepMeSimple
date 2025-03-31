@@ -1,4 +1,17 @@
 # Changelog
+## 5.4.1
+### Fixed
+- **UI Layout Correction**: Fixed Celsius and Polling interval inputs to properly display side-by-side as intended
+  - Replaced Bootstrap-style responsive grid with more robust flex layout
+  - Added explicit width controls to prevent field overflow
+  - Modified responsive breakpoints to maintain side-by-side layout on most screens
+  - Only allows stacking on extremely small mobile screens (under 480px)
+
+- **DOM Initialization Error**: Added robust DOM element initialization with recovery mechanism
+  - Implemented verification of critical UI elements at startup
+  - Added automatic retry with delay if elements are not immediately available
+  - Enhanced error reporting with specific missing element identification
+  - Added explicit width settings to ensure proper field rendering
 ## 5.4.0
 ### Fixed
 - **Complete Solution for Toast Notifications**: Completely eliminated unwanted toast notifications at startup

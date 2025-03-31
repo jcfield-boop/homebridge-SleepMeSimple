@@ -7,7 +7,51 @@
  * Uses the module pattern to avoid global namespace pollution
  * and improve code organization
  */
-
+/**
+ * DOM Ready Handler - Ensures UI elements are properly initialized
+ * Fixes "Failed to initialize UI elements" error
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    // Ensure the DOM is fully loaded before initialization
+    console.log('DOM fully loaded - starting initialization');
+    
+    // Initialize key form elements with explicit IDs
+    const formElements = ['unit', 'pollingInterval', 'apiToken', 'enableSchedules'];
+    
+    // Verify all critical elements exist
+    const missingElements = formElements.filter(id => !document.getElementById(id));
+    
+    if (missingElements.length > 0) {
+        console.error('Missing critical UI elements:', missingElements.join(', '));
+        
+        // Try to recover by forcing a small delay and retrying
+        setTimeout(() => {
+            const stillMissing = missingElements.filter(id => !document.getElementById(id));
+            if (stillMissing.length === 0) {
+                console.log('UI elements now available after delay');
+                initUIComponents();
+            } else {
+                console.error('Unable to recover missing elements:', stillMissing.join(', '));
+            }
+        }, 500);
+    } else {
+        // All elements found, initialize normally
+        initUIComponents();
+    }
+    
+    function initUIComponents() {
+        // Set explicit widths for the fields to ensure proper layout
+        const unitField = document.getElementById('unit');
+        const pollingField = document.getElementById('pollingInterval');
+        
+        if (unitField && pollingField) {
+            // Ensure fields have appropriate width
+            unitField.style.width = '100%';
+            pollingField.style.width = '100%';
+            console.log('Field widths explicitly set');
+        }
+    }
+});
 // Execute immediately to prevent ANY toasts from appearing during startup
 (function suppressAllStartupToasts() {
     // Immediately suppress ALL toast notifications during initialization
