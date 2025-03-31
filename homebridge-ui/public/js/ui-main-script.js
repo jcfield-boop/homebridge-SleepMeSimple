@@ -245,67 +245,53 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
   })();
-/**
- * Initialize collapsible sections throughout the UI
- * Enhanced to ensure proper opening/closing and better event handling
- */
-function initializeCollapsibleSections() {
-    // Get all collapsible headers
+  function initializeCollapsibleSections() {
+    console.log('🔍 Initializing Collapsible Sections');
+    
     const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
     
-    console.log(`Found ${collapsibleHeaders.length} collapsible sections`);
-    
-    if (!collapsibleHeaders || collapsibleHeaders.length === 0) {
-      console.warn('No collapsible sections found');
-      return;
+    if (collapsibleHeaders.length === 0) {
+        console.warn('⚠️ No collapsible sections found');
+        return;
     }
     
-    // Process each header
     collapsibleHeaders.forEach(header => {
-      // Clear existing listeners by cloning and replacing
-      const newHeader = header.cloneNode(true);
-      if (header.parentNode) {
+        // Remove existing listeners by cloning
+        const newHeader = header.cloneNode(true);
         header.parentNode.replaceChild(newHeader, header);
-      }
-      
-      // Add click handler to toggle content visibility
-      newHeader.addEventListener('click', function(event) {
-        // Prevent event bubbling
-        event.preventDefault();
-        event.stopPropagation();
         
-        const section = this.closest('.collapsible-section');
-        if (!section) return;
-        
-        // Toggle the open class
-        section.classList.toggle('open');
-        
-        // Get the content section
-        const content = section.querySelector('.collapsible-content');
-        if (!content) return;
-        
-        // Explicitly set display style with both methods
-        if (section.classList.contains('open')) {
-          content.style.display = 'block';
-          content.classList.remove('hidden');
-        } else {
-          content.style.display = 'none';
-          content.classList.add('hidden');
-        }
-        
-        // Update the dropdown indicator with rotation
-        const indicator = this.querySelector('.dropdown-indicator');
-        if (indicator) {
-          indicator.style.transform = section.classList.contains('open') ? 
-            'rotate(180deg)' : 'rotate(0deg)';
-        }
-        
-        console.log(`Section ${section.querySelector('h3')?.textContent || 'unknown'} toggled to ${section.classList.contains('open') ? 'open' : 'closed'}`);
-      });
+        newHeader.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const section = this.closest('.collapsible-section');
+            const content = section?.querySelector('.collapsible-content');
+            const indicator = this.querySelector('.dropdown-indicator');
+            
+            if (!section || !content) return;
+            
+            section.classList.toggle('open');
+            
+            if (section.classList.contains('open')) {
+                content.style.display = 'block';
+                if (indicator) indicator.style.transform = 'rotate(180deg)';
+            } else {
+                content.style.display = 'none';
+                if (indicator) indicator.style.transform = 'rotate(0deg)';
+            }
+            
+            console.log(`📦 Section toggled: ${section.querySelector('h3')?.textContent || 'Unknown Section'}`);
+        });
     });
     
-    console.log('Collapsible sections initialized successfully');
-  }
+    console.log(`✅ Initialized ${collapsibleHeaders.length} Collapsible Sections`);
+}
+
+// Ensure initialization after DOM is fully loaded
+document.addEventListener('DOMContentLoaded', initializeCollapsibleSections);
+
+// Expose for manual triggering if needed
+window.initializeCollapsibleSections = initializeCollapsibleSections;
   /**
    * Load Warm Hug settings from configuration with proper unit conversion
    * Enhanced to handle both Celsius and Fahrenheit units

@@ -1,6 +1,25 @@
 # Changelog
-## 5.5.5 (2025-04-01)
+## 5.5.6 (2025-04-02)
+### Fixed
+- **Collapsible Sections**: Complete overhaul of dropdown section initialization
+  - Resolved issues with section expansion and collapse mechanisms
+  - Enhanced event handling to prevent multiple listener bindings
+  - Improved cross-browser compatibility for section toggles
+  - Added comprehensive console logging for better debugging
 
+### Improved
+- **User Interface Interaction**: 
+  - More robust dropdown section behavior
+  - Explicit error checking for section initialization
+  - Added global function exposure for manual section management
+  - Enhanced transition animations for dropdown indicators
+
+### Technical
+- Implemented multi-method visibility toggling
+- Added detailed console diagnostics for section initialization
+- Improved event listener management to prevent memory leaks
+- Created fallback mechanisms for section interaction
+## 5.5.5 (2025-04-01)
 ### Improved
 - **API Rate Limit Handling**: Completely restructured device status polling to avoid rate limit errors
   - Removed redundant immediate status check during device initialization
