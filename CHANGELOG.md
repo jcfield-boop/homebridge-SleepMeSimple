@@ -1,4 +1,23 @@
 # Changelog
+## 5.5.6 (2025-03-31)
+
+### Improved
+- **UI Styling**: Completely redesigned Temperature Schedules UI
+  - Redesigned schedule form with grid layout and better spacing
+  - Enhanced schedule items with hover effects and better visual hierarchy
+  - Added color-coded sleep phases for better temperature visualization
+  - Improved temperature display and schedule grouping
+  - Responsive layout fixes for mobile devices
+  - Added visual temperature scale indicators
+  - Applied consistent CSS variables for better theming
+
+### Added
+- **Developer Documentation**: Created CLAUDE.md with development guidelines
+  - Added build commands and testing instructions
+  - Documented code style guidelines and naming conventions
+  - Specified TypeScript configuration details
+  - Added error handling and logging best practices
+
 ## 5.5.5 (2025-04-01)
 
 ### Improved
