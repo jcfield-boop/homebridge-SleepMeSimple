@@ -1,4 +1,37 @@
 # Changelog
+## 5.5.0 (2025-03-30)
+### Fixed
+- **Critical Schedule Display Fix**: Resolved issue where schedules were read from config.json but not displayed in UI
+  - Added missing `scheduleList` element to the HTML structure
+  - Enhanced schedule initialization sequence with proper error handling
+  - Improved data flow between config loading and schedule rendering
+  - Fixed timing issues with DOM initialization and data loading
+  - Added detailed debug logging to diagnose schedule loading/rendering process
+  - Implemented multiple fallback mechanisms to ensure schedules display properly
+  - Added verification steps after config loading to confirm schedule data integrity
+  - Fixed unit handling in schedule display
+  - Enhanced error reporting for schedule rendering failures
+  - Added automatic re-render on config load to ensure schedule visibility
+
+### Improved
+- **Enhanced Debugging**: Added comprehensive logging system for troubleshooting
+  - Implemented conditional debug logging with contextual prefixes
+  - Added detailed state tracking throughout initialization process
+  - Enhanced error handling with proper context information
+  - Added verification steps at critical points in the data flow
+  - Improved console output formatting for better readability
+  - Added timing information for tracing initialization sequence issues
+
+### Technical
+- **Code Structure Improvements**:
+  - Improved module encapsulation with proper function scoping
+  - Enhanced error boundaries around critical operations
+  - Added detailed type checking and validation for schedule properties
+  - Implemented proper event sequencing for reliable initialization
+  - Added DOM availability checks before manipulation
+  - Enhanced data flow between modules with proper state management
+  - Fixed potential race conditions in initialization sequence
+  - Improved backward compatibility with legacy code
 ## 5.4.1
 ### Fixed
 - **UI Layout Correction**: Fixed Celsius and Polling interval inputs to properly display side-by-side as intended

@@ -12,43 +12,140 @@
  * Fixes "Failed to initialize UI elements" error
  */
 document.addEventListener('DOMContentLoaded', function() {
-    // Ensure the DOM is fully loaded before initialization
-    console.log('DOM fully loaded - starting initialization');
+    console.log('DOM loaded, initializing UI components');
     
-    // Initialize key form elements with explicit IDs
-    const formElements = ['unit', 'pollingInterval', 'apiToken', 'enableSchedules'];
+    // Initialize DOM elements first
+    initUIComponents();
     
-    // Verify all critical elements exist
-    const missingElements = formElements.filter(id => !document.getElementById(id));
+    // Set up schedule-specific event listeners
+    setupScheduleListeners();
     
-    if (missingElements.length > 0) {
-        console.error('Missing critical UI elements:', missingElements.join(', '));
+    // Wait for Homebridge to be ready
+    initializeHomebridge();
+    
+    // Function to initialize UI components
+    function initUIComponents() {
+        // Ensure the DOM is fully loaded before initialization
+        console.log('Initializing UI components');
         
-        // Try to recover by forcing a small delay and retrying
-        setTimeout(() => {
-            const stillMissing = missingElements.filter(id => !document.getElementById(id));
-            if (stillMissing.length === 0) {
-                console.log('UI elements now available after delay');
-                initUIComponents();
-            } else {
-                console.error('Unable to recover missing elements:', stillMissing.join(', '));
+        // Initialize key form elements with explicit IDs
+        const formElements = ['unit', 'pollingInterval', 'apiToken', 'enableSchedules'];
+        
+        // Verify all critical elements exist
+        const missingElements = formElements.filter(id => !document.getElementById(id));
+        
+        if (missingElements.length > 0) {
+            console.error('Missing critical UI elements:', missingElements.join(', '));
+        } else {
+            console.log('All critical UI elements found');
+        }
+        
+        // Initialize collapsible sections if available
+        if (typeof initializeCollapsibleSections === 'function') {
+            try {
+                initializeCollapsibleSections();
+            } catch (error) {
+                console.error('Failed to initialize collapsible sections:', error);
             }
-        }, 500);
-    } else {
-        // All elements found, initialize normally
-        initUIComponents();
+        }
+        
+        // Initialize tabs if available
+        if (typeof initializeTabs === 'function') {
+            try {
+                initializeTabs();
+            } catch (error) {
+                console.error('Failed to initialize tabs:', error);
+            }
+        }
     }
     
-    function initUIComponents() {
-        // Set explicit widths for the fields to ensure proper layout
-        const unitField = document.getElementById('unit');
-        const pollingField = document.getElementById('pollingInterval');
+    // Function to set up schedule-specific event listeners
+    function setupScheduleListeners() {
+        console.log('Setting up schedule-specific listeners');
         
-        if (unitField && pollingField) {
-            // Ensure fields have appropriate width
-            unitField.style.width = '100%';
-            pollingField.style.width = '100%';
-            console.log('Field widths explicitly set');
+        // Set up additional event listeners for schedule-related UI elements
+        const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+        if (enableSchedulesCheckbox) {
+            enableSchedulesCheckbox.addEventListener('change', function() {
+                const schedulesContainer = document.getElementById('schedulesContainer');
+                if (schedulesContainer) {
+                    schedulesContainer.classList.toggle('hidden', !this.checked);
+                }
+            });
+        }
+        
+        // Check if scheduleList exists - critical for rendering schedules
+        const scheduleList = document.getElementById('scheduleList');
+        if (!scheduleList) {
+            console.error('CRITICAL: scheduleList element not found in DOM! Schedules cannot be rendered');
+        } else {
+            console.log('scheduleList element found in DOM');
+        }
+    }
+    
+    // Function to initialize Homebridge connection
+    function initializeHomebridge() {
+        console.log('Initializing Homebridge connection');
+        
+        if (typeof homebridge !== 'undefined') {
+            // If homebridge.getPluginConfig is already available
+            if (typeof homebridge.getPluginConfig === 'function') {
+                console.log('Homebridge API already available, loading config immediately');
+                
+                // Load config with a small delay to ensure DOM is fully ready
+                setTimeout(() => {
+                    window.loadConfig().then(() => {
+                        console.log('Config loaded, checking schedules');
+                        // Double-check schedule rendering
+                        if (Array.isArray(window.schedules) && 
+                            window.schedules.length > 0 && 
+                            typeof window.renderScheduleList === 'function') {
+                            console.log('Force re-rendering schedules');
+                            window.renderScheduleList();
+                        } else if (Array.isArray(window.schedules)) {
+                            console.log('Schedules array exists but is empty or renderScheduleList not available:', {
+                                schedulesLength: window.schedules.length,
+                                renderFunctionExists: typeof window.renderScheduleList === 'function'
+                            });
+                        } else {
+                            console.error('window.schedules is not an array after config load');
+                        }
+                    }).catch(error => {
+                        console.error('Error loading config:', error);
+                    });
+                }, 500); // 500ms delay to ensure DOM is fully ready
+            } else {
+                // Wait for homebridge ready event
+                console.log('Waiting for Homebridge API to be ready');
+                homebridge.addEventListener('ready', () => {
+                    console.log('Homebridge ready event received, loading config');
+                    
+                    // Load config with a small delay after ready event
+                    setTimeout(() => {
+                        window.loadConfig().then(() => {
+                            console.log('Config loaded after ready event, checking schedules');
+                            // Double-check schedule rendering
+                            if (Array.isArray(window.schedules) && 
+                                window.schedules.length > 0 && 
+                                typeof window.renderScheduleList === 'function') {
+                                console.log('Force re-rendering schedules after ready event');
+                                window.renderScheduleList();
+                            } else if (Array.isArray(window.schedules)) {
+                                console.log('Schedules array exists but is empty or renderScheduleList not available:', {
+                                    schedulesLength: window.schedules.length,
+                                    renderFunctionExists: typeof window.renderScheduleList === 'function'
+                                });
+                            } else {
+                                console.error('window.schedules is not an array after config load');
+                            }
+                        }).catch(error => {
+                            console.error('Error loading config after ready event:', error);
+                        });
+                    }, 500);
+                });
+            }
+        } else {
+            console.error('Homebridge object not available');
         }
     }
 });
@@ -1527,3 +1624,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 10000); // 10 second backup timeout
   }
 });
+// Failsafe initialization - ensure schedules are rendered even if other methods fail
+(function() {
+    // Set a timeout to check if schedules are properly initialized
+    setTimeout(function checkScheduleInitialization() {
+        console.log('Running failsafe schedule initialization check');
+        
+        // Check if schedules exist and if the scheduleList element exists
+        const scheduleListElement = document.getElementById('scheduleList');
+        const schedulesExist = Array.isArray(window.schedules) && window.schedules.length > 0;
+        
+        if (scheduleListElement && schedulesExist) {
+            console.log(`Failsafe: Found ${window.schedules.length} schedules, checking if they're rendered`);
+            
+            // Check if the scheduleList has any child elements
+            if (scheduleListElement.children.length <= 1) {
+                console.log('Failsafe: scheduleList appears empty, forcing re-render');
+                if (typeof window.renderScheduleList === 'function') {
+                    window.renderScheduleList();
+                }
+            }
+        } else {
+            console.log('Failsafe: Conditions not met for schedule rendering:', {
+                scheduleListElementExists: !!scheduleListElement,
+                schedulesExist: schedulesExist,
+                schedulesLength: Array.isArray(window.schedules) ? window.schedules.length : 'not an array'
+            });
+        }
+    }, 5000); // Check 5 seconds after page load - long enough for normal initialization to complete
+})();
