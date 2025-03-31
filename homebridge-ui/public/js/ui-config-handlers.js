@@ -222,36 +222,41 @@ function populateFormFields(config) {
   }
   
   // Handle schedules
-  if (enableSchedulesCheckbox) {
-    const enableSchedules = config.enableSchedules === true;
-    enableSchedulesCheckbox.checked = enableSchedules;
+if (enableSchedulesCheckbox) {
+  const enableSchedules = config.enableSchedules === true;
+  enableSchedulesCheckbox.checked = enableSchedules;
+  
+  if (schedulesContainer) {
+    schedulesContainer.classList.toggle('hidden', !enableSchedules);
+  }
+  
+  // Load schedules if available
+  if (Array.isArray(config.schedules) && config.schedules.length > 0) {
+    // Create a clean copy of schedules with unit info
+    window.schedules = config.schedules.map(schedule => ({
+      ...schedule,
+      unit: schedule.unit || (unitSelect ? unitSelect.value : 'C')
+    }));
     
-    if (schedulesContainer) {
-      schedulesContainer.classList.toggle('hidden', !enableSchedules);
+    // Assign to global schedules variable for compatibility
+    if (typeof window.renderScheduleList === 'function') {
+      console.log('Rendering schedule list with', window.schedules.length, 'schedules');
+      window.renderScheduleList();
+    } else {
+      console.warn('renderScheduleList function not available');
     }
     
-    // Load schedules if available
-    if (Array.isArray(config.schedules) && config.schedules.length > 0) {
-      // Create a clean copy of schedules with unit info
-      window.schedules = config.schedules.map(schedule => ({
-        ...schedule,
-        unit: schedule.unit || (unitSelect ? unitSelect.value : 'C')
-      }));
-      
-      // Assign to global schedules variable for compatibility
-      if (typeof window.renderScheduleList === 'function') {
-        console.log('Rendering schedule list with', window.schedules.length, 'schedules');
-        window.renderScheduleList();
-      } else {
-        console.warn('renderScheduleList function not available');
-      }
-      
-      console.log(`Loaded ${window.schedules.length} schedules from config`);
-    } else if (enableSchedules) {
-      console.log('No schedules found in config but schedules are enabled');
-      window.schedules = [];
+    console.log(`Loaded ${window.schedules.length} schedules from config`);
+  } else if (enableSchedules) {
+    console.log('No schedules found in config but schedules are enabled');
+    window.schedules = [];
+    
+    // Initialize empty schedule list
+    if (typeof window.renderScheduleList === 'function') {
+      window.renderScheduleList();
     }
   }
+}
   
   // Apply the updated temperature validation based on the loaded unit
   if (typeof window.updateTemperatureValidation === 'function') {
@@ -319,42 +324,49 @@ window.saveConfig = async function() {
     
     console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});
     
-    // Add schedules if enabled - CRITICAL SECTION
-    if (enableSchedules && Array.isArray(window.schedules)) {
-      // Ensure schedules is always an array even if empty
-      config.schedules = [];
+   // Add schedules if enabled - CRITICAL SECTION
+if (enableSchedules && Array.isArray(window.schedules)) {
+  // Ensure schedules is always an array even if empty
+  config.schedules = [];
+  
+  // Only add valid schedules
+  if (window.schedules.length > 0) {
+    // Clean schedules for storage - strict formatting
+    config.schedules = window.schedules.map(schedule => {
+      // Create a clean schedule object with explicit type conversions
+      const cleanSchedule = {
+        type: String(schedule.type || 'Everyday'),
+        time: String(schedule.time || '00:00'),
+        temperature: Number(schedule.temperature || 21)
+      };
       
-      // Only add valid schedules
-      if (window.schedules.length > 0) {
-        // Clean schedules for storage - strict formatting
-        config.schedules = window.schedules.map(schedule => {
-          // Create a clean schedule object with explicit type conversions
-          const cleanSchedule = {
-            type: String(schedule.type || 'Everyday'),
-            time: String(schedule.time || '00:00'),
-            temperature: Number(schedule.temperature || 21)
-          };
-          
-          // Add day for Specific Day schedules only if present
-          if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-            cleanSchedule.day = Number(schedule.day);
-          }
-          
-          // Add description if present (for Warm Hug, etc.)
-          if (schedule.description) {
-            cleanSchedule.description = String(schedule.description);
-          }
-          
-          return cleanSchedule;
-        });
+      // Add day for Specific Day schedules only if present
+      if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+        cleanSchedule.day = Number(schedule.day);
       }
       
-      console.log(`Adding ${config.schedules.length} schedules to config:`, config.schedules);
-    } else {
-      // Always explicitly set schedules to empty array when disabled
-      config.schedules = [];
-      console.log('Schedules disabled, setting empty array');
-    }
+      // Add description if present (for Warm Hug, etc.)
+      if (schedule.description) {
+        cleanSchedule.description = String(schedule.description);
+      }
+      
+      // Store unit information if available
+      if (schedule.unit) {
+        cleanSchedule.unit = String(schedule.unit);
+      } else {
+        cleanSchedule.unit = unit; // Use global unit setting
+      }
+      
+      return cleanSchedule;
+    });
+  }
+  
+  console.log(`Adding ${config.schedules.length} schedules to config:`, config.schedules);
+} else {
+  // Always explicitly set schedules to empty array when disabled
+  config.schedules = [];
+  console.log('Schedules disabled, setting empty array');
+}
     
     // Find current config position or create new entry
     let updatedConfig;
@@ -385,18 +397,24 @@ window.saveConfig = async function() {
       await homebridge.savePluginConfig();
       console.log('Config saved to disk successfully');
       
-      // Verify save was successful
-      const verifyConfig = await homebridge.getPluginConfig();
-      const verifyPlatform = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
-      
-      if (verifyPlatform && verifyPlatform.enableSchedules && 
-          Array.isArray(verifyPlatform.schedules)) {
-        console.log(`Verification: ${verifyPlatform.schedules.length} schedules saved`);
-      } else if (verifyPlatform) {
-        console.log('Verification: Platform saved but schedules not enabled');
-      } else {
-        console.warn('Verification: Platform config not found after save!');
-      }
+  // Verify save was successful
+const verifyConfig = await homebridge.getPluginConfig();
+const verifyPlatform = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
+
+if (verifyPlatform && verifyPlatform.enableSchedules && 
+    Array.isArray(verifyPlatform.schedules)) {
+  console.log(`Verification: ${verifyPlatform.schedules.length} schedules saved`);
+  
+  // Log the first few schedules for verification
+  if (verifyPlatform.schedules.length > 0) {
+    console.log('Sample saved schedules:', 
+      verifyPlatform.schedules.slice(0, Math.min(3, verifyPlatform.schedules.length)));
+  }
+} else if (verifyPlatform) {
+  console.log('Verification: Platform saved but schedules not enabled');
+} else {
+  console.warn('Verification: Platform config not found after save!');
+}
       
       // Update status element with success message
       const statusElement = document.getElementById('status');

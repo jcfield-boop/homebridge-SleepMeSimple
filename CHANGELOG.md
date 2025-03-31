@@ -1,4 +1,35 @@
 # Changelog
+
+## 5.3.4
+### Fixed
+- **Critical Schedule Persistence Fix**: Resolved issue with schedules not saving to config.json correctly
+  - Fixed schedule data structure to properly match Homebridge config schema
+  - Ensured consistent structure for each schedule entry with explicit type conversions
+  - Added complete unit information to each schedule for better temperature handling
+  - Enhanced verification after save to confirm schedules were properly saved
+  - Improved handling of empty schedule arrays
+  - Added better error handling and debug logging throughout save process
+  - Fixed rendering of loaded schedules from configuration
+
+### Improved
+- **Enhanced Loading Process**: Better handling of configuration loading
+  - Added detailed logging of configuration structure during load/save operations
+  - Improved handling of default values when configuration is incomplete
+  - Added explicit waiting for DOM elements to be available before population
+  - Enhanced verification of saved configuration with detailed logging
+  - Better console output formatting for debugging configuration structures
+  - Added detailed error logging for configuration operations
+  - Improved initialization of empty schedule lists when enabled but no schedules exist
+
+### Technical
+- **Code Structure Improvements**:
+  - Added explicit type conversions for all schedule properties
+  - Enhanced error handling with better context information
+  - Improved schedule template information preservation during edits
+  - Fixed schedule unit handling to maintain consistency
+  - Added detailed verification steps after configuration save operations
+  - Enhanced defensive coding practices throughout configuration handling
+  - Fixed potential race conditions in configuration loading process
 ## 5.3.3
 
 ### Fixed

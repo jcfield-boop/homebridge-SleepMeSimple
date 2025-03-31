@@ -40,7 +40,7 @@
         "type": "boolean",
         "default": false
       },
-     "schedules": {
+"schedules": {
   "type": "array",
   "items": {
     "type": "object",

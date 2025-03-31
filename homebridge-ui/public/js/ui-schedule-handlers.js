@@ -159,16 +159,16 @@
         }
         
         try {
-            // Create a new schedule object with the form values
-            const schedule = {
-                type,
-                time,
-                temperature,
-                unit,
-                // Add template origin flag if being created from template
-                // This helps identify and group template-based schedules
-                isFromTemplate: window.currentTemplateOrigin || false
-            };
+// Create a new schedule object with the form values
+const schedule = {
+    type,
+    time,
+    temperature,
+    unit,
+    // Add template origin flag if being created from template
+    // This helps identify and group template-based schedules
+    isFromTemplate: window.currentTemplateOrigin || false
+  };
             
             // Add day for specific day schedules
             if (type === 'Specific Day') {
@@ -229,6 +229,12 @@
             
             // Update UI
             renderScheduleList();
+            // Update UI
+if (typeof window.renderScheduleList === 'function') {
+    window.renderScheduleList();
+  } else {
+    console.warn('renderScheduleList function not available');
+  }
         } catch (error) {
             console.error('Schedule action error:', error);
             
