@@ -1,4 +1,26 @@
 # Changelog
+## 5.5.5 (2025-04-01)
+
+### Improved
+- **API Rate Limit Handling**: Completely restructured device status polling to avoid rate limit errors
+  - Removed redundant immediate status check during device initialization
+  - Added configurable delayed initial polling (60-second default)
+  - Implemented smarter priority handling for API requests
+  - Enhanced logging for request priorities to assist with troubleshooting
+
+### Changed
+- **Initialization Sequence**: Made device startup more efficient and resilient
+  - Removed the 15-second delay before first status check
+  - Replaced with a more conservative 60-second delay
+  - Improved startup sequence to reduce API calls during initialization
+  - Added detailed logging for scheduled status checks
+
+### Fixed
+- **Rate Limiting**: Solved "429 Too Many Requests" errors during device discovery
+  - Prioritized API calls more intelligently based on context
+  - Ensured system-initiated refreshes use lower priority than user actions
+  - Improved coordination between discovery and status polling
+  - Added verbose logging for API call priority decisions
 ## 5.5.4 (2025-04-01)
 
 ### Fixed

@@ -167,7 +167,7 @@ export class SleepMeAccessory {
     }, 15000); // 15 second delay for initial status check
     
     // Set up polling interval
-    this.setupStatusPolling();
+    this.setupStatusPolling(60000);
     
     this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
   }
@@ -665,7 +665,7 @@ private setupWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
 /**
    * Set up the status polling mechanism with trust-based adaptive intervals
    */
-private setupStatusPolling(): void {
+private setupStatusPolling(initialDelay = 0): void {
   // Clear any existing timer
   if (this.statusUpdateTimer) {
     clearInterval(this.statusUpdateTimer);
@@ -678,7 +678,20 @@ private setupStatusPolling(): void {
     `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
   );
   
-  // Set up regular polling with adaptive interval
+  // Add an initial one-time polling after the delay
+  if (initialDelay > 0) {
+    this.platform.log.info(
+      `Scheduling initial status check for device ${this.deviceId} in ${initialDelay/1000} seconds`
+    );
+    
+    setTimeout(() => {
+      this.refreshDeviceStatus(true).catch(e => {
+        this.platform.log.error(`Error in initial status check: ${e}`);
+      });
+    }, initialDelay);
+  }
+  
+  // Set up regular polling with adaptive interval (unchanged)
   this.statusUpdateTimer = setInterval(() => {
     // Skip update if another one is in progress to prevent queue buildup
     if (this.updateInProgress) {
