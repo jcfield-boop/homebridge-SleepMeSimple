@@ -2,6 +2,7 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "customUi": true,
+  "noServerLogs": true,
   "footerDisplay": "SleepMe Simple Homebridge Plugin v4.0.3",
   "customIcon": "icons/sleepmebasic.png",
   "schema": {
