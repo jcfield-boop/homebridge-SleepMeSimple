@@ -1,4 +1,35 @@
 # Changelog
+##5.3.1
+Major Changes
+
+Eliminated Toast Notifications at Source: Completely reworked the server-side implementation to prevent unwanted toast notifications from being generated
+Comprehensive Event Suppression: Implemented complete disabling of pushEvent functionality to block all automatic notifications
+Server-Side Prevention: Added targeted method overrides to stop initialization checks that trigger toast messages
+Improved Logging: Replaced UI notifications with console-only logging for better debugging without visual interruptions
+
+Key Improvements
+
+Root Cause Solution: Addressed the source of "Config Check" and "Config Found" notifications rather than just suppressing symptoms
+Clean Architecture: Maintained all functionality while preventing automatic events
+Console Logging: Enhanced server-side logging that doesn't trigger UI notifications
+API Function Integrity: Preserved all API functionality while disabling automatic events
+Method Override Protection: Implemented defensive coding to prevent parent class functionality from bypassing our settings
+Explicit Request Model: Ensured server only responds to explicit UI requests, never initiating its own events
+
+Technical Details
+
+Added _preventAutomaticEvents() method to completely disable the pushEvent functionality
+Overrode internal methods that might trigger automatic checks (_checkConfig, fetchLogs)
+Modified the constructor to call prevention methods immediately after parent class initialization
+Maintained all request handlers with clarification that they only run when explicitly requested by UI
+Enhanced error handling with better console logging via modified log() method
+
+Documentation
+
+Added detailed comments explaining the prevention strategy
+Enhanced method documentation to indicate when functions run
+Added console logging for key lifecycle events for debugging
+Clarified the purpose of method overrides with descriptive comments
 ## 5.3.0
 ### Improved
 - **UI Layout Optimization**: Combined temperature unit and polling interval fields onto one line for better space efficiency

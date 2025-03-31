@@ -1,4 +1,5 @@
-// homebridge-ui/server.js
+// homebridge-ui/server.js - Modified version to prevent automatic checks
+
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import axios from 'axios';
 import fs from 'fs';
@@ -9,36 +10,59 @@ const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * SleepMe UI Server class
- * Modified to prevent automatic log fetching that causes toast notifications
+ * Modified to prevent automatic config checking and log fetching
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     // Must call super first to initialize the parent class
     super();
     
-    // CRITICAL: Immediately override pushEvent to block automatic events
-    // This prevents the parent class from triggering log fetching
-    const originalPushEvent = this.pushEvent;
-    this.pushEvent = function() {
-      console.log('[SleepMeUI] Event push suppressed');
-      return; // Do nothing
-    };
+    // CRITICAL: Override internal functions that might trigger toast notifications
+    // This prevents ALL event pushes from happening automatically
+    this._preventAutomaticEvents();
     
-    // Register request handlers - ONLY add handlers for explicit UI requests
+    // Register ONLY explicit request handlers (no automatic operations)
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
     
     // Server-side logging that never triggers UI notifications
     console.log('[SleepMeUI] Server initialized');
     
-    // NO automatic config check - only respond to direct requests
-    
     // IMPORTANT: Signal that the server is ready to accept requests
     // This must be called after all request handlers are registered
     this.ready();
   }
   
-  // Rest of your code...
+  /**
+   * Prevent automatic events by overriding internal methods
+   * This is a comprehensive approach to block ALL automatic events
+   * @private
+   */
+  _preventAutomaticEvents() {
+    // 1. Override the pushEvent method to block automatic events
+    const originalPushEvent = this.pushEvent;
+    this.pushEvent = function() {
+      // Completely disable the pushEvent functionality
+      console.log('[SleepMeUI] Event push prevented');
+      return; // Return nothing and do nothing
+    };
+    
+    // 2. If there are any timers or initialization functions, prevent them too
+    if (this._checkConfig) {
+      this._checkConfig = function() {
+        console.log('[SleepMeUI] Automatic config check prevented');
+        return;
+      };
+    }
+    
+    // 3. If there are any log fetching methods, disable them
+    if (this.fetchLogs) {
+      this.fetchLogs = function() {
+        console.log('[SleepMeUI] Automatic log fetching prevented');
+        return;
+      };
+    }
+  }
   
   /**
    * Server-side logging that never triggers UI notifications
@@ -58,6 +82,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   
   /**
    * Check if we can access the config.json file
+   * ONLY RUNS WHEN EXPLICITLY REQUESTED by the UI
    * @returns {Promise<Object>} Status of config file access
    */
   async checkConfigFile() {
