@@ -247,7 +247,7 @@ document.addEventListener('DOMContentLoaded', function() {
   })();
 /**
  * Initialize collapsible sections throughout the UI
- * Enhanced to ensure proper opening/closing and larger indicators
+ * Enhanced to ensure proper opening/closing and better event handling
  */
 function initializeCollapsibleSections() {
     // Get all collapsible headers
@@ -269,7 +269,11 @@ function initializeCollapsibleSections() {
       }
       
       // Add click handler to toggle content visibility
-      newHeader.addEventListener('click', function() {
+      newHeader.addEventListener('click', function(event) {
+        // Prevent event bubbling
+        event.preventDefault();
+        event.stopPropagation();
+        
         const section = this.closest('.collapsible-section');
         if (!section) return;
         
@@ -302,7 +306,6 @@ function initializeCollapsibleSections() {
     
     console.log('Collapsible sections initialized successfully');
   }
-  
   /**
    * Load Warm Hug settings from configuration with proper unit conversion
    * Enhanced to handle both Celsius and Fahrenheit units
