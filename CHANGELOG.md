@@ -1,4 +1,26 @@
 # Changelog
+# Changelog
+## 5.5.1 (2025-03-31)
+### Fixed
+- **Collapsible Sections**: Fixed issue with Warm Hug Parameters section not expanding properly
+  - Completely rewrote the collapsible section initialization with proper event handling
+  - Added explicit style control for reliable opening and closing
+  - Fixed event propagation to ensure toggles work consistently
+  - Added error checks to prevent JavaScript errors if elements aren't found
+
+### Removed
+- **Device Settings Section**: Removed unused Device Settings UI elements
+  - Removed HTML section for Device Settings
+  - Removed related JavaScript functions and event handlers
+  - Simplified UI by focusing only on necessary configuration options
+
+### Improved
+- **Toast Notification Blocking**: Enhanced suppression of unwanted toast notifications
+  - Added comprehensive log-related request blocking
+  - Implemented specific toast message filtering for log errors
+  - Added network request interception for log-related API calls
+  - Fixed race condition in toast suppression code
+
 ## 5.5.0 (2025-03-31)
 ### Fixed
 - **Collapsible Sections**: Fixed issue with Warm Hug Parameters section not expanding properly

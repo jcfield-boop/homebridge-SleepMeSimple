@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   })();
   
- /**
+/**
  * Initialize collapsible sections throughout the UI
  * Fixed event handling to ensure proper expansion/collapse
  */
@@ -237,87 +237,86 @@ function initializeCollapsibleSections() {
     });
   }
   
-  /**
-   * Initialize tab handling with improved template code display
-   * Added defensive coding to prevent DOM errors
-   */
-  function initializeTabs() {
-      const tabContainer = document.querySelector('.tabs');
-      if (!tabContainer) {
-          // Silently fail if tab container doesn't exist
-          return;
-      }
-      
-      tabContainer.addEventListener('click', (event) => {
-          // Find the closest tab element (handles clicks on child elements)
-          const tabElement = event.target.closest('.tab');
-          
-          if (tabElement) {
-              const tabId = tabElement.getAttribute('data-tab');
-              if (!tabId) return; // Skip if no tab ID
-              
-              // Remove active class from all tabs and contents
-              document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-              document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-              
-              // Add active class to selected tab and content
-              tabElement.classList.add('active');
-              const tabContent = document.getElementById(tabId + 'Tab');
-              if (tabContent) {
-                  tabContent.classList.add('active');
-                  
-                  // Special handling for template help tab
-                  if (tabId === 'templateHelp') {
-                      try {
-                          populateTemplateCodePreview();
-                      } catch (error) {
-                          console.error('Failed to populate template code preview:', error);
-                      }
-                  }
-                  
-                  // Load advanced settings when that tab is selected
-                  if (tabId === 'advancedOptions') {
-                      try {
-                          loadAdvancedSettings();
-                          // Ensure collapsible sections are properly initialized
-                          setTimeout(() => {
-                              initializeCollapsibleSections();
-                          }, 100);
-                      } catch (error) {
-                          console.error('Failed to load advanced settings:', error);
-                      }
-                  }
-              }
-          }
-      });
-  }
-  
-  /**
-   * Populate template code preview with template data
-   * Enhanced with error handling to prevent DOM errors
-   */
-  function populateTemplateCodePreview() {
-      const templateCodePreview = document.getElementById('templateCodePreview');
-      if (!templateCodePreview) {
-          // Silent failure - no console error
-          return;
-      }
-      
-      try {
-          // Get templates from global scope or an empty object as fallback
-          const templates = window.templates || {};
-          
-          // Format templates nicely for display
-          const templateJson = JSON.stringify(templates, null, 2);
-          templateCodePreview.textContent = templateJson;
-      } catch (error) {
-          console.error('Error populating template code preview:', error);
-          // Set a default message instead of showing error
-          if (templateCodePreview) {
-              templateCodePreview.textContent = '// Error loading template definitions';
-          }
-      }
-  }
+ /**
+ * Initialize tab handling with improved template code display
+ * Added defensive coding to prevent DOM errors
+ */
+function initializeTabs() {
+    const tabContainer = document.querySelector('.tabs');
+    if (!tabContainer) {
+        // Silently fail if tab container doesn't exist
+        return;
+    }
+    
+    tabContainer.addEventListener('click', (event) => {
+        // Find the closest tab element (handles clicks on child elements)
+        const tabElement = event.target.closest('.tab');
+        
+        if (tabElement) {
+            const tabId = tabElement.getAttribute('data-tab');
+            if (!tabId) return; // Skip if no tab ID
+            
+            // Remove active class from all tabs and contents
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            // Add active class to selected tab and content
+            tabElement.classList.add('active');
+            const tabContent = document.getElementById(tabId + 'Tab');
+            if (tabContent) {
+                tabContent.classList.add('active');
+                
+                // Special handling for template help tab
+                if (tabId === 'templateHelp') {
+                    try {
+                        populateTemplateCodePreview();
+                    } catch (error) {
+                        console.error('Failed to populate template code preview:', error);
+                    }
+                }
+                
+                // Load advanced settings when that tab is selected
+                if (tabId === 'advancedOptions') {
+                    try {
+                        loadAdvancedSettings();
+                        // Ensure collapsible sections are properly initialized
+                        setTimeout(() => {
+                            initializeCollapsibleSections();
+                        }, 100);
+                    } catch (error) {
+                        console.error('Failed to load advanced settings:', error);
+                    }
+                }
+            }
+        }
+    });
+}
+/**
+ * Populate template code preview with template data
+ * Enhanced with error handling to prevent DOM errors
+ */
+function populateTemplateCodePreview() {
+    const templateCodePreview = document.getElementById('templateCodePreview');
+    if (!templateCodePreview) {
+        // Silent failure - no console error
+        return;
+    }
+    
+    try {
+        // Get templates from global scope or an empty object as fallback
+        const templates = window.templates || {};
+        
+        // Format templates nicely for display
+        const templateJson = JSON.stringify(templates, null, 2);
+        templateCodePreview.textContent = templateJson;
+    } catch (error) {
+        console.error('Error populating template code preview:', error);
+        // Set a default message instead of showing error
+        if (templateCodePreview) {
+            templateCodePreview.textContent = '// Error loading template definitions';
+        }
+    }
+}
   
   /**
    * Save Warm Hug parameters

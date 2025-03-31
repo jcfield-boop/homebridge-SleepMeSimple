@@ -168,7 +168,67 @@
         flex: 0 0 100%;
     }
 }
+/* Mobile tab improvements */
+@media (max-width: 768px) {
+    .tabs {
+        flex-wrap: wrap;
+    }
+    
+    .tab {
+        flex: 0 0 50%; /* Two tabs per row on mobile */
+        box-sizing: border-box;
+        margin-right: 0;
+        border-radius: 0;
+        font-size: 14px;
+        padding: 8px 10px;
+    }
+    
+    .tab:nth-child(1), .tab:nth-child(2) {
+        border-top-left-radius: 4px;
+        border-top-right-radius: 4px;
+    }
+}
 
+/* Ensure better display of collapsible sections */
+.collapsible-section {
+    margin-bottom: 20px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+    background-color: #e9ecef;
+}
+
+.collapsible-content {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: none;
+}
+
+.collapsible-section.open .collapsible-content {
+    display: block;
+}
+
+.dropdown-indicator {
+    transition: transform 0.3s ease;
+    font-size: 16px;
+}
+
+.collapsible-section.open .dropdown-indicator {
+    transform: rotate(180deg);
+}
 /* Fix for DOM initialization error - ensure script loading */
 body {
     opacity: 1;
