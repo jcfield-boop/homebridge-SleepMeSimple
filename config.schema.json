@@ -1,12 +1,14 @@
 {
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
-  "singular": true,
+  "customUi": true,
+  "footerDisplay": "SleepMe Simple Homebridge Plugin v4.0.3",
+  "customIcon": "icons/sleepmebasic.png",
   "schema": {
     "type": "object",
     "properties": {
       "name": {
-        "title": "Platform Name",
+        "title": "Name",
         "type": "string",
         "default": "SleepMe Simple",
         "required": true
@@ -15,34 +17,64 @@
         "title": "API Token",
         "type": "string",
         "format": "password",
-        "description": "Your SleepMe API token (obtain from your account at sleep.me)",
+        "description": "Your SleepMe API token",
         "required": true
       },
       "unit": {
         "title": "Temperature Unit",
         "type": "string",
-        "default": "C",
         "enum": ["C", "F"],
-        "enumNames": ["Celsius (°C)", "Fahrenheit (°F)"],
-        "description": "Select preferred temperature unit",
-        "required": true
+        "default": "C",
+        "description": "Temperature display unit"
       },
       "pollingInterval": {
         "title": "Polling Interval",
         "type": "integer",
-        "format": "number",
+        "minimum": 60,
+        "maximum": 300,
         "default": 90,
-        "description": "How frequently to check device status (in seconds) don't go less than 30"
+        "description": "Device status check interval (seconds)"
       },
-      "logLevel": {
-        "title": "Logging Level",
+      "enableSchedules": {
+        "title": "Enable Schedules",
+        "type": "boolean",
+        "default": false
+      },
+"schedules": {
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "type": {
         "type": "string",
-        "default": "normal",
-        "enum": ["normal", "debug", "verbose"],
-        "enumNames": ["Normal", "Debug", "Verbose"],
-        "description": "Controls the detail level of plugin logs"
+        "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"]
+      },
+      "time": {
+        "type": "string",
+        "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
+      },
+      "temperature": {
+        "type": "number",
+        "minimum": 13,
+        "maximum": 46
+      },
+      "day": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 6
+      },
+      "description": {
+        "type": "string"
+      },
+      "unit": {
+        "type": "string",
+        "enum": ["C", "F"]
       }
     },
-    "required": ["apiToken", "unit"]
+    "required": ["type", "time", "temperature"]
+  }
+}
+    },
+    "required": ["apiToken"]
   }
 }

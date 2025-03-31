@@ -250,13 +250,23 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     // At this point, we need fresh data
     this.logger.debug(`Fetching status for device ${deviceId}...`);
     
-    const response = await this.makeRequest<Record<string, unknown>>({
-      method: 'GET',
-      url: `/devices/${deviceId}`,
-      priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
-      deviceId,
-      operationType: 'getDeviceStatus'
-    });
+  // MORE CONSERVATIVE APPROACH:
+// Only use HIGH priority when explicitly requested by user actions
+// For system-initiated refreshes (including initial polls), use NORMAL or LOW
+const isSystemInitiated = !forceFresh || (this.startupFinished === false);
+const priority = isSystemInitiated ? 
+               RequestPriority.NORMAL : 
+               RequestPriority.HIGH;
+
+this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
+
+const response = await this.makeRequest<Record<string, unknown>>({
+  method: 'GET',
+  url: `/devices/${deviceId}`,
+  priority: priority,
+  deviceId,
+  operationType: 'getDeviceStatus'
+});
     
     if (!response) {
       this.logger.error(`Empty response for device ${deviceId}`);
