@@ -1,5 +1,5 @@
 # Changelog
-## 5.6.0 (2025-03-31)
+## 5.5.0 (2025-03-31)
 ### Fixed
 - **Collapsible Sections**: Fixed issue with Warm Hug Parameters section not expanding properly
   - Completely rewrote the collapsible section initialization with proper event handling
@@ -19,7 +19,7 @@
   - Implemented specific toast message filtering for log errors
   - Added network request interception for log-related API calls
   - Fixed race condition in toast suppression code
-## 5.5.0 (2025-03-30)
+## 5.4.1 (2025-03-30)
 ### Fixed
 - **Critical Schedule Display Fix**: Resolved issue where schedules were read from config.json but not displayed in UI
   - Added missing `scheduleList` element to the HTML structure
