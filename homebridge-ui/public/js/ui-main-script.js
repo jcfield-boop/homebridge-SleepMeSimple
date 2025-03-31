@@ -13,7 +13,60 @@
  */
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing UI components');
-    
+      // Add this block early in the function
+    // IMPORTANT: Initialize templates globally so they're available to all functions
+    window.templates = {
+        optimal: {
+            name: "Optimal Sleep Cycle",
+            description: "Designed for complete sleep cycles with REM enhancement",
+            schedules: [
+                { type: "Weekdays", time: "22:00", temperature: 21, description: "Cool Down" },
+                { type: "Weekdays", time: "23:00", temperature: 19, description: "Deep Sleep" },
+                { type: "Weekdays", time: "02:00", temperature: 23, description: "REM Support" },
+                { type: "Weekdays", time: "06:00", temperature: 26, description: "Warm Hug Wake-up" }
+            ]
+        },
+        nightOwl: {
+            name: "Night Owl",
+            description: "Later bedtime with extended morning warm-up",
+            schedules: [
+                { type: "Weekdays", time: "23:30", temperature: 21, description: "Cool Down" },
+                { type: "Weekdays", time: "00:30", temperature: 19, description: "Deep Sleep" },
+                { type: "Weekdays", time: "03:30", temperature: 23, description: "REM Support" },
+                { type: "Weekdays", time: "07:30", temperature: 26, description: "Warm Hug Wake-up" }
+            ]
+        },
+        earlyBird: {
+            name: "Early Bird",
+            description: "Earlier bedtime and wake-up schedule",
+            schedules: [
+                { type: "Weekdays", time: "21:00", temperature: 21, description: "Cool Down" },
+                { type: "Weekdays", time: "22:00", temperature: 19, description: "Deep Sleep" },
+                { type: "Weekdays", time: "01:00", temperature: 23, description: "REM Support" },
+                { type: "Weekdays", time: "05:00", temperature: 26, description: "Warm Hug Wake-up" }
+            ]
+        },
+        recovery: {
+            name: "Weekend Recovery",
+            description: "Extra sleep with later wake-up time",
+            schedules: [
+                { type: "Weekend", time: "23:00", temperature: 21, description: "Cool Down" },
+                { type: "Weekend", time: "00:00", temperature: 19, description: "Deep Sleep" },
+                { type: "Weekend", time: "03:00", temperature: 23, description: "REM Support" },
+                { type: "Weekend", time: "08:00", temperature: 26, description: "Warm Hug Wake-up" }
+            ]
+        },
+        relaxed: {
+            name: "Relaxed Weekend",
+            description: "Gradual transitions for weekend leisure",
+            schedules: [
+                { type: "Weekend", time: "23:30", temperature: 22, description: "Cool Down" },
+                { type: "Weekend", time: "01:00", temperature: 20, description: "Deep Sleep" },
+                { type: "Weekend", time: "04:00", temperature: 24, description: "REM Support" },
+                { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up" }
+            ]
+        }
+    };
     // Initialize DOM elements first
     initUIComponents();
     
@@ -239,12 +292,14 @@ function initializeCollapsibleSections() {
   
  /**
  * Initialize tab handling with improved template code display
- * Added defensive coding to prevent DOM errors
+ * Updated to handle the warmHugOptions tab
  */
 function initializeTabs() {
+    console.log('Initializing tabs...');
     const tabContainer = document.querySelector('.tabs');
     if (!tabContainer) {
         // Silently fail if tab container doesn't exist
+        console.warn('Tab container not found');
         return;
     }
     
@@ -255,6 +310,8 @@ function initializeTabs() {
         if (tabElement) {
             const tabId = tabElement.getAttribute('data-tab');
             if (!tabId) return; // Skip if no tab ID
+            
+            console.log(`Tab clicked: ${tabId}`);
             
             // Remove active class from all tabs and contents
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -275,49 +332,220 @@ function initializeTabs() {
                     }
                 }
                 
-                // Load advanced settings when that tab is selected
-                if (tabId === 'advancedOptions') {
+                // Load Warm Hug settings when that tab is selected
+                // Changed from advancedOptions to warmHugOptions
+                if (tabId === 'warmHugOptions') {
                     try {
-                        loadAdvancedSettings();
-                        // Ensure collapsible sections are properly initialized
-                        setTimeout(() => {
-                            initializeCollapsibleSections();
-                        }, 100);
+                        loadWarmHugSettings();
                     } catch (error) {
-                        console.error('Failed to load advanced settings:', error);
+                        console.error('Failed to load Warm Hug settings:', error);
                     }
                 }
+            } else {
+                console.warn(`Tab content for ${tabId} not found`);
             }
         }
     });
+    
+    console.log('Tab initialization complete');
+}
+/**
+ * Load Warm Hug settings from configuration
+ * Specific function to handle Warm Hug parameters
+ */
+async function loadWarmHugSettings() {
+    try {
+        console.log('Loading Warm Hug settings...');
+        // Get form elements
+        const incrementInput = document.getElementById('warmHugIncrement');
+        const durationInput = document.getElementById('warmHugDuration');
+        
+        // Only proceed if homebridge is ready
+        if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
+            console.error('Homebridge API not ready');
+            return;
+        }
+        
+        // Get current config
+        const pluginConfig = await homebridge.getPluginConfig();
+        
+        const config = findPlatformConfig(pluginConfig);
+        
+        if (!config) {
+            console.warn('Platform configuration not found in plugin config');
+            return;
+        }
+        
+        // Set values if they exist in config.advanced
+        if (config.advanced) {
+            if (incrementInput && config.advanced.warmHugIncrement !== undefined) {
+                incrementInput.value = config.advanced.warmHugIncrement;
+            } else if (incrementInput) {
+                // Default value if not in config
+                incrementInput.value = "2";
+            }
+            
+            if (durationInput && config.advanced.warmHugDuration !== undefined) {
+                durationInput.value = config.advanced.warmHugDuration;
+            } else if (durationInput) {
+                // Default value if not in config
+                durationInput.value = "15";
+            }
+        } else {
+            // Set default values if advanced section doesn't exist
+            if (incrementInput) incrementInput.value = "2";
+            if (durationInput) durationInput.value = "15";
+        }
+        
+        console.log('Warm Hug settings loaded successfully');
+    } catch (error) {
+        console.error('Error loading Warm Hug settings:', error);
+    }
+}
+/**
+ * Save Warm Hug parameters to config
+ * Enhanced with better error handling
+ */
+async function saveWarmHugParameters() {
+    try {
+        console.log('Saving Warm Hug parameters...');
+        const incrementInput = document.getElementById('warmHugIncrement');
+        const durationInput = document.getElementById('warmHugDuration');
+        
+        if (!incrementInput || !durationInput) {
+            console.error('Warm Hug input elements not found');
+            return;
+        }
+        
+        // Validate inputs
+        const increment = parseFloat(incrementInput.value);
+        const duration = parseInt(durationInput.value);
+        
+        if (isNaN(increment) || increment < 0.5 || increment > 5) {
+            console.error('Invalid increment value:', increment);
+            
+            // Update status element
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+                statusElement.textContent = 'Error: Increment must be between 0.5 and 5';
+                statusElement.className = 'status error';
+                statusElement.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        if (isNaN(duration) || duration < 5 || duration > 30) {
+            console.error('Invalid duration value:', duration);
+            
+            // Update status element
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+                statusElement.textContent = 'Error: Duration must be between 5 and 30 minutes';
+                statusElement.className = 'status error';
+                statusElement.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        // Only proceed if homebridge is ready
+        if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
+            console.error('Homebridge API not ready');
+            return;
+        }
+        
+        // Get current config
+        const pluginConfig = await homebridge.getPluginConfig();
+        
+        // Find platform config
+        let config = null;
+        if (Array.isArray(pluginConfig)) {
+            config = pluginConfig.find(cfg => cfg && cfg.platform === 'SleepMeSimple');
+        }
+        
+        if (!config) {
+            console.error('Platform configuration not found');
+            
+            // Update status element
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+                statusElement.textContent = 'Error: Configuration not found';
+                statusElement.className = 'status error';
+                statusElement.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        // Ensure advanced section exists
+        if (!config.advanced) {
+            config.advanced = {};
+        }
+        
+        // Update Warm Hug parameters
+        config.advanced.warmHugIncrement = increment;
+        config.advanced.warmHugDuration = duration;
+        
+        // Update config in memory
+        await homebridge.updatePluginConfig(pluginConfig);
+        
+        // Save to disk
+        await homebridge.savePluginConfig();
+        
+        console.log('Warm Hug parameters saved successfully');
+        
+        // Update status element with success message
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+            statusElement.textContent = 'Warm Hug parameters saved successfully';
+            statusElement.className = 'status success';
+            statusElement.classList.remove('hidden');
+            
+            // Auto-hide after a few seconds
+            setTimeout(() => {
+                statusElement.classList.add('hidden');
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('Error saving Warm Hug parameters:', error);
+        
+        // Update status element with error
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+            statusElement.textContent = `Error saving parameters: ${error.message}`;
+            statusElement.className = 'status error';
+            statusElement.classList.remove('hidden');
+        }
+    }
 }
 /**
  * Populate template code preview with template data
- * Enhanced with error handling to prevent DOM errors
+ * Enhanced with direct access to the global templates object
  */
 function populateTemplateCodePreview() {
+    console.log('Populating template code preview...');
     const templateCodePreview = document.getElementById('templateCodePreview');
     if (!templateCodePreview) {
-        // Silent failure - no console error
+        console.error('Template code preview element not found');
         return;
     }
     
     try {
-        // Get templates from global scope or an empty object as fallback
-        const templates = window.templates || {};
+        // Access templates from window global - this should be defined in the DOMContentLoaded handler
+        if (!window.templates || Object.keys(window.templates).length === 0) {
+            console.error('Templates not initialized yet');
+            templateCodePreview.textContent = '// Templates not initialized yet. Please try refreshing the page.';
+            return;
+        }
         
         // Format templates nicely for display
-        const templateJson = JSON.stringify(templates, null, 2);
+        const templateJson = JSON.stringify(window.templates, null, 2);
         templateCodePreview.textContent = templateJson;
+        console.log('Template code preview populated successfully');
     } catch (error) {
         console.error('Error populating template code preview:', error);
         // Set a default message instead of showing error
-        if (templateCodePreview) {
-            templateCodePreview.textContent = '// Error loading template definitions';
-        }
+        templateCodePreview.textContent = '// Error loading template definitions: ' + error.message;
     }
 }
-  
   /**
    * Save Warm Hug parameters
    * Updates configuration with user-defined Warm Hug settings

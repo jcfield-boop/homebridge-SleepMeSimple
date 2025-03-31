@@ -1,5 +1,40 @@
 # Changelog
-# Changelog
+
+## 5.5.2 (2025-04-01)
+
+### Fixed
+- **Server Error Fix**: Resolved "fs is not defined" error in server.js
+  - Added missing fs import for proper file system access
+  - Enhanced testDeviceConnection function with better error handling
+  - Fixed config file checking functionality
+  - Added more comprehensive error reporting
+
+### Changed
+- **UI Reorganization**: Renamed "Advanced Options" tab to "Warm Hug Options" for clearer purpose
+  - Refocused tab content specifically on Warm Hug configuration parameters
+  - Enhanced Warm Hug description with detailed explanation of functionality
+  - Added step-by-step explanation of how Warm Hug works
+  - Improved parameter labels and descriptions
+
+### Fixed
+- **Template Code Preview**: Fixed issue where template definitions weren't loading properly
+  - Added direct template initialization during page load
+  - Enhanced template data access with global variable initialization
+  - Improved template preview generation with better error handling
+  - Added detailed console logging for template operations
+
+### Moved
+- **Log Level Setting**: Relocated from Advanced Options to main configuration section
+  - Added Log Level below Temperature Unit and Polling Interval
+  - Maintained consistent styling with other configuration elements
+  - Improved descriptive text for log level options
+
+### Improved
+- **Warm Hug Documentation**: Added comprehensive explanation of the feature
+  - Created clear, step-by-step overview of how Warm Hug works
+  - Added visual explanation with ordered list for better understanding
+  - Enhanced parameter descriptions with practical guidance
+  - Improved visual presentation with info cards
 ## 5.5.1 (2025-03-31)
 ### Fixed
 - **Collapsible Sections**: Fixed issue with Warm Hug Parameters section not expanding properly

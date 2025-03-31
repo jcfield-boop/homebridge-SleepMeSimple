@@ -701,7 +701,15 @@ select, input {
         <small class="form-text text-muted">Frequency of device status checks (60-300 seconds)</small>
     </div>
 </div>
-            
+<div class="form-group">
+    <label for="logLevel">Log Level:</label>
+    <select id="logLevel" name="logLevel">
+        <option value="normal">Normal - Standard operation logs</option>
+        <option value="debug">Debug - Additional debugging information</option>
+        <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
+    </select>
+    <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+</div>            
             <div class="form-group">
                 <label>
                     <input type="checkbox" id="enableSchedules" name="enableSchedules">
@@ -731,8 +739,8 @@ select, input {
                 <span class="tab-title">Template Help</span>
                 <span class="dropdown-indicator">▾</span>
             </div>
-            <div class="tab" data-tab="advancedOptions">
-                <span class="tab-title">Advanced Options</span>
+            <div class="tab" data-tab="warmHugOptions">
+                <span class="tab-title">Warm Hug Options</span>
                 <span class="dropdown-indicator">▾</span>
             </div>
         </div>
@@ -783,7 +791,8 @@ select, input {
             
             <div id="warmHugInfo" class="info-card hidden">
                 <h4>Warm Hug Feature</h4>
-                <p>The Warm Hug feature gradually increases temperature over time, starting before the scheduled time, for a gentle wake-up experience.</p>
+                <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled time, for a gentle wake-up experience. When selected, your device will begin warming <strong>before</strong> the time you set to ensure it reaches your target temperature exactly at your scheduled time.</p>
+                <p>For detailed configuration of Warm Hug parameters, please see the "Warm Hug Options" tab.</p>
             </div>
             <div id="scheduleList" class="schedule-list">
                 <!-- Schedules will be rendered here -->
@@ -899,45 +908,39 @@ select, input {
             </div>
         </div>
 
-      <!-- Advanced Options Tab -->
-<div id="advancedOptionsTab" class="tab-content">
+<!-- Changed from advancedOptionsTab to warmHugOptionsTab -->
+<div id="warmHugOptionsTab" class="tab-content">
     <div class="info-card">
-        <h4>Advanced Configuration Options</h4>
-        <p>These settings provide further customization for power users. Most users should leave these at their default values.</p>
+        <h4>Warm Hug Configuration</h4>
+        <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled wake-up time. This creates a gentle warming effect that helps you wake up naturally and comfortably.</p>
     </div>
 
     <div class="form-group">
-        <label for="logLevel">Log Level:</label>
-        <select id="logLevel" name="logLevel">
-            <option value="normal">Normal - Standard operation logs</option>
-            <option value="debug">Debug - Additional debugging information</option>
-            <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
-        </select>
-        <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+        <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
+        <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
+        <small class="form-text text-muted">How quickly temperature increases (0.5-5°C per minute)</small>
     </div>
     
-    <div class="collapsible-section">
-        <div class="collapsible-header" aria-expanded="false" aria-controls="warmHugParamsContent">
-            <h3>Warm Hug Parameters</h3>
-            <span class="dropdown-indicator">▾</span>
-        </div>
-        <div id="warmHugParamsContent" class="collapsible-content" aria-hidden="true">
-            <p>Configure how the Warm Hug feature gradually increases temperature.</p>
-            
-            <div class="form-group">
-                <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
-                <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
-                <small class="form-text text-muted">How quickly temperature increases (0.5-5°C per minute)</small>
-            </div>
-            
-            <div class="form-group">
-                <label for="warmHugDuration">Warm Hug Duration (minutes):</label>
-                <input type="number" id="warmHugDuration" min="5" max="60" value="15">
-                <small class="form-text text-muted">Total duration of the Warm Hug feature (5-60 minutes)</small>
-            </div>
-            
-            <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
-        </div>
+    <div class="form-group">
+        <label for="warmHugDuration">Warm Hug Duration (minutes):</label>
+        <input type="number" id="warmHugDuration" min="5" max="60" value="15">
+        <small class="form-text text-muted">Total duration of the Warm Hug (5-60 minutes before scheduled time)</small>
+    </div>
+
+    <div class="info-card">
+        <h4>How Warm Hug Works</h4>
+        <p>When you create a "Warm Hug" schedule type, the device will:</p>
+        <ol>
+            <li>Start at your current temperature</li>
+            <li>Begin warming up gradually <strong>before</strong> your scheduled time (based on the duration setting)</li>
+            <li>Increase temperature at the specified rate until reaching your target temperature</li>
+            <li>Reach the exact target temperature at precisely your scheduled time</li>
+        </ol>
+        <p>This creates a gentle, natural wake-up experience similar to sunrise, helping you start your day refreshed.</p>
+    </div>
+    
+    <button type="button" id="saveWarmHugParams" class="btn">Save Warm Hug Parameters</button>
+</div>
     </div>
 
 </div>
