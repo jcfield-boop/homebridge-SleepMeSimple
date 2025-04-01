@@ -47,13 +47,8 @@
                     // Log to console only
                     console.log('Schedule removed successfully');
                     
-                    // Update status element
-                    const statusElement = document.getElementById('status');
-                    if (statusElement) {
-                        statusElement.textContent = "Schedule removed successfully";
-                        statusElement.className = "status success";
-                        statusElement.classList.remove('hidden');
-                    }
+                 // Use NotificationManager for status updates
+NotificationManager.success('Schedule added successfully', 'Schedule Management');
                 }
             );
         } else {
@@ -148,13 +143,8 @@
         if (!type || !time || isNaN(temperature)) {
             console.error('All schedule fields are required');
             
-            // Update status element
-            const statusElement = document.getElementById('status');
-            if (statusElement) {
-                statusElement.textContent = 'All schedule fields are required';
-                statusElement.className = 'status error';
-                statusElement.classList.remove('hidden');
-            }
+        // Use NotificationManager for status updates
+NotificationManager.success('Schedule removed successfully', 'Schedule Management');
             return;
         }
         
@@ -340,18 +330,15 @@ if (typeof window.renderScheduleList === 'function') {
   
         console.log('Editing schedule');
         
-        // Update status element
-        const statusElement = document.getElementById('status');
-        if (statusElement) {
-            statusElement.textContent = 'Editing schedule';
-            statusElement.className = 'status info';
-            statusElement.classList.remove('hidden');
-            
-            // If editing a template-based schedule, show additional info
-            if (schedule.isFromTemplate) {
-                statusElement.textContent = `Editing ${schedule.templateSource || 'template-based'} schedule`;
-            }
-        }
+// Use NotificationManager for status updates
+if (schedule.isFromTemplate) {
+    NotificationManager.info(
+        `Editing ${schedule.templateSource || 'template-based'} schedule`,
+        'Schedule Edit Mode'
+    );
+} else {
+    NotificationManager.info('Editing schedule', 'Schedule Edit Mode');
+}
     };
     
     /**
@@ -464,13 +451,11 @@ if (typeof window.renderScheduleList === 'function') {
       if (count > 0) {
           console.log(`Applied ${count} schedules from templates`);
           
-          // Update status element
-          const statusElement = document.getElementById('status');
-          if (statusElement) {
-              statusElement.textContent = `Applied ${count} schedules from templates`;
-              statusElement.className = 'status success';
-              statusElement.classList.remove('hidden');
-          }
+// Use NotificationManager for status updates
+NotificationManager.success(
+    `Applied ${count} schedules from templates`,
+    'Template Application'
+);
       } else {
           console.warn('No templates selected');
           

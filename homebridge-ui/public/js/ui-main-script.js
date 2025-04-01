@@ -481,39 +481,48 @@ window.initializeCollapsibleSections = initializeCollapsibleSections;
    */
   async function saveWarmHugParameters() {
     try {
-      console.log('Saving Warm Hug parameters...');
-      const incrementInput = document.getElementById('warmHugIncrement');
-      const durationInput = document.getElementById('warmHugDuration');
-      const unitSelect = document.getElementById('unit');
-      
-      if (!incrementInput || !durationInput || !unitSelect) {
-        console.error('Warm Hug input elements not found');
-        return;
-      }
-      
-      // Get current unit
-      const currentUnit = unitSelect.value;
-      
-      // Validate inputs with appropriate ranges based on unit
-      const increment = parseFloat(incrementInput.value);
-      const duration = parseInt(durationInput.value);
-      
-      // Different validation ranges based on unit
-      const minIncrement = currentUnit === 'C' ? 0.5 : 1.0;
-      const maxIncrement = currentUnit === 'C' ? 5.0 : 9.0;
-      
-      if (isNaN(increment) || increment < minIncrement || increment > maxIncrement) {
-        console.error('Invalid increment value:', increment);
+        console.log('Saving Warm Hug parameters...');
+        const incrementInput = document.getElementById('warmHugIncrement');
+        const durationInput = document.getElementById('warmHugDuration');
+        const unitSelect = document.getElementById('unit');
         
-        // Update status element
-        const statusElement = document.getElementById('status');
-        if (statusElement) {
-          statusElement.textContent = `Error: Increment must be between ${minIncrement} and ${maxIncrement}°${currentUnit}`;
-          statusElement.className = 'status error';
-          statusElement.classList.remove('hidden');
+        if (!incrementInput || !durationInput || !unitSelect) {
+            console.error('Warm Hug input elements not found');
+            return;
         }
-        return;
-      }
+        
+        // Get current unit
+        const currentUnit = unitSelect.value;
+        
+        // Validate inputs with appropriate ranges based on unit
+        const increment = parseFloat(incrementInput.value);
+        const duration = parseInt(durationInput.value);
+        
+        // Different validation ranges based on unit
+        const minIncrement = currentUnit === 'C' ? 0.5 : 1.0;
+        const maxIncrement = currentUnit === 'C' ? 5.0 : 9.0;
+        
+        if (isNaN(increment) || increment < minIncrement || increment > maxIncrement) {
+            console.error('Invalid increment value:', increment);
+            
+            // Use NotificationManager instead of direct DOM manipulation
+            NotificationManager.error(
+                `Increment must be between ${minIncrement} and ${maxIncrement}°${currentUnit}`,
+                'Validation Error'
+            );
+            return;
+        }
+        
+        if (isNaN(duration) || duration < 5 || duration > 30) {
+            console.error('Invalid duration value:', duration);
+            
+            // Use NotificationManager instead of direct DOM manipulation
+            NotificationManager.error(
+                'Duration must be between 5 and 30 minutes',
+                'Validation Error'
+            );
+            return;
+        }
       
       if (isNaN(duration) || duration < 5 || duration > 30) {
         console.error('Invalid duration value:', duration);
@@ -578,30 +587,22 @@ window.initializeCollapsibleSections = initializeCollapsibleSections;
       
       console.log('Warm Hug parameters saved successfully');
       
-      // Update status element with success message
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-        statusElement.textContent = 'Warm Hug parameters saved successfully';
-        statusElement.className = 'status success';
-        statusElement.classList.remove('hidden');
-        
-        // Auto-hide after a few seconds
-        setTimeout(() => {
-          statusElement.classList.add('hidden');
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('Error saving Warm Hug parameters:', error);
-      
-      // Update status element with error
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-        statusElement.textContent = `Error saving parameters: ${error.message}`;
-        statusElement.className = 'status error';
-        statusElement.classList.remove('hidden');
-      }
-    }
-  }
+    // Use NotificationManager for success message
+    NotificationManager.success(
+        'Warm Hug parameters saved successfully',
+        'Parameters Saved',
+        { autoHide: true }
+    );
+} catch (error) {
+    console.error('Error saving Warm Hug parameters:', error);
+    
+    // Use NotificationManager for error reporting
+    NotificationManager.error(
+        `Error saving parameters: ${error.message}`,
+        'Save Error'
+    );
+}
+}
 /**
  * Populate template code preview with template data
  * Enhanced with direct access to the global templates object
@@ -1557,60 +1558,52 @@ async function waitForHomebridgeReady() {
  * @returns {Promise<void>}
  */
 async function testConnection() {
-  try {
-      const apiTokenInput = document.getElementById('apiToken');
-      if (!apiTokenInput) {
-          console.error('API token input field not found');
-          return;
-      }
-      
-      const apiToken = apiTokenInput.value.trim();
-      if (!apiToken) {
-          // Update status element instead of toast
-          const statusElement = document.getElementById('status');
-          if (statusElement) {
-              statusElement.textContent = 'Please enter your API token';
-              statusElement.className = 'status error';
-              statusElement.classList.remove('hidden');
-          }
-          return;
-      }
-      
-      console.log('Testing API connection...'); 
-      
-      if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
-          console.error('Homebridge API not available for API test');
-          return;
-      }
-      
-      // Make request to server
-      const response = await homebridge.request('/device/test', { apiToken });
-              
-      // Update status element instead of toast
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-          if (response.success) {
-              statusElement.textContent = `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`;
-              statusElement.className = 'status success';
-          } else {
-              statusElement.textContent = response.error || 'Unknown error testing connection';
-              statusElement.className = 'status error';
-          }
-          statusElement.classList.remove('hidden');
-      }
-  } catch (error) {
-      console.error('Error testing connection:', error);
-      
-      // Update status element instead of toast
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-          statusElement.textContent = `Error testing connection: ${error.message}`;
-          statusElement.className = 'status error';
-          statusElement.classList.remove('hidden');
-      }
+    try {
+        const apiTokenInput = document.getElementById('apiToken');
+        if (!apiTokenInput) {
+            console.error('API token input field not found');
+            return;
+        }
+        
+        const apiToken = apiTokenInput.value.trim();
+        if (!apiToken) {
+            // Use NotificationManager instead of direct DOM manipulation
+            NotificationManager.error('Please enter your API token', 'Validation Error');
+            return;
+        }
+        
+        console.log('Testing API connection...'); 
+        
+        if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
+            console.error('Homebridge API not available for API test');
+            return;
+        }
+        
+        // Make request to server
+        const response = await homebridge.request('/device/test', { apiToken });
+                
+        // Use NotificationManager instead of direct DOM manipulation
+        if (response.success) {
+            NotificationManager.success(
+                `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`,
+                'API Test'
+            );
+        } else {
+            NotificationManager.error(
+                response.error || 'Unknown error testing connection',
+                'API Test Failed'
+            );
+        }
+    } catch (error) {
+        console.error('Error testing connection:', error);
+        
+        // Use NotificationManager for error reporting
+        NotificationManager.error(
+            `Error testing connection: ${error.message}`,
+            'API Test Error'
+        );
+    }
   }
-}
-
 /**
  * Robust initialization sequence with better error handling and fallbacks
  * Uses sequential async operations with proper error boundaries

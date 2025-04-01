@@ -1,4 +1,41 @@
 # Changelog
+
+# Changelog
+
+## 5.8.0 (2025-04-20)
+
+### Added
+- **Enhanced NotificationManager**: Complete overhaul of the notification system
+  - Added centralized notification management with intelligent filtering
+  - Implemented blocklist/allowlist approach for toast notifications
+  - Added direct status element updates with proper console logging
+  - Created lazy initialization for better startup reliability
+  - Added dynamic management of allowed/blocked notification patterns
+
+### Improved
+- **Notification Consistency**: Standardized all user feedback mechanisms
+  - Replaced direct DOM manipulation with centralized NotificationManager calls
+  - Enhanced status element handling with automatic timeout management
+  - Improved console logging with appropriate severity levels
+  - Added explicit auto-hide functionality for transient notifications
+  - Streamlined notification appearance/disappearance for better UX
+
+### Fixed
+- **Toast Notification Issues**: Comprehensive solution for unwanted toast messages
+  - Expanded blocklist to catch all system-generated notifications
+  - Added status-only mode to prevent toast displays when not needed
+  - Fixed notification race conditions with proper initialization checks
+  - Enhanced error handling in notification system
+  - Implemented message context preservation in status updates
+
+### Technical
+- **Architecture Enhancement**: More robust notification infrastructure
+  - Added module pattern encapsulation for better state management
+  - Created public API with convenience methods for different notification types
+  - Implemented explicit timeout management to prevent memory leaks
+  - Added dynamic notification filtering based on message content
+  - Enhanced error recovery with fallback notification methods
+  - Improved performance by reducing redundant DOM operations
 ## 5.7.0 (2025-04-15)
 
 ### Fixed
