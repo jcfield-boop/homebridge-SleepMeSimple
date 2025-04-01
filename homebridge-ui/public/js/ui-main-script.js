@@ -30,6 +30,11 @@
       
       // Initialize Homebridge connection
       initializeHomebridge();
+       // Add delayed re-initialization of collapsible sections
+  setTimeout(function() {
+    console.log('Running delayed initialization of collapsible sections');
+    initializeCollapsibleSections();
+  }, 1000); // 1 second delay
     });
     
     /**
@@ -73,59 +78,82 @@
       console.log('Tabs initialized');
     }
     
-    /**
-     * Initialize collapsible sections
-     */
     function initializeCollapsibleSections() {
-      const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
-      
-      if (collapsibleHeaders.length === 0) {
-        return;
-      }
-      
-      collapsibleHeaders.forEach((header) => {
-        // Remove existing listeners and create a clean element
-        const newHeader = header.cloneNode(true);
-        if (header.parentNode) {
-          header.parentNode.replaceChild(newHeader, header);
+        console.log('Initializing collapsible sections...');
+        
+        // Get all headers
+        const headers = document.querySelectorAll('.collapsible-header');
+        console.log(`Found ${headers.length} collapsible headers`);
+        
+        if (headers.length === 0) {
+          console.warn('No collapsible headers found in the DOM');
+          return;
         }
         
-        // Add click listener
-        newHeader.addEventListener('click', function() {
-          const section = this.closest('.collapsible-section');
-          const content = section.querySelector('.collapsible-content');
-          const indicator = this.querySelector('.dropdown-indicator');
+        // Process each header
+        headers.forEach((header, index) => {
+          console.log(`Processing collapsible header ${index + 1}/${headers.length}`);
           
-          // Toggle section state
-          section.classList.toggle('open');
-          
-          // Set content display style
-          if (section.classList.contains('open')) {
-            content.style.display = 'block';
-            if (indicator) {
-              indicator.style.transform = 'rotate(180deg)';
-            }
+          // First, ensure we're working with a fresh element without previous listeners
+          const newHeader = header.cloneNode(true);
+          if (header.parentNode) {
+            header.parentNode.replaceChild(newHeader, header);
           } else {
-            content.style.display = 'none';
-            if (indicator) {
-              indicator.style.transform = 'rotate(0deg)';
+            console.warn('Header has no parent node, skipping', header);
+            return;
+          }
+          
+          // Find the associated section and content
+          const section = newHeader.closest('.collapsible-section');
+          const content = section?.querySelector('.collapsible-content');
+          const indicator = newHeader.querySelector('.dropdown-indicator');
+          
+          if (!section || !content) {
+            console.warn('Missing section or content element for header', newHeader);
+            return;
+          }
+          
+          // Initialize to closed state with both class and inline style
+          section.classList.remove('open');
+          content.style.display = 'none';
+          if (indicator) {
+            indicator.style.transform = 'rotate(0deg)';
+          }
+          
+          // Add click handler with explicit event binding
+          function toggleSection(event) {
+            console.log('Collapsible header clicked:', this);
+            
+            // Stop event propagation to prevent interference
+            event.stopPropagation();
+            
+            // Toggle the open class
+            section.classList.toggle('open');
+            
+            // Update content display property using both class and style
+            if (section.classList.contains('open')) {
+              console.log('Opening section');
+              content.style.display = 'block';
+              if (indicator) {
+                indicator.style.transform = 'rotate(180deg)';
+              }
+            } else {
+              console.log('Closing section');
+              content.style.display = 'none';
+              if (indicator) {
+                indicator.style.transform = 'rotate(0deg)';
+              }
             }
           }
+          
+          // Use both event binding methods for compatibility
+          newHeader.addEventListener('click', toggleSection);
+          
+          console.log('Initialized collapsible section:', section);
         });
         
-        // Initialize sections to closed state
-        const section = newHeader.closest('.collapsible-section');
-        const content = section.querySelector('.collapsible-content');
-        const indicator = newHeader.querySelector('.dropdown-indicator');
-        
-        section.classList.remove('open');
-        content.style.display = 'none';
-        if (indicator) {
-          indicator.style.transform = 'rotate(0deg)';
-        }
-      });
-    }
-    
+        console.log('Collapsible sections initialization complete');
+      }
     /**
      * Set up schedule-specific event listeners
      */

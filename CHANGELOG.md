@@ -1,5 +1,27 @@
 # Changelog
+## 6.0.1 (2025-04-30)
 
+### Fixed
+- **Collapsible Sections Functionality**: Completely rewrote the section initialization mechanism
+  - Added robust DOM element verification before manipulation
+  - Implemented both class toggling and explicit style properties
+  - Added proper event propagation control for click handlers
+  - Used element cloning to eliminate event listener conflicts
+  - Added detailed logging for troubleshooting section state
+
+### Enhanced
+- **Initialization Process**: Improved section loading reliability
+  - Implemented delayed re-initialization for DOM readiness
+  - Added per-section error handling with specific error messages
+  - Enhanced section state management with explicit style control
+  - Fixed dropdown indicator rotation animations
+
+### Technical
+- **Code Improvements**: Enhanced codebase stability
+  - Added comprehensive element existence checks
+  - Implemented defensive coding practices throughout
+  - Added runtime logging for initialization sequence
+  - Improved error boundaries around critical functionality
 ## 6.0.0 (2025-04-25)
 
 ### Complete UI Redesign
