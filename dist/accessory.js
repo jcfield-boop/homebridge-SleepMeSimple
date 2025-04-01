@@ -173,8 +173,8 @@ export class SleepMeAccessory {
         this.temperatureControlService
             .getCharacteristic(this.Characteristic.CurrentTemperature)
             .setProps({
-            minValue: MIN_TEMPERATURE_C - 5,
-            maxValue: MAX_TEMPERATURE_C + 5,
+            minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
+            maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
             minStep: 0.1
         })
             .onGet(() => this.currentTemperature || 20);

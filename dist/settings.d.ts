@@ -79,8 +79,8 @@ export declare enum LogLevel {
  * Request priority levels for more intelligent queue management
  */
 export declare enum RequestPriority {
-    CRITICAL = "critical",
-    HIGH = "high",
-    NORMAL = "normal",
+    CRITICAL = "critical",// User-initiated power changes, must succeed
+    HIGH = "high",// User-initiated temperature changes
+    NORMAL = "normal",// Regular status updates
     LOW = "low"
 }
