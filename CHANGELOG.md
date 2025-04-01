@@ -1,6 +1,31 @@
 # Changelog
 
-# Changelog
+## 6.0.0 (2025-04-25)
+
+### Complete UI Redesign
+- **Reorganized Tab Structure**: Intuitive tab organization with Manual Schedules, Templates, Warm Hug Options, and Help
+- **Improved Schedule Management**: Enhanced schedule creation, editing, and display with better grouping and visual cues
+- **Consolidated Warm Hug Options**: All Warm Hug parameters moved to dedicated tab with improved explanations
+- **Responsive Design Enhancements**: Better mobile support with improved layouts for smaller screens
+
+### UI Components
+- **Enhanced Form Validation**: More robust validation for time and temperature with unit-aware feedback
+- **Improved Template System**: Better template previews and application with clearer success indicators
+- **Collapsible Sections**: More reliable section expansion/collapse with proper indicator rotation
+- **Confirmation Modal**: Enhanced reliability for schedule removal confirmation
+
+### Technical Improvements
+- **Modular Code Architecture**: Better separation of concerns with focused modules for notifications, scheduling, and UI
+- **Consistent Unit Handling**: Seamless conversion between Celsius and Fahrenheit throughout the interface
+- **Memory Leak Prevention**: Proper event listener cleanup and element management
+- **Defensive Programming**: Better error handling with appropriate user feedback
+- **Enhanced Accessibility**: Improved keyboard navigation and ARIA attributes
+
+### Code Quality
+- **Better Documentation**: Comprehensive JSDoc comments for all functions
+- **Type Safety**: Improved validation for all input/output data
+- **Code Organization**: Logical function grouping and naming conventions
+- **Performance Optimization**: Reduced DOM operations and better state management
 
 ## 5.8.0 (2025-04-20)
 

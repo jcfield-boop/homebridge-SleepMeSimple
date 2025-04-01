@@ -8,249 +8,331 @@
  * and improve code organization
  */
 /**
- * DOM Ready Handler - Ensures UI elements are properly initialized
- * Fixes "Failed to initialize UI elements" error
+ * SleepMe Simple UI Initialization
+ * Handles tab navigation and collapsible sections
  */
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing UI components');
-
-    // Initialize NotificationManager
-    if (typeof NotificationManager !== 'undefined') {
+(function() {
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, initializing UI components');
+      
+      // Initialize NotificationManager
+      if (typeof NotificationManager !== 'undefined') {
         NotificationManager.init();
-    } else {
-        console.error('NotificationManager not loaded');
-    }
-      // Add this block early in the function
-    // IMPORTANT: Initialize templates globally so they're available to all functions
-    window.templates = {
-        optimal: {
-            name: "Optimal Sleep Cycle",
-            description: "Designed for complete sleep cycles with REM enhancement",
-            schedules: [
-                { type: "Weekdays", time: "22:00", temperature: 21, description: "Cool Down" },
-                { type: "Weekdays", time: "23:00", temperature: 19, description: "Deep Sleep" },
-                { type: "Weekdays", time: "02:00", temperature: 23, description: "REM Support" },
-                { type: "Weekdays", time: "06:00", temperature: 26, description: "Warm Hug Wake-up" }
-            ]
-        },
-        nightOwl: {
-            name: "Night Owl",
-            description: "Later bedtime with extended morning warm-up",
-            schedules: [
-                { type: "Weekdays", time: "23:30", temperature: 21, description: "Cool Down" },
-                { type: "Weekdays", time: "00:30", temperature: 19, description: "Deep Sleep" },
-                { type: "Weekdays", time: "03:30", temperature: 23, description: "REM Support" },
-                { type: "Weekdays", time: "07:30", temperature: 26, description: "Warm Hug Wake-up" }
-            ]
-        },
-        earlyBird: {
-            name: "Early Bird",
-            description: "Earlier bedtime and wake-up schedule",
-            schedules: [
-                { type: "Weekdays", time: "21:00", temperature: 21, description: "Cool Down" },
-                { type: "Weekdays", time: "22:00", temperature: 19, description: "Deep Sleep" },
-                { type: "Weekdays", time: "01:00", temperature: 23, description: "REM Support" },
-                { type: "Weekdays", time: "05:00", temperature: 26, description: "Warm Hug Wake-up" }
-            ]
-        },
-        recovery: {
-            name: "Weekend Recovery",
-            description: "Extra sleep with later wake-up time",
-            schedules: [
-                { type: "Weekend", time: "23:00", temperature: 21, description: "Cool Down" },
-                { type: "Weekend", time: "00:00", temperature: 19, description: "Deep Sleep" },
-                { type: "Weekend", time: "03:00", temperature: 23, description: "REM Support" },
-                { type: "Weekend", time: "08:00", temperature: 26, description: "Warm Hug Wake-up" }
-            ]
-        },
-        relaxed: {
-            name: "Relaxed Weekend",
-            description: "Gradual transitions for weekend leisure",
-            schedules: [
-                { type: "Weekend", time: "23:30", temperature: 22, description: "Cool Down" },
-                { type: "Weekend", time: "01:00", temperature: 20, description: "Deep Sleep" },
-                { type: "Weekend", time: "04:00", temperature: 24, description: "REM Support" },
-                { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up" }
-            ]
-        }
-    };
-    // Initialize DOM elements first
-    initUIComponents();
+      }
+      
+      // Initialize UI components
+      initializeTabs();
+      initializeCollapsibleSections();
+      setupScheduleListeners();
+      initializeTemplateHandlers();
+      initializeWarmHugHandlers();
+      
+      // Initialize Homebridge connection
+      initializeHomebridge();
+    });
     
-    // Set up schedule-specific event listeners
-    setupScheduleListeners();
-
-     // Set up schedule-specific event listeners
-     setupScheduleListeners();
-    
-    // Wait for Homebridge to be ready
-    initializeHomebridge();
-    
-    // Function to initialize UI components
-    function initUIComponents() {
-        // Ensure the DOM is fully loaded before initialization
-        console.log('Initializing UI components');
+    /**
+     * Initialize tab navigation
+     */
+    function initializeTabs() {
+      const tabContainer = document.querySelector('.tabs');
+      if (!tabContainer) {
+        console.warn('Tab container not found');
+        return;
+      }
+      
+      tabContainer.addEventListener('click', (event) => {
+        // Find the closest tab element
+        const tabElement = event.target.closest('.tab');
         
-        // Initialize key form elements with explicit IDs
-        const formElements = ['unit', 'pollingInterval', 'apiToken', 'enableSchedules'];
-        
-        // Verify all critical elements exist
-        const missingElements = formElements.filter(id => !document.getElementById(id));
-        
-        if (missingElements.length > 0) {
-            console.error('Missing critical UI elements:', missingElements.join(', '));
-        } else {
-            console.log('All critical UI elements found');
-        }
-        
-        // Initialize collapsible sections if available
-        if (typeof initializeCollapsibleSections === 'function') {
-            try {
-                initializeCollapsibleSections();
-            } catch (error) {
-                console.error('Failed to initialize collapsible sections:', error);
+        if (tabElement) {
+          const tabId = tabElement.getAttribute('data-tab');
+          if (!tabId) {
+            return;
+          }
+          
+          // Remove active class from all tabs and contents
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          
+          // Add active class to selected tab and content
+          tabElement.classList.add('active');
+          const tabContent = document.getElementById(tabId + 'Tab');
+          if (tabContent) {
+            tabContent.classList.add('active');
+            
+            // Special actions for specific tabs
+            if (tabId === 'warmHug') {
+              loadWarmHugSettings();
             }
-        }
-        
-        // Initialize tabs if available
-        if (typeof initializeTabs === 'function') {
-            try {
-                initializeTabs();
-            } catch (error) {
-                console.error('Failed to initialize tabs:', error);
-            }
-        }
-    }
-    
-    // Function to set up schedule-specific event listeners
-    function setupScheduleListeners() {
-        console.log('Setting up schedule-specific listeners');
-        
-        // Set up additional event listeners for schedule-related UI elements
-        const enableSchedulesCheckbox = document.getElementById('enableSchedules');
-        if (enableSchedulesCheckbox) {
-            enableSchedulesCheckbox.addEventListener('change', function() {
-                const schedulesContainer = document.getElementById('schedulesContainer');
-                if (schedulesContainer) {
-                    schedulesContainer.classList.toggle('hidden', !this.checked);
-                }
-            });
-        }
-        
-        // Check if scheduleList exists - critical for rendering schedules
-        const scheduleList = document.getElementById('scheduleList');
-        if (!scheduleList) {
-            console.error('CRITICAL: scheduleList element not found in DOM! Schedules cannot be rendered');
-        } else {
-            console.log('scheduleList element found in DOM');
-        }
-    }
-    
-    // Function to initialize Homebridge connection
-    function initializeHomebridge() {
-        console.log('Initializing Homebridge connection');
-        
-        if (typeof homebridge !== 'undefined') {
-            // If homebridge.getPluginConfig is already available
-            if (typeof homebridge.getPluginConfig === 'function') {
-                console.log('Homebridge API already available, loading config immediately');
-                
-                // Load config with a small delay to ensure DOM is fully ready
-                setTimeout(() => {
-                    window.loadConfig().then(() => {
-                        console.log('Config loaded, checking schedules');
-                        // Double-check schedule rendering
-                        if (Array.isArray(window.schedules) && 
-                            window.schedules.length > 0 && 
-                            typeof window.renderScheduleList === 'function') {
-                            console.log('Force re-rendering schedules');
-                            window.renderScheduleList();
-                        } else if (Array.isArray(window.schedules)) {
-                            console.log('Schedules array exists but is empty or renderScheduleList not available:', {
-                                schedulesLength: window.schedules.length,
-                                renderFunctionExists: typeof window.renderScheduleList === 'function'
-                            });
-                        } else {
-                            console.error('window.schedules is not an array after config load');
-                        }
-                    }).catch(error => {
-                        console.error('Error loading config:', error);
-                    });
-                }, 500); // 500ms delay to ensure DOM is fully ready
-            } else {
-                // Wait for homebridge ready event
-                console.log('Waiting for Homebridge API to be ready');
-                homebridge.addEventListener('ready', () => {
-                    console.log('Homebridge ready event received, loading config');
-                    
-                    // Load config with a small delay after ready event
-                    setTimeout(() => {
-                        window.loadConfig().then(() => {
-                            console.log('Config loaded after ready event, checking schedules');
-                            // Double-check schedule rendering
-                            if (Array.isArray(window.schedules) && 
-                                window.schedules.length > 0 && 
-                                typeof window.renderScheduleList === 'function') {
-                                console.log('Force re-rendering schedules after ready event');
-                                window.renderScheduleList();
-                            } else if (Array.isArray(window.schedules)) {
-                                console.log('Schedules array exists but is empty or renderScheduleList not available:', {
-                                    schedulesLength: window.schedules.length,
-                                    renderFunctionExists: typeof window.renderScheduleList === 'function'
-                                });
-                            } else {
-                                console.error('window.schedules is not an array after config load');
-                            }
-                        }).catch(error => {
-                            console.error('Error loading config after ready event:', error);
-                        });
-                    }, 500);
-                });
-            }
-        } else {
-            console.error('Homebridge object not available');
-        }
-    }
-});
-// Execute immediately to prevent ANY toasts from appearing during startup
-(function suppressAllStartupToasts() {
-    // Immediately suppress ALL toast notifications during initialization
-    if (typeof homebridge !== 'undefined') {
-      // METHOD 1: Override toast methods directly - must run ASAP
-      const toastTypes = ['success', 'error', 'warning', 'info'];
-      toastTypes.forEach(type => {
-        if (homebridge.toast && typeof homebridge.toast[type] === 'function') {
-          const originalToast = homebridge.toast[type];
-          homebridge.toast[type] = function(message, title) {
-            // Only log to console during initialization
-            console.log(`[TOAST SUPPRESSED] ${type}: ${title || ''} - ${message}`);
-            return; // Don't call original function
-          };
+          }
         }
       });
       
-      // METHOD 2: Block log fetching at the source
-      if (typeof homebridge.fetchLogs === 'function') {
-        homebridge.fetchLogs = function() {
-          console.log('[LOGS] Log fetching suppressed');
-          return Promise.resolve([]); // Return empty logs array
-        };
+      console.log('Tabs initialized');
+    }
+    
+    /**
+     * Initialize collapsible sections
+     */
+    function initializeCollapsibleSections() {
+      const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
+      
+      if (collapsibleHeaders.length === 0) {
+        return;
       }
       
-      // METHOD 3: Block network requests to log endpoints
-      const originalFetch = window.fetch;
-      window.fetch = function(url, options) {
-        if (url && typeof url === 'string' && 
-            (url.includes('/log') || url.includes('logs'))) {
-          console.log(`[NETWORK] Suppressed fetch to: ${url}`);
-          return Promise.resolve(new Response('[]', { 
-            status: 200, 
-            headers: { 'Content-Type': 'application/json' }
-          }));
+      collapsibleHeaders.forEach((header) => {
+        // Remove existing listeners and create a clean element
+        const newHeader = header.cloneNode(true);
+        if (header.parentNode) {
+          header.parentNode.replaceChild(newHeader, header);
         }
-        return originalFetch.apply(this, arguments);
-      };
+        
+        // Add click listener
+        newHeader.addEventListener('click', function() {
+          const section = this.closest('.collapsible-section');
+          const content = section.querySelector('.collapsible-content');
+          const indicator = this.querySelector('.dropdown-indicator');
+          
+          // Toggle section state
+          section.classList.toggle('open');
+          
+          // Set content display style
+          if (section.classList.contains('open')) {
+            content.style.display = 'block';
+            if (indicator) {
+              indicator.style.transform = 'rotate(180deg)';
+            }
+          } else {
+            content.style.display = 'none';
+            if (indicator) {
+              indicator.style.transform = 'rotate(0deg)';
+            }
+          }
+        });
+        
+        // Initialize sections to closed state
+        const section = newHeader.closest('.collapsible-section');
+        const content = section.querySelector('.collapsible-content');
+        const indicator = newHeader.querySelector('.dropdown-indicator');
+        
+        section.classList.remove('open');
+        content.style.display = 'none';
+        if (indicator) {
+          indicator.style.transform = 'rotate(0deg)';
+        }
+      });
     }
+    
+    /**
+     * Set up schedule-specific event listeners
+     */
+    function setupScheduleListeners() {
+      // Enable schedules toggle
+      const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+      const schedulesContainer = document.getElementById('schedulesContainer');
+      
+      if (enableSchedulesCheckbox && schedulesContainer) {
+        enableSchedulesCheckbox.addEventListener('change', function() {
+          schedulesContainer.classList.toggle('hidden', !this.checked);
+        });
+      }
+      
+      // Schedule type change - show/hide day select and warm hug info
+      const scheduleTypeSelect = document.getElementById('scheduleType');
+      const daySelectContainer = document.getElementById('daySelectContainer');
+      const warmHugInfo = document.getElementById('warmHugInfo');
+      
+      if (scheduleTypeSelect) {
+        scheduleTypeSelect.addEventListener('change', function() {
+          if (daySelectContainer) {
+            daySelectContainer.classList.toggle('hidden', this.value !== 'Specific Day');
+          }
+          
+          if (warmHugInfo) {
+            warmHugInfo.classList.toggle('hidden', this.value !== 'Warm Hug');
+          }
+        });
+      }
+      
+      // Schedule validation
+      const scheduleTimeInput = document.getElementById('scheduleTime');
+      const scheduleTemperatureInput = document.getElementById('scheduleTemperature');
+      
+      if (scheduleTimeInput && typeof validateScheduleTime === 'function') {
+        scheduleTimeInput.addEventListener('input', validateScheduleTime);
+        scheduleTimeInput.addEventListener('blur', validateScheduleTime);
+      }
+      
+      if (scheduleTemperatureInput && typeof validateTemperature === 'function') {
+        scheduleTemperatureInput.addEventListener('input', validateTemperature);
+        scheduleTemperatureInput.addEventListener('blur', validateTemperature);
+      }
+      
+      // Add/update schedule button
+      const addScheduleBtn = document.getElementById('addSchedule');
+      if (addScheduleBtn && typeof handleScheduleAction === 'function') {
+        addScheduleBtn.addEventListener('click', handleScheduleAction);
+      }
+      
+      // Cancel edit button
+      const cancelEditBtn = document.getElementById('cancelEdit');
+      if (cancelEditBtn && typeof exitEditMode === 'function') {
+        cancelEditBtn.addEventListener('click', exitEditMode);
+      }
+    }
+    
+    /**
+     * Initialize template-related handlers
+     */
+    function initializeTemplateHandlers() {
+      // Apply templates button
+      const applyTemplatesBtn = document.getElementById('applyTemplates');
+      if (applyTemplatesBtn && typeof applyScheduleTemplates === 'function') {
+        applyTemplatesBtn.addEventListener('click', applyScheduleTemplates);
+      }
+      
+      // Weekday template selection
+      const weekdayTemplateSelect = document.getElementById('weekdayTemplate');
+      if (weekdayTemplateSelect) {
+        weekdayTemplateSelect.addEventListener('change', function() {
+          updateTemplateDescription('weekday', this.value);
+        });
+      }
+      
+      // Weekend template selection
+      const weekendTemplateSelect = document.getElementById('weekendTemplate');
+      if (weekendTemplateSelect) {
+        weekendTemplateSelect.addEventListener('change', function() {
+          updateTemplateDescription('weekend', this.value);
+        });
+      }
+    }
+    
+    /**
+     * Initialize Warm Hug handlers
+     */
+    function initializeWarmHugHandlers() {
+      // Save Warm Hug parameters button
+      const saveWarmHugParamsBtn = document.getElementById('saveWarmHugParams');
+      if (saveWarmHugParamsBtn) {
+        saveWarmHugParamsBtn.addEventListener('click', saveWarmHugParameters);
+      }
+      
+      // Unit change handler for temperature display
+      const unitSelect = document.getElementById('unit');
+      if (unitSelect) {
+        unitSelect.addEventListener('change', function() {
+          updateWarmHugUnitLabels(this.value);
+          loadWarmHugSettings(); // Reload with new unit
+        });
+      }
+    }
+    
+    /**
+     * Update template description based on selection
+     * @param {string} type - 'weekday' or 'weekend'
+     * @param {string} templateKey - Selected template key
+     */
+    function updateTemplateDescription(type, templateKey) {
+      if (!window.templates || !templateKey) {
+        return;
+      }
+      
+      const template = window.templates[templateKey];
+      const descElement = document.getElementById(`${type}TemplateDesc`);
+      
+      if (descElement && template) {
+        descElement.textContent = template.description || '';
+        
+        // Add preview button if not already present
+        if (!document.getElementById(`${type}PreviewBtn`)) {
+          const previewBtn = document.createElement('button');
+          previewBtn.id = `${type}PreviewBtn`;
+          previewBtn.className = 'secondary';
+          previewBtn.textContent = 'Preview Schedules';
+          previewBtn.style.marginTop = '10px';
+          
+          // Add click handler
+          previewBtn.addEventListener('click', function() {
+            if (typeof showTemplatePreview === 'function') {
+              showTemplatePreview(templateKey);
+            }
+          });
+          
+          descElement.appendChild(previewBtn);
+        }
+      } else if (descElement) {
+        descElement.textContent = '';
+      }
+    }
+    
+    /**
+     * Update Warm Hug unit labels based on temperature unit
+     * @param {string} unit - Temperature unit ('C' or 'F')
+     */
+    function updateWarmHugUnitLabels(unit) {
+      const incrementLabel = document.querySelector('label[for="warmHugIncrement"]');
+      const incrementHelp = document.querySelector('#warmHugIncrement + .form-text');
+      
+      if (incrementLabel) {
+        incrementLabel.textContent = `Temperature Increment (°${unit}/min):`;
+      }
+      
+      if (incrementHelp) {
+        if (unit === 'C') {
+          incrementHelp.textContent = 'How quickly temperature increases (0.5-5°C per minute)';
+        } else {
+          incrementHelp.textContent = 'How quickly temperature increases (1-9°F per minute)';
+        }
+      }
+    }
+    
+    /**
+     * Initialize Homebridge connection
+     */
+    function initializeHomebridge() {
+      if (typeof homebridge === 'undefined') {
+        console.error('Homebridge object not available');
+        return;
+      }
+      
+      // Check if API is already available
+      if (typeof homebridge.getPluginConfig === 'function') {
+        console.log('Homebridge API already available, loading config immediately');
+        setTimeout(loadConfig, 500);
+      } else {
+        // Wait for ready event
+        homebridge.addEventListener('ready', function() {
+          console.log('Homebridge ready event received, loading config');
+          setTimeout(loadConfig, 500);
+        });
+      }
+    }
+    
+    /**
+     * Load configuration from Homebridge
+     */
+    function loadConfig() {
+      if (typeof window.loadConfig === 'function') {
+        window.loadConfig().then(function() {
+          console.log('Config loaded, rendering schedules');
+          if (typeof window.renderScheduleList === 'function') {
+            window.renderScheduleList();
+          }
+        }).catch(function(error) {
+          console.error('Error loading config:', error);
+        });
+      }
+    }
+    
+    // Expose functions to global scope
+    window.initializeTabs = initializeTabs;
+    window.initializeCollapsibleSections = initializeCollapsibleSections;
+    window.updateTemplateDescription = updateTemplateDescription;
+    window.updateWarmHugUnitLabels = updateWarmHugUnitLabels;
   })();
 // Tab navigation handling
 function initializeTabs() {
@@ -295,85 +377,7 @@ function initializeTabs() {
     console.log('Tabs initialized');
   }
 
-  /**
- * Initialize collapsible sections with proper event handling and state management
- * Correctly handles show/hide toggling and indicator rotation
- */
-function initializeCollapsibleSections() {
-    console.log('Initializing collapsible sections');
-    
-    // Select all collapsible headers
-    const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
-    
-    if (collapsibleHeaders.length === 0) {
-      console.warn('No collapsible sections found in DOM');
-      return;
-    }
-    
-    console.log(`Found ${collapsibleHeaders.length} collapsible sections`);
-    
-    // Process each collapsible header
-    collapsibleHeaders.forEach((header, index) => {
-      // First, ensure we're working with a clean element by removing existing listeners
-      const newHeader = header.cloneNode(true);
-      header.parentNode.replaceChild(newHeader, header);
-      
-      // Add click event listener to the new header
-      newHeader.addEventListener('click', function(event) {
-        // Prevent default behavior and stop propagation
-        event.preventDefault();
-        event.stopPropagation();
-        
-        // Get the parent section and content elements
-        const section = this.closest('.collapsible-section');
-        const content = section.querySelector('.collapsible-content');
-        const indicator = this.querySelector('.dropdown-indicator');
-        
-        // Log for debugging
-        console.log(`Toggling section ${index}: ${section.querySelector('h3')?.textContent || 'Unknown'}`);
-        
-        // Toggle the open class on the section
-        section.classList.toggle('open');
-        
-        // Explicitly set display style based on open state
-        // This is critical - we need to set both class AND style
-        if (section.classList.contains('open')) {
-          content.style.display = 'block';
-          if (indicator) {
-            indicator.style.transform = 'rotate(180deg)';
-          }
-          console.log(`Section ${index} opened`);
-        } else {
-          content.style.display = 'none';
-          if (indicator) {
-            indicator.style.transform = 'rotate(0deg)';
-          }
-          console.log(`Section ${index} closed`);
-        }
-      });
-      
-      // Ensure sections start in a closed state
-      const section = newHeader.closest('.collapsible-section');
-      const content = section.querySelector('.collapsible-content');
-      const indicator = newHeader.querySelector('.dropdown-indicator');
-      
-      // Explicitly set initial state - hide content
-      section.classList.remove('open');
-      content.style.display = 'none';
-      if (indicator) {
-        indicator.style.transform = 'rotate(0deg)';
-      }
-      
-      console.log(`Section ${index} initialized: ${section.querySelector('h3')?.textContent || 'Unknown'}`);
-    });
-    
-    console.log('Collapsible sections initialization complete');
-  }
-// Ensure initialization after DOM is fully loaded
-document.addEventListener('DOMContentLoaded', initializeCollapsibleSections);
-
-// Expose for manual triggering if needed
-window.initializeCollapsibleSections = initializeCollapsibleSections;
+  
   /**
    * Load Warm Hug settings from configuration with proper unit conversion
    * Enhanced to handle both Celsius and Fahrenheit units
