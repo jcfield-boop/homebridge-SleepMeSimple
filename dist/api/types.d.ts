@@ -30,8 +30,8 @@ export declare enum ThermalStatus {
     OFF = "off",
     HEATING = "heating",
     COOLING = "cooling",
-    ACTIVE = "active",
-    STANDBY = "standby",
+    ACTIVE = "active",// General active state
+    STANDBY = "standby",// Powered on but not actively heating/cooling
     UNKNOWN = "unknown"
 }
 /**
