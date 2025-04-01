@@ -1,14 +1,15 @@
 {
   "name": "homebridge-sleepme-simple",
   "displayName": "SleepMe Simple",
-  "version": "6.0.1",
+  "version": "6.0.0",
   "type": "module",
   "description": "Simplified HomeKit control for SleepMe devices (ChiliPad, OOLER, Dock Pro)",
   "license": "MIT",
   "files": [
     "dist",
     "config.schema.json",
-    "homebridge-ui"
+    "homebridge-ui",
+    "LICENSE"
   ],
   "keywords": [
     "homebridge-plugin",
@@ -23,11 +24,14 @@
     "homebridge": "^1.6.0 || ^2.0.0-beta.0"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "rimraf ./dist",
+    "build": "npm run clean && tsc && npm run build:ui",
+    "build:ui": "mkdir -p dist/homebridge-ui/public/js && cp homebridge-ui/public/js/*.js dist/homebridge-ui/public/js/",
     "watch": "tsc -w",
     "lint": "eslint ./src --ext .ts",
-    "clean": "rimraf ./dist/",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "npm run build",
+    "version": "npm run build",
+    "postversion": "git push && git push --tags",
     "check-publish": "node scripts/pre-publish-check.js",
     "postinstall": "node -e \"try { require('fs').mkdirSync('./homebridge-ui/public/icons', { recursive: true }); } catch (e) {}\""
   },
