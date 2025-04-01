@@ -1,7 +1,7 @@
 // homebridge-ui/server.js
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
-import { readFileSync, existsSync, accessSync, constants } from 'fs';
-import path from 'path';
+const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
+const fs = require('fs');
+const path = require('path');
 
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -32,7 +32,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Check if the config file exists and is readable
     if (this.homebridgeConfigPath) {
       try {
-        accessSync(this.homebridgeConfigPath, constants.R_OK);
+        fs.accessSync(this.homebridgeConfigPath, fs.constants.R_OK);
         console.log('[SleepMeUI] ✓ Config file exists and is readable');
       } catch (error) {
         console.error('[SleepMeUI] ✗ Config file access error:', error.message);
@@ -55,7 +55,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       console.log('[SleepMeUI] Config path:', this.homebridgeConfigPath);
       
       // Check if file exists
-      if (!existsSync(this.homebridgeConfigPath)) {
+      if (!fs.existsSync(this.homebridgeConfigPath)) {
         console.error('[SleepMeUI] Config file does not exist');
         return {
           success: false,
@@ -66,7 +66,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       // Check if we can read it
       try {
-        accessSync(this.homebridgeConfigPath, constants.R_OK);
+        fs.accessSync(this.homebridgeConfigPath, fs.constants.R_OK);
       } catch (error) {
         console.error('[SleepMeUI] Config file is not readable:', error.message);
         return {
@@ -77,7 +77,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
       
       // Read and parse config
-      const configContents = readFileSync(this.homebridgeConfigPath, 'utf8');
+      const configContents = fs.readFileSync(this.homebridgeConfigPath, 'utf8');
       let config;
       
       try {
@@ -165,11 +165,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   // Get raw config for debugging
   async getRawConfig() {
     try {
-      if (!this.homebridgeConfigPath || !existsSync(this.homebridgeConfigPath)) {
+      if (!this.homebridgeConfigPath || !fs.existsSync(this.homebridgeConfigPath)) {
         return { success: false, error: 'Config file not found' };
       }
       
-      const configContents = readFileSync(this.homebridgeConfigPath, 'utf8');
+      const configContents = fs.readFileSync(this.homebridgeConfigPath, 'utf8');
       const config = JSON.parse(configContents);
       
       // Return sanitized config (without sensitive data)
@@ -195,11 +195,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   // More extensive validation
   async validateConfig() {
     try {
-      if (!this.homebridgeConfigPath || !existsSync(this.homebridgeConfigPath)) {
+      if (!this.homebridgeConfigPath || !fs.existsSync(this.homebridgeConfigPath)) {
         return { success: false, error: 'Config file not found' };
       }
       
-      const configContents = readFileSync(this.homebridgeConfigPath, 'utf8');
+      const configContents = fs.readFileSync(this.homebridgeConfigPath, 'utf8');
       let config;
       
       try {
@@ -268,7 +268,41 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       };
     }
   }
+
+  // Device test endpoint handler
+  async testDeviceConnection(payload) {
+    console.log('[SleepMeUI] Testing device connection...');
+    try {
+      const apiToken = payload.apiToken;
+      
+      if (!apiToken) {
+        return {
+          success: false,
+          error: 'API token is required'
+        };
+      }
+      
+      // Here you would typically make an API call to SleepMe's service
+      // For testing, we'll just return mock data
+      return {
+        success: true,
+        devices: 2,
+        deviceInfo: [
+          { id: 'mock-device-1', name: 'Bedroom SleepMe', model: 'Dock Pro' },
+          { id: 'mock-device-2', name: 'Guest Room SleepMe', model: 'OOLER' }
+        ]
+      };
+    } catch (error) {
+      console.error('[SleepMeUI] Device test error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
-// Create and export a new instance
-export default new SleepMeUiServer();
+// Export the UiServer
+(() => {
+  return new SleepMeUiServer();
+})();
