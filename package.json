@@ -1,7 +1,7 @@
 {
   "name": "homebridge-sleepme-simple",
   "displayName": "SleepMe Simple",
-  "version": "6.1.0",
+  "version": "6.1.1",
   "type": "module",
   "description": "Simplified HomeKit control for SleepMe devices (ChiliPad, OOLER, Dock Pro)",
   "license": "MIT",
@@ -25,9 +25,8 @@
   },
   "scripts": {
     "clean": "rimraf ./dist",
-    "build:ui": "mkdir -p dist/homebridge-ui && cp -r homebridge-ui/. dist/homebridge-ui/ && node scripts/version-scripts.js",
-    "build": "npm run clean && tsc && npm run build:ui",
     "build:ui": "mkdir -p dist/homebridge-ui && cp -r homebridge-ui/. dist/homebridge-ui/",
+    "build": "npm run clean && tsc && npm run build:ui",
     "watch": "tsc -w",
     "lint": "eslint ./src --ext .ts",
     "prepublishOnly": "npm run build",
