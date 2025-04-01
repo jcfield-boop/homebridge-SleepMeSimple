@@ -1,50 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script>
-        // Block ALL log-related toast notifications
-        window.addEventListener('DOMContentLoaded', function() {
-          if (typeof homebridge !== 'undefined') {
-            // Block log fetching completely
-            if (typeof homebridge.fetchLogs === 'function') {
-              homebridge.fetchLogs = function() {
-                console.log('Log fetching suppressed');
-                return Promise.resolve([]); // Return empty logs
-              };
-            }
-            
-            // Intercept fetch requests related to logs
-            const originalFetch = window.fetch;
-            window.fetch = function(url, options) {
-              if (typeof url === 'string' && (url.includes('/log') || url.includes('/logs'))) {
-                console.log('Suppressed fetch to:', url);
-                return Promise.resolve(new Response('[]', {
-                  status: 200,
-                  headers: {'Content-Type': 'application/json'}
-                }));
-              }
-              return originalFetch.apply(this, arguments);
-            };
-            
-            // Override toast methods for log-related messages
-            if (homebridge.toast) {
-              const originalToast = {};
-              ['success', 'error', 'warning', 'info'].forEach(type => {
-                originalToast[type] = homebridge.toast[type];
-                homebridge.toast[type] = function(message, title) {
-                  // Block specific log-related error messages
-                  if (title === 'Logs Error' || 
-                      (message && (message.includes('logs') || message.includes('log')))) {
-                    console.log(`Suppressed ${type} toast:`, title, message);
-                    return;
-                  }
-                  return originalToast[type].call(this, message, title);
-                };
-              });
-            }
-          }
-        });
-      </script>
+   
     <title>SleepMe Simple Configuration</title>
      <script>
         // Pre-declare ALL global variables at the earliest possible moment
