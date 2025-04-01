@@ -1,12 +1,12 @@
 /**
- * SleepMe Simple Platform
- * This is the main platform implementation that handles device discovery
- * and accessory management for SleepMe devices
+ * Entry point for the SleepMe Simple Homebridge plugin
+ * This file exports the platform constructor to Homebridge
  */
 import { API, Characteristic, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
 import { SleepMeApi } from './api/sleepme-api.js';
 import { Logger as CustomLogger } from './api/types.js';
 import { LogLevel } from './settings.js';
+import { ScheduleManager } from './schedule.js';
 /**
  * SleepMe Simple Platform
  * This class is the entry point for the plugin and manages the plugin lifecycle
@@ -17,7 +17,7 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     readonly Service: typeof Service;
     readonly Characteristic: typeof Characteristic;
     readonly accessories: PlatformAccessory[];
-    readonly api: SleepMeApi;
+    readonly api?: SleepMeApi;
     readonly log: CustomLogger;
     /**
      * Configuration options parsed from config.json
@@ -27,6 +27,9 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     readonly temperatureUnit: string;
     private readonly accessoryInstances;
     private discoveryTimer?;
+    private discoveryInProgress;
+    private isConfigured;
+    private _scheduleManager?;
     /**
      * Constructor for the SleepMe platform.
      * Initializes the platform with configuration from Homebridge
@@ -36,6 +39,11 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
      * @param homebridgeApi - Reference to the Homebridge API
      */
     constructor(logger: Logger, config: PlatformConfig, homebridgeApi: API);
+    /**
+     * Get the schedule manager
+     * @returns Schedule manager instance if available
+     */
+    get scheduleManager(): ScheduleManager | undefined;
     /**
      * Create a custom logger adapter
      * @param logger Homebridge logger
@@ -52,6 +60,8 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     /**
      * Discover SleepMe devices and create HomeKit accessories
      * Uses staggered initialization to prevent API rate limiting
+     * Modified to return a Promise for async operation
+     * @returns Promise that resolves when discovery is complete
      */
     discoverDevices(): Promise<void>;
     /**

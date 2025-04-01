@@ -1,22 +1,20 @@
 /**
  * SleepMe Accessory
  *
- * This class implements a simplified HomeKit interface for SleepMe devices,
- * using separate services for temperature reporting, power control, and temperature adjustment
+ * This class implements a HomeKit interface for SleepMe devices,
+ * using a combination of services for the best user experience
  */
 import { PlatformAccessory } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
 import { SleepMeApi } from './api/sleepme-api.js';
 /**
  * SleepMe Accessory
- * Provides a simplified interface for SleepMe devices using separate HomeKit services
+ * Provides a simplified interface for SleepMe devices
  */
 export declare class SleepMeAccessory {
     private readonly platform;
     private readonly accessory;
     private readonly apiClient;
-    private temperatureSensorService;
-    private switchService;
     private temperatureControlService;
     private waterLevelService?;
     private informationService;
@@ -26,11 +24,19 @@ export declare class SleepMeAccessory {
     private firmwareVersion;
     private waterLevel;
     private isWaterLow;
+    private tempSetterDebounced;
+    private powerStateSetterDebounced;
     private readonly deviceId;
     private readonly displayName;
     private deviceModel;
     private statusUpdateTimer?;
-    private lastTemperatureSetTime;
+    private lastStatusUpdate;
+    private lastUserActionTime;
+    private failedUpdateAttempts;
+    private updateInProgress;
+    private skipNextUpdate;
+    private commandEpoch;
+    private pendingOperation;
     private readonly Characteristic;
     /**
      * Constructor for the SleepMe accessory
@@ -41,75 +47,89 @@ export declare class SleepMeAccessory {
      */
     private setupInformationService;
     /**
-     * Set up the temperature sensor service
-     */
-    private setupTemperatureSensorService;
-    /**
-     * Set up the power switch service
-     */
-    private setupPowerSwitchService;
-    /**
-     * Set up the temperature control service (using Lightbulb)
+     * Set up the Thermostat service for temperature control
      */
     private setupTemperatureControlService;
     /**
+    * Verify the current device state by forcing a refresh
+    * Used after critical operations like power changes
+    */
+    private verifyDeviceState;
+    /**
+    * Get the current heating/cooling state based on device status
+    */
+    private getCurrentHeatingCoolingState;
+    /**
+    * Get the target heating/cooling state
+    */
+    private getTargetHeatingCoolingState;
+    /**
+       * Update the schedule manager with current temperature
+       * @param temperature Current temperature
+       */
+    private updateScheduleManager;
+    /**
+      * Update the current heating/cooling state in HomeKit
+      */
+    private updateCurrentHeatingCoolingState;
+    /**
+     * Handle getting the target temperature
+     * @returns Current target temperature
+     */
+    private handleTargetTemperatureGet;
+    /**
+     * Handle setting the target heating cooling state
+     * @param value Target heating cooling state value
+     */
+    private handleTargetHeatingCoolingStateSet;
+    /**
+       * Verify power state consistency
+       */
+    private verifyPowerState;
+    /**
+     * Execute an operation with epoch tracking for cancellation
+     * @param operationType Type of operation
+     * @param epoch Command epoch to track cancellation
+     * @param operation Async operation to execute
+     */
+    private executeOperation;
+    /**
+     * Handle target temperature setting with trust-based approach
+     * @param value New target temperature value
+     */
+    private handleTargetTemperatureSet;
+    /**
+       * Implementation for power state setting (called by debounced wrapper)
+       * @param turnOn Whether to turn the device on
+       */
+    private handlePowerStateSetImpl;
+    /**
      * Add/update the water level service if supported
-     * @param waterLevel - Current water level percentage
-     * @param isWaterLow - Whether water level is considered low
+     * @param waterLevel Current water level percentage
+     * @param isWaterLow Whether water level is considered low
      */
     private setupWaterLevelService;
     /**
-     * Set up the status polling mechanism
-     */
+       * Set up the status polling mechanism with trust-based adaptive intervals
+       */
     private setupStatusPolling;
     /**
-     * Detect device model based on attachments or other characteristics
-     * @param data - Raw device data from API
-     * @returns Detected device model name
-     */
+       * Detect device model based on attachments or other characteristics
+       * @param data Raw device data from API
+       * @returns Detected device model name
+       */
     private detectDeviceModel;
     /**
-     * Refresh the device status from the API
-     * @param isInitialSetup - Whether this is the initial setup refresh
+     * Refresh the device status from the API with trust-based approach
+     * @param isInitialSetup Whether this is the initial setup refresh
      */
     private refreshDeviceStatus;
     /**
-     * Convert temperature to percentage (for the brightness control)
-     * @param temperature - Temperature in Celsius
-     * @returns Percentage value for slider (0-100)
+     * Implementation of target temperature setting that makes the API call
+     * @param newTemp New target temperature
+     * @param previousTemp Previous target temperature before UI update
      */
-    private temperatureToPercentage;
-    /**
-     * Convert percentage to temperature
-     * @param percentage - Percentage value from slider (0-100)
-     * @returns Temperature in Celsius
-     */
-    private percentageToTemperature;
-    /**
-     * Handler for CurrentTemperature GET
-     * @returns Current temperature value
-     */
-    private handleCurrentTemperatureGet;
-    /**
-     * Handler for power state GET
-     * @returns Current power state (boolean)
-     */
-    private handlePowerStateGet;
-    /**
-     * Handler for power state SET
-     * @param value - New power state value
-     */
-    private handlePowerStateSet;
-    /**
-     * Handler for temperature control GET
-     * @returns Current temperature as percentage for slider
-     */
-    private handleTemperatureControlGet;
-    /**
-     * Handler for temperature control SET
-     * @param value - New temperature percentage from slider
-     */
-    private handleTemperatureControlSet;
+    private handleTargetTemperatureSetImpl;
     /**
      * Clean up resources when this accessory is removed
      */

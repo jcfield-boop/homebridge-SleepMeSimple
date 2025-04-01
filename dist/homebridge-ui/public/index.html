@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html>
+<head>
+   
+    <title>SleepMe Simple Configuration</title>
+     <script>
+        // Pre-declare ALL global variables at the earliest possible moment
+        // This uses window as the global scope to ensure availability everywhere
+        window.isEditing = false;
+        window.editingScheduleIndex = -1;
+        window.schedules = [];
+        
+        // Also pre-declare these commonly accessed variables
+        window.scheduleTypeSelect = null;
+        window.daySelectContainer = null;
+        window.scheduleTimeInput = null;
+        window.scheduleTemperatureInput = null;
+        window.unitSelect = null;
+        window.warmHugInfo = null;
+        window.addScheduleBtn = null;
+        window.cancelEditBtn = null;
+        window.scheduleList = null;
+        
+        // Safety wrapper for any functions that might be called early
+        window.renderScheduleList = window.renderScheduleList || function() { 
+          console.log('renderScheduleList called before initialization'); 
+        };
+        window.validateScheduleTime = window.validateScheduleTime || function() { 
+          return true; 
+        };
+        window.validateTemperature = window.validateTemperature || function() { 
+          return true; 
+        };
+        
+        console.log('Global variables and safety functions initialized');
+      </script>
+   <style>
+    /* Core Variables */
+:root {
+  /* Colors */
+  --primary-color: #0070c9;
+  --primary-color-dark: #00559b;
+  --primary-color-light: #e6f7ff;
+  --secondary-color: #6c757d;
+  --secondary-color-dark: #5a6268;
+  --success-color: #28a745;
+  --success-color-dark: #218838;
+  --danger-color: #dc3545;
+  --danger-color-dark: #c82333;
+  --light-gray: #f8f9fa;
+  --medium-gray: #e9ecef;
+  --border-color: #ddd;
+  --text-color: #333;
+  --text-muted: #6c757d;
+  
+  /* Sleep Phase Colors */
+  --cool-down-color: #5bc0de;
+  --deep-sleep-color: #0275d8;
+  --rem-color: #5cb85c;
+  --wakeup-color: #f0ad4e;
+  
+  /* Spacing */
+  --spacing-xs: 5px;
+  --spacing-sm: 10px;
+  --spacing-md: 15px;
+  --spacing-lg: 20px;
+  --spacing-xl: 30px;
+  
+  /* Border Radius */
+  --border-radius-sm: 4px;
+  --border-radius-md: 6px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.1);
+  
+  /* Transitions */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.3s;
+}
+
+/* Base Styles */
+body { 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  max-width: 800px; 
+  margin: 0 auto;
+  padding: 20px;
+  color: var(--text-color);
+}
+
+.container {
+  background-color: #fff;
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-lg);
+  max-height: none;
+  overflow: visible;
+}
+
+h1, h2, h3 {
+  color: var(--text-color);
+  text-align: center;
+}
+
+h1 {
+  margin-bottom: var(--spacing-lg);
+}
+
+h2 {
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+}
+
+h3 {
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+  font-size: 18px;
+}
+
+/* Header & Layout */
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.logo {
+  width: 100px;
+  height: 100px;
+  margin-bottom: var(--spacing-md);
+}
+
+.section-divider {
+  border-top: 1px solid var(--border-color);
+  margin: var(--spacing-xl) 0 var(--spacing-md);
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: var(--spacing-md);
+  position: relative;
+}
+
+label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: bold;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  box-sizing: border-box;
+}
+
+input.invalid {
+  border-color: var(--danger-color);
+}
+
+input[type="checkbox"] {
+  width: auto;
+}
+
+/* Field Row Layout */
+.fields-row {
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 0 -10px;
+  gap: var(--spacing-lg);
+}
+
+.field-column {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+/* Buttons */
+button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: 16px;
+  margin-right: var(--spacing-xs);
+  transition: background-color var(--transition-fast);
+}
+
+button:hover {
+  background-color: var(--primary-color-dark);
+}
+
+button.secondary {
+  background-color: var(--secondary-color);
+}
+
+button.secondary:hover {
+  background-color: var(--secondary-color-dark);
+}
+
+button.danger {
+  background-color: var(--danger-color);
+}
+
+button.danger:hover {
+  background-color: var(--danger-color-dark);
+}
+
+button.edit {
+  background-color: var(--success-color);
+}
+
+button.edit:hover {
+  background-color: var(--success-color-dark);
+}
+
+.button-group {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Status Messages */
+.status {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+}
+
+.status.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.status.error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.status.info {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #bbdefb;
+}
+
+.status.warning {
+  background-color: #fff8e1;
+  color: #f57f17;
+  border: 1px solid #ffecb3;
+}
+
+.status.hidden {
+  display: none;
+}
+
+/* Error Text */
+.error-text {
+  color: var(--danger-color);
+  font-size: 14px;
+  margin-bottom: var(--spacing-xs);
+  display: none;
+}
+
+.error-text.visible {
+  display: block;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--spacing-lg);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 15px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  margin-right: var(--spacing-xs);
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+  transition: background-color var(--transition-fast);
+}
+
+.tab:hover {
+  background-color: var(--light-gray);
+}
+
+.tab.active {
+  background-color: #fff;
+  border-color: var(--border-color);
+  border-bottom-color: #fff;
+  margin-bottom: -1px;
+  font-weight: bold;
+}
+
+.tab-title {
+  flex: 1;
+}
+.tab.active .dropdown-indicator {
+  transform: rotate(180deg);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Collapsible Sections */
+.collapsible-section {
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background-color: var(--light-gray);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.collapsible-header:hover {
+  background-color: var(--medium-gray);
+}
+
+.collapsible-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary-color);
+  text-align: left;
+}
+
+.collapsible-content {
+  display: none; /* Hidden by default */
+}
+
+.collapsible-section.open .collapsible-content {
+  display: block;
+}
+
+.collapsible-section.open .dropdown-indicator {
+  transform: rotate(180deg);
+}
+
+/* Larger dropdown indicators */
+.dropdown-indicator {
+  font-size: 24px !important;
+  transition: transform var(--transition-normal);
+  font-weight: bold;
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--primary-color);
+}
+
+/* ===== IMPROVED SCHEDULE STYLES ===== */
+
+/* Schedule Container */
+.schedule-container {
+  margin-top: var(--spacing-lg);
+}
+
+/* Schedule Form */
+.schedule-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  align-items: flex-end;
+  background-color: var(--light-gray);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.schedule-form .form-group {
+  margin-bottom: 0;
+}
+
+.schedule-form button {
+  align-self: flex-end;
+  height: 38px;
+}
+
+/* Schedule List */
+.schedule-list {
+  margin-top: var(--spacing-lg);
+  max-height: 500px; /* Increased height for better visibility */
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  background-color: white;
+}
+
+/* Schedule Group */
+.schedule-group {
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--light-gray);
+  box-shadow: var(--shadow-sm);
+}
+
+.schedule-group:last-child {
+  margin-bottom: 0;
+}
+
+.schedule-group-title {
+  font-weight: bold;
+  margin-bottom: var(--spacing-md);
+  color: var(--primary-color);
+  font-size: 18px;
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: var(--spacing-xs);
+}
+
+/* Schedule Items */
+.schedule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--spacing-sm);
+  background-color: white;
+  box-shadow: var(--shadow-sm);
+  border-left: 3px solid var(--primary-color);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.schedule-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.schedule-item:last-child {
+  margin-bottom: 0;
+}
+
+.schedule-item button {
+  margin-left: var(--spacing-sm);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.schedule-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.schedule-time {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.schedule-temp {
+  display: flex;
+  align-items: center;
+}
+
+.temp-indicator {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin-right: var(--spacing-xs);
+}
+
+/* Sleep phase styling */
+.schedule-phase {
+  margin-top: var(--spacing-xs);
+  padding: 3px 8px;
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  font-weight: normal;
+  color: white;
+  display: inline-block;
+  margin-right: var(--spacing-xs);
+}
+
+.phase-cooldown {
+  background-color: var(--cool-down-color);
+}
+
+.phase-deep {
+  background-color: var(--deep-sleep-color);
+}
+
+.phase-rem {
+  background-color: var(--rem-color);
+}
+
+.phase-wakeup {
+  background-color: var(--wakeup-color);
+}
+
+/* Template styling */
+.template-schedule {
+  border-left: 3px solid var(--primary-color-dark);
+  background-color: var(--primary-color-light);
+}
+
+.template-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 50%;
+  margin-left: var(--spacing-xs);
+  cursor: help;
+}
+
+/* Temperature Visual Indicator */
+.temp-scale {
+  margin-top: var(--spacing-sm);
+  height: 8px;
+  width: 100%;
+  background: linear-gradient(to right, #00aaff, #ffaa00);
+  border-radius: 4px;
+  position: relative;
+}
+
+.temp-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background-color: white;
+  border: 2px solid black;
+  border-radius: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+/* Warm Hug Info Card */
+.warm-hug-info {
+  background-color: #FFF3E0;
+  border-left: 4px solid var(--wakeup-color);
+}
+
+/* Template Sections */
+.template-section {
+  background-color: var(--light-gray);
+  border-radius: var(--border-radius-sm);
+  padding: 15px;
+  margin-bottom: var(--spacing-lg);
+}
+
+.template-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.template-col {
+  flex: 1;
+}
+
+.template-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-sm);
+}
+
+.info-card {
+  background-color: var(--primary-color-light);
+  border: 1px solid #91d5ff;
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.info-card h4 {
+  margin-top: 0;
+  margin-bottom: var(--spacing-xs);
+  color: var(--primary-color);
+}
+
+.info-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Code Examples */
+.code-example {
+  background-color: var(--light-gray);
+  border: 1px solid var(--medium-gray);
+  border-radius: var(--border-radius-sm);
+  padding: 15px;
+  margin: 10px 0;
+  font-family: monospace;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.code-example pre {
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Template Preview */
+.template-preview {
+  margin-top: 15px;
+  padding: 10px;
+  border: 1px dashed #ccc;
+  border-radius: var(--border-radius-sm);
+  background-color: #f9f9f9;
+}
+
+.template-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.preview-item {
+  padding: 5px 10px;
+  margin-bottom: 5px;
+  border-radius: var(--border-radius-sm);
+  background-color: #fff;
+  border-left: 3px solid var(--primary-color);
+  display: flex;
+  justify-content: space-between;
+}
+
+.copy-success {
+  color: var(--success-color);
+  font-size: 14px;
+  margin-left: var(--spacing-sm);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.copy-success.visible {
+  opacity: 1;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #fff;
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--shadow-md);
+  max-width: 400px;
+  width: 100%;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--spacing-lg);
+  gap: var(--spacing-sm);
+}
+
+#confirmModal.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Form Text */
+.form-text {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: var(--spacing-xs);
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  /* Tab styles */
+  .tabs {
+    flex-wrap: wrap;
+  }
+  
+  .tab {
+    flex: 0 0 50%; /* Two tabs per row on mobile */
+    box-sizing: border-box;
+    margin-right: 0;
+    border-radius: 0;
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+  
+  .tab:nth-child(1), .tab:nth-child(2) {
+    border-top-left-radius: var(--border-radius-sm);
+    border-top-right-radius: var(--border-radius-sm);
+  }
+  
+  /* Column styles */
+  .col-md-6 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+  
+  /* Form layout */
+  .button-group {
+    flex-direction: column;
+  }
+  
+  button {
+    margin-bottom: var(--spacing-xs);
+    width: 100%;
+    margin-right: 0;
+  }
+  
+  .schedule-form {
+    grid-template-columns: 1fr;
+  }
+  
+  .schedule-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .schedule-item-actions {
+    margin-top: var(--spacing-xs);
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .schedule-item button {
+    flex: 1;
+    margin-left: 0;
+    margin-right: var(--spacing-xs);
+  }
+  
+  .schedule-item button:last-child {
+    margin-right: 0;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .fields-row {
+    flex-wrap: wrap;
+  }
+  
+  .field-column {
+    flex: 0 0 100%;
+  }
+  
+  .container {
+    padding: var(--spacing-sm);
+  }
+  
+  .modal-content {
+    max-width: 85%;
+    padding: var(--spacing-sm);
+  }
+}
+   </style> <
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="icons/sleepmebasic.png" alt="SleepMe Simple" class="logo">
+            <h1>SleepMe Simple Configuration</h1>
+        </div>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <form id="configForm">
+            <div class="form-group">
+                <label for="apiToken">API Token:</label>
+                <input type="text" id="apiToken" name="apiToken" required>
+                <small id="apiTokenHelp" class="form-text text-muted">Your SleepMe API token. Obtain this from your account at sleep.me</small>
+            </div>
+            
+<!-- Replace the existing two-column layout with this -->
+<div class="fields-row">
+    <div class="field-column">
+        <label for="unit">Temperature Unit:</label>
+        <select id="unit" name="unit">
+            <option value="C">Celsius</option>
+            <option value="F">Fahrenheit</option>
+        </select>
+    </div>
+    <div class="field-column">
+        <label for="pollingInterval">Polling Interval (seconds):</label>
+        <input type="number" id="pollingInterval" name="pollingInterval" min="60" max="300" value="90">
+        <small class="form-text text-muted">Frequency of device status checks (60-300 seconds)</small>
+    </div>
+</div>
+<div class="form-group">
+    <label for="logLevel">Log Level:</label>
+    <select id="logLevel" name="logLevel">
+        <option value="normal">Normal - Standard operation logs</option>
+        <option value="debug">Debug - Additional debugging information</option>
+        <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
+    </select>
+    <small class="form-text text-muted">Controls the detail level of plugin logs</small>
+</div>            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="enableSchedules" name="enableSchedules">
+                    Enable Schedules
+                </label>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" id="testConnection">Test Connection</button>
+                <button type="submit">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="schedulesContainer" class="container">
+      <h2>Temperature Schedules</h2>
+      
+      <div class="tabs">
+        <div class="tab active" data-tab="manual">
+          <span class="tab-title">Manual Schedule</span>
+        </div>
+        <div class="tab" data-tab="templates">
+          <span class="tab-title">Schedule Templates</span>
+        </div>
+        <div class="tab" data-tab="warmHug">
+          <span class="tab-title">Warm Hug Options</span>
+        </div>
+        <div class="tab" data-tab="help">
+          <span class="tab-title">Help</span>
+        </div>
+      </div>
+      
+      <!-- Manual Schedule Tab -->
+      <div id="manualTab" class="tab-content active">
+        <p>Create schedules to automatically adjust your device temperature throughout the day.</p>
+        
+        <div class="schedule-form">
+          <div class="form-group">
+            <label for="scheduleType">Schedule Type:</label>
+            <select id="scheduleType">
+              <option value="Everyday">Everyday</option>
+              <option value="Weekdays">Weekdays</option>
+              <option value="Weekend">Weekend</option>
+              <option value="Specific Day">Specific Day</option>
+              <option value="Warm Hug">Warm Hug</option>
+            </select>
+          </div>
+          
+          <div id="daySelectContainer" class="form-group hidden">
+            <label for="scheduleDay">Day:</label>
+            <select id="scheduleDay">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="scheduleTime">Time (24h):</label>
+            <div id="timeError" class="error-text">Please enter a valid 24-hour time (HH:MM)</div>
+            <input type="text" id="scheduleTime" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" placeholder="HH:MM" value="21:30" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="scheduleTemperature">Temperature:</label>
+            <div id="tempError" class="error-text">Please enter a valid temperature</div>
+            <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
+          </div>
+          
+          <div class="form-group">
+            <button type="button" id="addSchedule" class="primary">Add Schedule</button>
+            <button type="button" id="cancelEdit" class="secondary hidden">Cancel</button>
+          </div>
+        </div>
+        
+        <div id="warmHugInfo" class="info-card warm-hug-info hidden">
+          <h4>Warm Hug Feature</h4>
+          <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled time, for a gentle wake-up experience.</p>
+          <p>When selected, your device will begin warming <strong>before</strong> the time you set to ensure it reaches your target temperature exactly at your scheduled time.</p>
+        </div>
+        
+        <div id="scheduleList" class="schedule-list">
+          <!-- Schedules will be rendered here -->
+          <p>No schedules configured.</p>
+        </div>
+      </div>
+      
+      <!-- Templates Tab -->
+      <div id="templatesTab" class="tab-content">
+        <div class="info-card">
+          <h4>About Schedule Templates</h4>
+          <p>These templates are designed based on sleep science to optimize your sleep experience throughout the night. Choose a template for weekdays and weekends to automatically create multiple schedule entries.</p>
+        </div>
+        
+        <div class="template-section">
+          <h3>Weekday Template</h3>
+          <div class="template-row">
+            <div class="template-col">
+              <label for="weekdayTemplate">Select Template:</label>
+              <select id="weekdayTemplate">
+                <option value="">None</option>
+                <option value="optimal">Optimal Sleep Cycle</option>
+                <option value="nightOwl">Night Owl</option>
+                <option value="earlyBird">Early Bird</option>
+              </select>
+            </div>
+          </div>
+          <div id="weekdayTemplateDesc" class="template-desc"></div>
+        </div>
+        
+        <div class="template-section">
+          <h3>Weekend Template</h3>
+          <div class="template-row">
+            <div class="template-col">
+              <label for="weekendTemplate">Select Template:</label>
+              <select id="weekendTemplate">
+                <option value="">None</option>
+                <option value="recovery">Weekend Recovery</option>
+                <option value="relaxed">Relaxed Weekend</option>
+              </select>
+            </div>
+          </div>
+          <div id="weekendTemplateDesc" class="template-desc"></div>
+        </div>
+        
+        <div class="template-preview-container">
+          <!-- Template previews will appear here -->
+        </div>
+        
+        <div class="button-group">
+          <button type="button" id="applyTemplates" class="primary">Apply Templates</button>
+        </div>
+      </div>
+      
+      <!-- Warm Hug Options Tab -->
+      <div id="warmHugTab" class="tab-content">
+        <div class="info-card warm-hug-info">
+          <h4>Warm Hug Configuration</h4>
+          <p>The Warm Hug feature gradually increases temperature over time, starting before your scheduled wake-up time, for a gentle morning experience.</p>
+        </div>
+        
+        <div class="collapsible-section">
+          <div class="collapsible-header">
+            <h3>Temperature Parameters</h3>
+            <span class="dropdown-indicator">▾</span>
+          </div>
+          <div class="collapsible-content">
+            <div class="form-group">
+              <label for="warmHugIncrement">Temperature Increment (°C/min):</label>
+              <input type="number" id="warmHugIncrement" min="0.5" max="5" step="0.1" value="2">
+              <small class="form-text">How quickly temperature increases (0.5-5°C per minute)</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="warmHugDuration">Warm Hug Duration (minutes):</label>
+              <input type="number" id="warmHugDuration" min="5" max="60" value="15">
+              <small class="form-text">Total duration of the Warm Hug (5-60 minutes before scheduled time)</small>
+            </div>
+          </div>
+        </div>
+        
+        <div class="collapsible-section">
+          <div class="collapsible-header">
+            <h3>How Warm Hug Works</h3>
+            <span class="dropdown-indicator">▾</span>
+          </div>
+          <div class="collapsible-content">
+            <p>When you create a "Warm Hug" schedule type, the device will:</p>
+            <ol>
+              <li>Start at your current temperature</li>
+              <li>Begin warming up gradually <strong>before</strong> your scheduled time (based on the duration setting)</li>
+              <li>Increase temperature at the specified rate until reaching your target temperature</li>
+              <li>Reach the exact target temperature at precisely your scheduled time</li>
+            </ol>
+            <p>This creates a gentle, natural wake-up experience similar to sunrise, helping you start your day refreshed.</p>
+          </div>
+        </div>
+        
+        <div class="button-group">
+          <button type="button" id="saveWarmHugParams" class="primary">Save Warm Hug Parameters</button>
+        </div>
+      </div>
+      
+      <!-- Help Tab -->
+      <div id="helpTab" class="tab-content">
+        <div class="info-card">
+          <h4>Using Temperature Schedules</h4>
+          <p>Schedules allow you to automate temperature changes throughout the day and night.</p>
+        </div>
+        
+        <div class="collapsible-section">
+          <div class="collapsible-header">
+            <h3>Schedule Types</h3>
+            <span class="dropdown-indicator">▾</span>
+          </div>
+          <div class="collapsible-content">
+            <ul>
+              <li><strong>Everyday</strong>: Applies the same schedule every day</li>
+              <li><strong>Weekdays</strong>: Applies only on Monday through Friday</li>
+              <li><strong>Weekend</strong>: Applies only on Saturday and Sunday</li>
+              <li><strong>Specific Day</strong>: Applies on a specific day of the week</li>
+              <li><strong>Warm Hug</strong>: Gradually increases temperature for a gentle wake-up experience</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="collapsible-section">
+          <div class="collapsible-header">
+            <h3>Template Benefits</h3>
+            <span class="dropdown-indicator">▾</span>
+          </div>
+          <div class="collapsible-content">
+            <p>Schedule templates are pre-configured based on sleep science research. They help optimize your sleep by:</p>
+            <ul>
+              <li>Creating the ideal temperature curve throughout the night</li>
+              <li>Supporting different phases of sleep (cool down, deep sleep, REM, wake-up)</li>
+              <li>Adjusting to your personal preferences and schedule</li>
+              <li>Providing a consistent sleep environment every night</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="collapsible-section">
+          <div class="collapsible-header">
+            <h3>Editing Schedules</h3>
+            <span class="dropdown-indicator">▾</span>
+          </div>
+          <div class="collapsible-content">
+            <p>You can edit any schedule by clicking the "Edit" button. Template schedules can be modified after application to fit your specific needs.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3 id="confirmTitle">Confirm Action</h3>
+        <p id="confirmMessage">Are you sure you want to perform this action?</p>
+        <div class="modal-buttons">
+          <button id="confirmCancel" class="secondary">Cancel</button>
+          <button id="confirmOk" class="danger">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts - corrected loading order -->
+    <script src="js/notification-manager.js"></script>
+    <script src="js/ui-validation-functions.js"></script>
+    <script src="js/ui-config-handlers.js"></script>
+    <script src="js/ui-schedule-handlers.js"></script>
+    <script src="js/ui-main-script.js"></script>
+
+
+</body>
+</html>

@@ -12,12 +12,6 @@ on:
           - patch
           - minor
           - major
-  
-  # Optional: Keep existing triggers if needed
-  # push:
-  #   branches: [ main ]
-  # pull_request:
-  #   branches: [ main ]
 
 jobs:
   manual-build-and-publish:
@@ -35,20 +29,38 @@ jobs:
 
     - name: Install Dependencies
       run: npm ci
-
+      
     - name: Lint
       run: npm run lint
 
+    - name: Clean
+      run: npm run clean
+      
     - name: Build TypeScript
-      run: npm run build
-
-    - name: Prepare Distribution Files
+      run: tsc
+      
+    - name: Build UI Files
       run: |
-        mkdir -p dist/homebridge-ui/public/js
-        cp homebridge-ui/public/js/*.js dist/homebridge-ui/public/js/
+        mkdir -p dist/homebridge-ui
+        cp -r homebridge-ui/. dist/homebridge-ui/
         
-        echo "Distribution files:"
-        find dist -type f
+    - name: Verify Build
+      run: |
+        if [ ! -d "dist/homebridge-ui/public" ]; then
+          echo "Error: dist/homebridge-ui/public directory is missing!"
+          exit 1
+        fi
+        
+        if [ ! -f "dist/homebridge-ui/public/index.html" ]; then
+          echo "Error: index.html is missing from UI build!"
+          exit 1
+        fi
+        
+        echo "UI Files in dist:"
+        find dist/homebridge-ui -type f | grep -v "node_modules" | sort
+        
+        echo "JS Files in UI:"
+        find dist/homebridge-ui/public/js -type f | sort
 
     - name: Bump Version
       run: |

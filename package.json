@@ -26,7 +26,7 @@
   "scripts": {
     "clean": "rimraf ./dist",
     "build": "npm run clean && tsc && npm run build:ui",
-    "build:ui": "mkdir -p dist/homebridge-ui/public/js && cp homebridge-ui/public/js/*.js dist/homebridge-ui/public/js/",
+    "build:ui": "mkdir -p dist/homebridge-ui && cp -r homebridge-ui/. dist/homebridge-ui/",
     "watch": "tsc -w",
     "lint": "eslint ./src --ext .ts",
     "prepublishOnly": "npm run build",

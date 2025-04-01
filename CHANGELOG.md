@@ -1,4 +1,29 @@
 # Changelog
+## 6.1.0 (2025-05-05)
+
+### Build System Improvements
+- **Enhanced Build Process**: Completely overhauled file copying mechanism for UI assets
+  - Implemented proper recursive directory copying for all UI files
+  - Added comprehensive build verification steps to prevent incomplete builds
+  - Fixed JavaScript file copying to ensure all UI scripts are properly included
+  - Improved GitHub Actions workflow with explicit build stages
+  - Added detailed build logging for easier troubleshooting
+
+### Added
+- **Pre-publish Verification**: New script that validates build completeness before publishing
+  - Added critical path checking for required files
+  - Implemented JS file count verification
+  - Added detailed reporting of build artifacts
+  - Enhanced error detection with descriptive messages
+  - Prevents publishing if any critical files are missing
+
+### Technical
+- **Improved Reliability**: Enhanced overall build reliability
+  - Separated TypeScript compilation from UI asset copying
+  - Added explicit directory creation with proper permissions
+  - Enhanced workflow steps with independent verification
+  - Improved error handling during build process
+  - Added detailed logging of copied files for better traceability
 ## 6.0.1 (2025-04-30)
 
 ### Fixed
