@@ -13,6 +13,13 @@
  */
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing UI components');
+
+    // Initialize NotificationManager
+    if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.init();
+    } else {
+        console.error('NotificationManager not loaded');
+    }
       // Add this block early in the function
     // IMPORTANT: Initialize templates globally so they're available to all functions
     window.templates = {

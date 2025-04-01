@@ -1,4 +1,30 @@
 # Changelog
+## 5.7.0 (2025-04-15)
+
+### Fixed
+- **Notification Functionality**: Completely rewrote the notification handling system
+  - Fixed persistent toast notifications across the application
+  - Ensured comprehensive error logging with intelligent filtering
+  - Improved user feedback mechanisms with granular control
+  - Added sophisticated error handling and context preservation
+  - Implemented robust fallback mechanisms for notification display
+
+### Improved
+- **Event Handling**: Enhanced messaging system with advanced features
+  - Used dependency injection for flexible notification configuration
+  - Implemented whitelist and blacklist for toast notifications
+  - Added detailed console logging with context preservation
+  - Improved error tracing and debugging capabilities
+  - Enhanced cross-component communication for status updates
+
+### Technical
+- **Initialization Process**: Restructured UI messaging approach
+  - Added timeout and auto-hide capabilities for different notification types
+  - Implemented cross-browser compatible notification display
+  - Enhanced modularity of notification handling system
+  - Added comprehensive error tracking and reporting
+  - Improved performance by reducing redundant notification calls
+
 ## 5.6.0 (2025-04-05)
 
 ### Fixed
