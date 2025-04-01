@@ -1,4 +1,22 @@
 # Changelog
+## 6.1.4 (2025-05-15)
+
+### Fixed
+- **UI Initialization Issue**: Resolved "spinning cog" problem that prevented the config UI from loading
+  - Implemented immediate UI readiness signaling before any initialization
+  - Restructured server initialization sequence with proper async pattern
+  - Added fallback server creation mechanism for resilience
+  - Enhanced platform detection with flexible name matching
+  - Added comprehensive error handling throughout server component
+
+### Architecture Improvements
+- **Server Component**: Refactored server.js with better design patterns
+  - Separated initialization logic from constructor for improved reliability
+  - Created modular code organization with dedicated methods for each responsibility
+  - Implemented proper error boundaries around all operations
+  - Enhanced diagnostics with detailed logging throughout the initialization process
+  - Added graceful degradation with fallback mechanisms
+  
 ## 6.1.2 (2025-05-10)
 
 ### Critical Fixes

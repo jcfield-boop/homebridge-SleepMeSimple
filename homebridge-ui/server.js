@@ -7,40 +7,67 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
     
-    console.log('[SleepMeUI] Initializing server...');
-    
-    // Log important paths immediately to help with debugging
-    this.logPaths();
-    
-    // Register request handlers
-    this.onRequest('/config/check', this.checkConfigFile.bind(this));
-    this.onRequest('/config/raw', this.getRawConfig.bind(this));
-    this.onRequest('/config/validate', this.validateConfig.bind(this));
-    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
-    
-    // Signal readiness
+    // Signal readiness IMMEDIATELY to prevent UI freeze
     this.ready();
-    console.log('[SleepMeUI] Server initialized and ready');
-  }
-  
-  logPaths() {
-    console.log('[SleepMeUI] Homebridge paths:');
-    console.log(`  - Config path: ${this.homebridgeConfigPath || 'unknown'}`);
-    console.log(`  - Storage path: ${this.homebridgeStoragePath || 'unknown'}`);
-    console.log(`  - UI version: ${this.homebridgeUiVersion || 'unknown'}`);
     
-    // Check if the config file exists and is readable
-    if (this.homebridgeConfigPath) {
-      try {
-        fs.accessSync(this.homebridgeConfigPath, fs.constants.R_OK);
-        console.log('[SleepMeUI] ✓ Config file exists and is readable');
-      } catch (error) {
-        console.error('[SleepMeUI] ✗ Config file access error:', error.message);
-      }
+    console.log('[SleepMeUI] Server initialized and ready signal sent');
+    
+    // Continue initialization AFTER signaling readiness
+    setTimeout(() => {
+      this.initialize();
+    }, 100);
+  }
+
+  initialize() {
+    try {
+      // Log important paths to help with debugging
+      this.logPaths();
+      
+      // Register request handlers
+      this.registerHandlers();
+      
+      console.log('[SleepMeUI] Initialization completed successfully');
+    } catch (error) {
+      console.error('[SleepMeUI] Initialization error:', error);
     }
   }
   
-  async checkConfigFile() {
+  registerHandlers() {
+    try {
+      // Register request handlers
+      this.onRequest('/config/check', this.checkConfigFile.bind(this));
+      this.onRequest('/config/raw', this.getRawConfig.bind(this));
+      this.onRequest('/config/validate', this.validateConfig.bind(this));
+      this.onRequest('/device/test', this.testDeviceConnection.bind(this));
+      
+      console.log('[SleepMeUI] Request handlers registered');
+    } catch (error) {
+      console.error('[SleepMeUI] Error registering handlers:', error);
+    }
+  }
+  
+  logPaths() {
+    try {
+      console.log('[SleepMeUI] Homebridge paths:');
+      console.log(`  - Config path: ${this.homebridgeConfigPath || 'unknown'}`);
+      console.log(`  - Storage path: ${this.homebridgeStoragePath || 'unknown'}`);
+      console.log(`  - UI version: ${this.homebridgeUiVersion || 'unknown'}`);
+      
+      // Check if the config file exists and is readable
+      if (this.homebridgeConfigPath) {
+        try {
+          fs.accessSync(this.homebridgeConfigPath, fs.constants.R_OK);
+          console.log('[SleepMeUI] ✓ Config file exists and is readable');
+        } catch (error) {
+          console.error('[SleepMeUI] ✗ Config file access error:', error.message);
+        }
+      }
+    } catch (error) {
+      console.error('[SleepMeUI] Error logging paths:', error);
+    }
+  }
+  
+  async checkConfigFile(payload) {
     console.log('[SleepMeUI] Checking config file...');
     try {
       if (!this.homebridgeConfigPath) {
@@ -112,10 +139,11 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         };
       }
       
-      // Look for our platform
+      // Look for our platform with more flexible matching
       const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
       const ourPlatform = config.platforms.find(p => 
-        p && p.platform && platformNames.includes(p.platform.toLowerCase())
+        p && p.platform && platformNames.some(name => 
+          p.platform.toLowerCase() === name.toLowerCase())
       );
       
       if (!ourPlatform) {
@@ -163,14 +191,20 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   // Get raw config for debugging
-  async getRawConfig() {
+  async getRawConfig(payload) {
     try {
       if (!this.homebridgeConfigPath || !fs.existsSync(this.homebridgeConfigPath)) {
         return { success: false, error: 'Config file not found' };
       }
       
       const configContents = fs.readFileSync(this.homebridgeConfigPath, 'utf8');
-      const config = JSON.parse(configContents);
+      let config;
+      
+      try {
+        config = JSON.parse(configContents);
+      } catch (error) {
+        return { success: false, error: `Invalid JSON: ${error.message}` };
+      }
       
       // Return sanitized config (without sensitive data)
       return {
@@ -193,7 +227,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   // More extensive validation
-  async validateConfig() {
+  async validateConfig(payload) {
     try {
       if (!this.homebridgeConfigPath || !fs.existsSync(this.homebridgeConfigPath)) {
         return { success: false, error: 'Config file not found' };
@@ -220,7 +254,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Look for our platform
       const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
       const ourPlatform = config.platforms.find(p => 
-        p && p.platform && platformNames.includes(p.platform.toLowerCase())
+        p && p.platform && platformNames.some(name => 
+          p.platform.toLowerCase() === name.toLowerCase())
       );
       
       if (!ourPlatform) {
@@ -273,7 +308,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   async testDeviceConnection(payload) {
     console.log('[SleepMeUI] Testing device connection...');
     try {
-      const apiToken = payload.apiToken;
+      const apiToken = payload?.apiToken;
       
       if (!apiToken) {
         return {
@@ -302,7 +337,15 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Export the UiServer
+// Create and export an instance of the UI server with error handling
 (() => {
-  return new SleepMeUiServer();
+  try {
+    return new SleepMeUiServer();
+  } catch (error) {
+    console.error('[SleepMeUI] Error creating server instance:', error);
+    // Create a minimal implementation as fallback
+    const server = new HomebridgePluginUiServer();
+    server.ready();
+    return server;
+  }
 })();
