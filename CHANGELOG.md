@@ -1,4 +1,28 @@
 # Changelog
+## 5.6.0 (2025-04-05)
+
+### Fixed
+- **Collapsible Section Functionality**: Completely rewrote the collapsible section handler
+  - Fixed dropdown indicators not rotating when sections are clicked
+  - Ensured consistent visibility state using both class and style properties
+  - Improved event handling to prevent issues with event propagation
+  - Fixed initialization of section state to ensure all sections start closed
+  - Added comprehensive error handling and logging throughout the process
+
+### Improved
+- **Event Delegation**: Enhanced event handler attachment with proper cleanup
+  - Used element cloning to remove any pre-existing event listeners
+  - Implemented explicit parent-child relationship traversal
+  - Added more detailed debug logging for state changes
+  - Fixed transform animations for dropdown indicators
+
+### Technical
+- **Initialization Process**: Enhanced UI component initialization sequence
+  - Added timeout to ensure DOM is fully processed before attaching handlers
+  - Improved section state tracking with console logs for better debugging
+  - Added verification of DOM element existence before manipulation
+  - Enhanced compatibility with tab navigation system
+  - Implemented both class and inline style manipulation for cross-browser compatibility
 ## 5.5.6 (2025-04-02)
 ### Fixed
 - **Collapsible Sections**: Complete overhaul of dropdown section initialization

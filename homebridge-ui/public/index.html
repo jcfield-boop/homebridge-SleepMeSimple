@@ -308,13 +308,6 @@ button.edit:hover {
 .tab-title {
   flex: 1;
 }
-
-.dropdown-indicator {
-  font-size: 18px;
-  transition: transform var(--transition-normal);
-  margin-left: var(--spacing-xs);
-}
-
 .tab.active .dropdown-indicator {
   transform: rotate(180deg);
 }
@@ -358,9 +351,7 @@ button.edit:hover {
 }
 
 .collapsible-content {
-  padding: 15px;
-  border-top: 1px solid var(--border-color);
-  display: none;
+  display: none; /* Hidden by default */
 }
 
 .collapsible-section.open .collapsible-content {

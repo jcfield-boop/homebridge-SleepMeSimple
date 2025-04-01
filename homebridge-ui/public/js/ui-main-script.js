@@ -245,48 +245,123 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
   })();
-  function initializeCollapsibleSections() {
-    console.log('🔍 Initializing Collapsible Sections');
+// Tab navigation handling
+function initializeTabs() {
+    const tabContainer = document.querySelector('.tabs');
+    if (!tabContainer) {
+      console.warn('Tab container not found');
+      return;
+    }
     
+    tabContainer.addEventListener('click', (event) => {
+      // Find the closest tab element
+      const tabElement = event.target.closest('.tab');
+      
+      if (tabElement) {
+        const tabId = tabElement.getAttribute('data-tab');
+        if (!tabId) {
+          console.warn('Tab ID not found');
+          return;
+        }
+        
+        // Remove active class from all tabs and contents
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Add active class to selected tab and content
+        tabElement.classList.add('active');
+        const tabContent = document.getElementById(tabId + 'Tab');
+        if (tabContent) {
+          tabContent.classList.add('active');
+          
+          // Initialize sections in this tab
+          setTimeout(() => {
+            console.log(`Tab ${tabId} activated, initializing sections`);
+            initializeCollapsibleSections();
+          }, 100);
+        } else {
+          console.warn(`Tab content for ${tabId} not found`);
+        }
+      }
+    });
+    
+    console.log('Tabs initialized');
+  }
+
+  /**
+ * Initialize collapsible sections with proper event handling and state management
+ * Correctly handles show/hide toggling and indicator rotation
+ */
+function initializeCollapsibleSections() {
+    console.log('Initializing collapsible sections');
+    
+    // Select all collapsible headers
     const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
     
     if (collapsibleHeaders.length === 0) {
-        console.warn('⚠️ No collapsible sections found');
-        return;
+      console.warn('No collapsible sections found in DOM');
+      return;
     }
     
-    collapsibleHeaders.forEach(header => {
-        // Remove existing listeners by cloning
-        const newHeader = header.cloneNode(true);
-        header.parentNode.replaceChild(newHeader, header);
+    console.log(`Found ${collapsibleHeaders.length} collapsible sections`);
+    
+    // Process each collapsible header
+    collapsibleHeaders.forEach((header, index) => {
+      // First, ensure we're working with a clean element by removing existing listeners
+      const newHeader = header.cloneNode(true);
+      header.parentNode.replaceChild(newHeader, header);
+      
+      // Add click event listener to the new header
+      newHeader.addEventListener('click', function(event) {
+        // Prevent default behavior and stop propagation
+        event.preventDefault();
+        event.stopPropagation();
         
-        newHeader.addEventListener('click', function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            const section = this.closest('.collapsible-section');
-            const content = section?.querySelector('.collapsible-content');
-            const indicator = this.querySelector('.dropdown-indicator');
-            
-            if (!section || !content) return;
-            
-            section.classList.toggle('open');
-            
-            if (section.classList.contains('open')) {
-                content.style.display = 'block';
-                if (indicator) indicator.style.transform = 'rotate(180deg)';
-            } else {
-                content.style.display = 'none';
-                if (indicator) indicator.style.transform = 'rotate(0deg)';
-            }
-            
-            console.log(`📦 Section toggled: ${section.querySelector('h3')?.textContent || 'Unknown Section'}`);
-        });
+        // Get the parent section and content elements
+        const section = this.closest('.collapsible-section');
+        const content = section.querySelector('.collapsible-content');
+        const indicator = this.querySelector('.dropdown-indicator');
+        
+        // Log for debugging
+        console.log(`Toggling section ${index}: ${section.querySelector('h3')?.textContent || 'Unknown'}`);
+        
+        // Toggle the open class on the section
+        section.classList.toggle('open');
+        
+        // Explicitly set display style based on open state
+        // This is critical - we need to set both class AND style
+        if (section.classList.contains('open')) {
+          content.style.display = 'block';
+          if (indicator) {
+            indicator.style.transform = 'rotate(180deg)';
+          }
+          console.log(`Section ${index} opened`);
+        } else {
+          content.style.display = 'none';
+          if (indicator) {
+            indicator.style.transform = 'rotate(0deg)';
+          }
+          console.log(`Section ${index} closed`);
+        }
+      });
+      
+      // Ensure sections start in a closed state
+      const section = newHeader.closest('.collapsible-section');
+      const content = section.querySelector('.collapsible-content');
+      const indicator = newHeader.querySelector('.dropdown-indicator');
+      
+      // Explicitly set initial state - hide content
+      section.classList.remove('open');
+      content.style.display = 'none';
+      if (indicator) {
+        indicator.style.transform = 'rotate(0deg)';
+      }
+      
+      console.log(`Section ${index} initialized: ${section.querySelector('h3')?.textContent || 'Unknown'}`);
     });
     
-    console.log(`✅ Initialized ${collapsibleHeaders.length} Collapsible Sections`);
-}
-
+    console.log('Collapsible sections initialization complete');
+  }
 // Ensure initialization after DOM is fully loaded
 document.addEventListener('DOMContentLoaded', initializeCollapsibleSections);
 
