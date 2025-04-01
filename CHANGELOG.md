@@ -1,6 +1,40 @@
 # Changelog
-## 6.1.1 (2025-05-05)
+## 6.1.2 (2025-05-10)
 
+### Critical Fixes
+- **Configuration Loading System**: Complete overhaul of configuration load/save mechanism
+ - Added comprehensive error handling for each step of the loading process
+ - Implemented timeout protection to prevent UI freezing on API failures
+ - Enhanced form field population with field-by-field error handling
+ - Added configuration verification after save operations
+ - Fixed platform detection with flexible name matching
+ - Improved schedule data structure handling and validation
+
+### Added
+- **Enhanced User Feedback**: Fully integrated with centralized notification system
+ - Added contextual error messages with specific error details
+ - Implemented progressive success/failure messaging
+ - Added configuration verification reporting with detailed diagnostics
+ - Improved console logging for better troubleshooting visibility
+ - Added notification options support including auto-hide functionality
+
+### Technical Improvements
+- **Robust Error Boundaries**: Added multi-layer error protection
+ - Implemented try/catch blocks for each major operation
+ - Added specific error handling for API availability issues
+ - Enhanced data validation before configuration updates
+ - Added graceful degradation for partial configuration loading
+ - Improved diagnostics with detailed console logging throughout
+ - Fixed race conditions in configuration processing
+
+### Under the Hood
+- **API Integration**: Better handling of Homebridge Plugin UI Utils
+ - Added Homebridge API availability checking with fallbacks
+ - Improved configuration object structure management
+ - Enhanced schedule data processing with proper unit handling
+ - Fixed potential memory issues with deep object cloning
+ - Added detailed verification steps for configuration changes
+## 6.1.1 (2025-05-05)
 ### Fixed
 - **Script Caching Issues**: Implemented automatic cache-busting mechanism for UI scripts
   - Added version parameter to all script URLs to force fresh loading
