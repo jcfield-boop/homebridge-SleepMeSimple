@@ -1,5 +1,7 @@
 // homebridge-ui/server.js
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+//incorrect method according to custom-plugin-ui.md
+import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 
 // API URL for SleepMe services
@@ -43,39 +45,63 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         console.log(`${prefix} ${message}`);
     }
   }
-
-  async loadPluginConfig() {
+  
+  /**
+   * Check if we can access the config.json file
+   * @returns {Promise<Object>} Status of config file access
+   */
+  async checkConfigFile() {
     try {
-      const pluginConfig = await this.homebridgeApi.getPluginConfig();
+      const configPath = this.homebridgeConfigPath;
+      this.log(`Checking config file at: ${configPath}`);
       
-      // Find our platform config
-      const platformConfig = pluginConfig.find(config => config.platform === 'SleepMeSimple');
-      
-      if (!platformConfig) {
-        throw new Error('Platform configuration not found');
+      // Check if file exists
+      if (!existsSync(configPath)) {
+        this.log('Config file not found', 'warn');
+        return {
+          success: false,
+          message: 'Config file not found',
+          path: configPath
+        };
       }
+      
+      // Read and parse config file
+      const configContents = readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configContents);
+      
+      // Check for our platform
+      const platforms = config.platforms || [];
+      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
+      
+      // Try to find our platform by any of the possible names
+      const ourPlatform = platforms.find(p => 
+        p.platform && platformNames.includes(p.platform.toLowerCase())
+      );
       
       return {
         success: true,
-        platformConfig: {
-          name: platformConfig.name || 'SleepMe Simple',
-          hasApiToken: !!platformConfig.apiToken,
-          unit: platformConfig.unit || 'C',
-          pollingInterval: platformConfig.pollingInterval || 90,
-          logLevel: platformConfig.logLevel || 'normal',
-          enableSchedules: !!platformConfig.enableSchedules,
-          scheduleCount: Array.isArray(platformConfig.schedules) ? platformConfig.schedules.length : 0
-        }
+        platformFound: !!ourPlatform,
+        platformConfig: ourPlatform ? {
+          name: ourPlatform.name || 'SleepMe Simple',
+          hasApiToken: !!ourPlatform.apiToken,
+          unit: ourPlatform.unit || 'C',
+          pollingInterval: ourPlatform.pollingInterval || 90,
+          logLevel: ourPlatform.logLevel || 'normal',
+          enableSchedules: !!ourPlatform.enableSchedules,
+          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
+        } : null,
+        path: configPath
       };
     } catch (error) {
-      this.log(`Failed to load plugin config: ${error.message}`, 'error');
+      this.log(`Error checking config file: ${error.message}`, 'error');
       return {
         success: false,
-        error: 'failed_to_load_config'
+        error: error.message,
+        path: this.homebridgeConfigPath || 'unknown'
       };
     }
   }
- 
+  
   /**
    * Test connection to the SleepMe API
    * @param {Object} payload - Payload containing API token
@@ -94,7 +120,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         };
       }
       
-      this.log('Testing API connection with provided token');
+      this.log(`Testing API connection with provided token`);
       
       // Make an actual API call to test the connection
       // For demonstration purposes, we'll make a fetch request to the SleepMe API
@@ -104,7 +130,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         
         // Placeholder for actual implementation:
         const devices = [
-          { id: 'sample-id', name: 'Sample Device', type: 'Dock Pro' }
+          { id: "sample-id", name: "Sample Device", type: "Dock Pro" }
         ];
         
         return {
@@ -168,4 +194,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 }
 
 // Create and export a new instance
-export default () => new SleepMeUiServer();
+(() => {
+  return new SleepMeUiServer();
+})();

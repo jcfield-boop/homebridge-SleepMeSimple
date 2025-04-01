@@ -1,4 +1,25 @@
 # Changelog
+6.1.8 (2025-04-05)
+Changed
+
+Config File Access: Refactored checkConfigFile function to align with Homebridge Plugin UI Utils guidelines
+
+Now uses homebridge.getPluginConfig(), homebridge.updatePluginConfig(), and homebridge.savePluginConfig() to manage configuration
+Improved error handling with more specific error codes
+Separated config file access logic from platform-specific parsing for better modularity
+
+
+
+Removed
+
+Direct Config File Access: Removed direct access to config.json using Node.js fs module functions
+Case-Insensitive Platform Matching: Removed case-insensitive platform name matching
+
+Fixed
+
+Platform Naming Convention: Ensured consistent naming convention for platform by using the exact name from config.schema.json
+Config Management Synchronization: Improved synchronization and conflict avoidance by using Homebridge-provided methods for config management
+
 ## 6.1.6 (2025-05-20)
 
 ### Added
