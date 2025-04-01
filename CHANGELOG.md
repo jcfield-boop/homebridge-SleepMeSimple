@@ -1,4 +1,29 @@
 # Changelog
+## 6.1.1 (2025-05-05)
+
+### Fixed
+- **Script Caching Issues**: Implemented automatic cache-busting mechanism for UI scripts
+  - Added version parameter to all script URLs to force fresh loading
+  - Created build-time version injection from package.json
+  - Ensured all UI JavaScript files are reloaded when version changes
+  - Eliminated persistent caching problems affecting user experience
+  - Fixed "Logs Error" messages caused by stale cached scripts
+
+### Added
+- **Build Process Improvements**: Enhanced script processing during build
+  - Added version-scripts.js utility for automatic version stamping
+  - Implemented template-based version injection in HTML files
+  - Created more reliable UI asset processing pipeline
+  - Improved script reference handling for better browser compatibility
+  - Added comprehensive build verification for UI components
+
+### Technical
+- **Script Version Management**: Created a more robust approach to script versioning
+  - Leveraged package.json version for automatic cache invalidation
+  - Enhanced build scripts to process version placeholders
+  - Maintained backward compatibility with existing code
+  - Improved user experience by eliminating stale code execution
+  - Added version tracking for easier debugging
 ## 6.1.0 (2025-05-05)
 
 ### Build System Improvements

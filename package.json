@@ -25,6 +25,7 @@
   },
   "scripts": {
     "clean": "rimraf ./dist",
+    "build:ui": "mkdir -p dist/homebridge-ui && cp -r homebridge-ui/. dist/homebridge-ui/ && node scripts/version-scripts.js",
     "build": "npm run clean && tsc && npm run build:ui",
     "build:ui": "mkdir -p dist/homebridge-ui && cp -r homebridge-ui/. dist/homebridge-ui/",
     "watch": "tsc -w",

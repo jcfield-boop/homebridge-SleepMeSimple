@@ -1082,13 +1082,12 @@ button.edit:hover {
       </div>
     </div>
 
-    <!-- Scripts - corrected loading order -->
-    <script src="js/notification-manager.js"></script>
-    <script src="js/ui-validation-functions.js"></script>
-    <script src="js/ui-config-handlers.js"></script>
-    <script src="js/ui-schedule-handlers.js"></script>
-    <script src="js/ui-main-script.js"></script>
-
+<!-- Scripts with version-based cache busting -->
+<script src="js/notification-manager.js?v={{version}}"></script>
+<script src="js/ui-validation-functions.js?v={{version}}"></script>
+<script src="js/ui-config-handlers.js?v={{version}}"></script>
+<script src="js/ui-schedule-handlers.js?v={{version}}"></script>
+<script src="js/ui-main-script.js?v={{version}}"></script>
 
 </body>
 </html>
