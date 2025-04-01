@@ -1,7 +1,4 @@
-// homebridge-ui/server.js
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
-import { readFileSync, existsSync, writeFileSync } from 'fs';
-import path from 'path';
 
 // API URL for SleepMe services
 const API_BASE_URL = 'https://api.developer.sleep.me/v1';
@@ -21,7 +18,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
     
-    // NEW: Added configuration management endpoints
+    // NEW: Add config loading and saving endpoints
     this.onRequest('/config/load', this.loadConfig.bind(this));
     this.onRequest('/config/save', this.saveConfig.bind(this));
     this.onRequest('/config/validate', this.validateConfig.bind(this));
@@ -32,8 +29,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Signal readiness
     this.ready();
   }
-  
-  // ... [All previous methods remain unchanged]
 
   /**
    * Load the SleepMe Simple platform configuration
@@ -41,20 +36,18 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    */
   async loadConfig() {
     try {
-      const configPath = this.homebridgeConfigPath;
-      
-      // Read and parse config file
-      const configContent = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configContent);
+      // Use the built-in method to get plugin configurations
+      const configs = await this.getPluginConfigs();
       
       // Find SleepMe Simple platform configuration
       const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-      const platformConfig = config.platforms?.find(platform => 
+      const platformConfig = configs.find(platform => 
         platform && platformNames.some(name => 
           platform.platform.toLowerCase() === name.toLowerCase()
         )
       );
       
+      // If no platform config found, return a default configuration
       if (!platformConfig) {
         return {
           success: false,
@@ -89,15 +82,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         };
       }
       
-      const configPath = this.homebridgeConfigPath;
+      // Get current configurations
+      const configs = await this.getPluginConfigs();
       
-      // Read current config
-      const configContent = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configContent);
-      
-      // Find existing platform config index
+      // Find existing SleepMe Simple platform config
       const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-      const platformIndex = config.platforms.findIndex(platform => 
+      const platformIndex = configs.findIndex(platform => 
         platform && platformNames.some(name => 
           platform.platform.toLowerCase() === name.toLowerCase()
         )
@@ -111,13 +101,13 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       // Update or add platform config
       if (platformIndex !== -1) {
-        config.platforms[platformIndex] = updatedPlatformConfig;
+        configs[platformIndex] = updatedPlatformConfig;
       } else {
-        config.platforms.push(updatedPlatformConfig);
+        configs.push(updatedPlatformConfig);
       }
       
-      // Write updated config
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      // Save updated configurations
+      await this.savePluginConfigs(configs);
       
       return {
         success: true,
@@ -172,7 +162,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
 
       return {
         success: errors.length === 0,
-        errors: errors,
+        errors,
         config: errors.length === 0 ? config : null
       };
     } catch (error) {
@@ -185,7 +175,5 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Create and export a new instance
-(() => {
-  return new SleepMeUiServer();
-})();
+// Create and export a new instance immediately
+export default (() => new SleepMeUiServer())();
