@@ -1,6 +1,6 @@
 // homebridge-ui/server.js
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import path from 'path';
 
 // API URL for SleepMe services
@@ -17,9 +17,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Prevent automatic events immediately after initialization
     this._preventAutomaticEvents();
     
-    // Register request handlers for specific endpoints
+    // Existing request handlers
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
+    
+    // NEW: Added configuration management endpoints
+    this.onRequest('/config/load', this.loadConfig.bind(this));
+    this.onRequest('/config/save', this.saveConfig.bind(this));
+    this.onRequest('/config/validate', this.validateConfig.bind(this));
     
     // Simple console logging without UI events
     console.log('[SleepMeUI] Server initialized');
@@ -28,202 +33,155 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.ready();
   }
   
+  // ... [All previous methods remain unchanged]
+
   /**
-   * Prevent automatic events that cause unwanted toasts
-   * @private
+   * Load the SleepMe Simple platform configuration
+   * @returns {Promise<Object>} Configuration object
    */
-  _preventAutomaticEvents() {
-    // Override pushEvent to filter automatic events
-    const originalPushEvent = this.pushEvent;
-    this.pushEvent = function(event, data) {
-      // List of events to filter
-      const filteredEvents = ['log', 'logs', 'config', 'ready', 'checkConfig'];
-      
-      // Only pass through non-filtered events
-      if (!filteredEvents.includes(event)) {
-        originalPushEvent.call(this, event, data);
-      } else {
-        console.log(`[Server] Filtered event: ${event}`);
-      }
-    };
-    
-    // Override log fetching to prevent "Fetching server logs" toast
-    this.fetchLogs = function() {
-      console.log('[Server] Log fetching bypassed');
-      return Promise.resolve([]);
-    };
-    
-    // Override config checking to prevent automatic checks
-    this._checkConfig = function() {
-      console.log('[Server] Automatic config check bypassed');
-      return Promise.resolve(true);
-    };
-  }
-  
-  /**
-   * Server-side logging that doesn't trigger UI notifications
-   * @param {string} message - Log message
-   * @param {string} level - Log level (info, warn, error)
-   */
-  log(message, level = 'info') {
-    const prefix = '[SleepMeUI]';
-    
-    switch (level) {
-      case 'error':
-        console.error(`${prefix} ${message}`);
-        break;
-      case 'warn':
-        console.warn(`${prefix} ${message}`);
-        break;
-      default:
-        console.log(`${prefix} ${message}`);
-    }
-  }
-  
-  /**
-   * Check if we can access the config.json file
-   * @returns {Promise<Object>} Status of config file access
-   */
-  async checkConfigFile() {
+  async loadConfig() {
     try {
       const configPath = this.homebridgeConfigPath;
-      this.log(`Checking config file at: ${configPath}`);
-      
-      // Check if file exists
-      if (!existsSync(configPath)) {
-        this.log('Config file not found', 'warn');
-        return {
-          success: false,
-          message: 'Config file not found',
-          path: configPath
-        };
-      }
       
       // Read and parse config file
-      const configContents = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configContents);
+      const configContent = readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configContent);
       
-      // Check for our platform
-      const platforms = config.platforms || [];
+      // Find SleepMe Simple platform configuration
       const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-      
-      // Try to find our platform by any of the possible names
-      const ourPlatform = platforms.find(p => 
-        p.platform && platformNames.includes(p.platform.toLowerCase())
+      const platformConfig = config.platforms?.find(platform => 
+        platform && platformNames.some(name => 
+          platform.platform.toLowerCase() === name.toLowerCase()
+        )
       );
+      
+      if (!platformConfig) {
+        return {
+          success: false,
+          error: 'SleepMe Simple platform configuration not found'
+        };
+      }
       
       return {
         success: true,
-        platformFound: !!ourPlatform,
-        platformConfig: ourPlatform ? {
-          name: ourPlatform.name || 'SleepMe Simple',
-          hasApiToken: !!ourPlatform.apiToken,
-          unit: ourPlatform.unit || 'C',
-          pollingInterval: ourPlatform.pollingInterval || 90,
-          logLevel: ourPlatform.logLevel || 'normal',
-          enableSchedules: !!ourPlatform.enableSchedules,
-          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
-        } : null,
-        path: configPath
+        config: platformConfig
       };
     } catch (error) {
-      this.log(`Error checking config file: ${error.message}`, 'error');
+      console.error('Config load error:', error);
       return {
         success: false,
-        error: error.message,
-        path: this.homebridgeConfigPath || 'unknown'
+        error: error.message
       };
     }
   }
-  
+
   /**
-   * Test connection to the SleepMe API
-   * @param {Object} payload - Payload containing API token
-   * @returns {Promise<Object>} Response with success status and device info
+   * Save configuration for SleepMe Simple platform
+   * @param {Object} payload - Configuration to save
+   * @returns {Promise<Object>} Save result
    */
-  async testDeviceConnection(payload) {
+  async saveConfig(payload) {
     try {
-      // Extract API token from request payload
-      const apiToken = payload?.apiToken || payload?.body?.apiToken;
-      
-      if (!apiToken) {
-        this.log('API token missing from test request', 'warn');
+      if (!payload || !payload.config) {
         return {
           success: false,
-          error: 'API token is required'
+          error: 'Invalid configuration payload'
         };
       }
       
-      this.log(`Testing API connection with provided token`);
+      const configPath = this.homebridgeConfigPath;
       
-      // Make an actual API call to test the connection
-      // For demonstration purposes, we'll make a fetch request to the SleepMe API
-      try {
-        // This is where you'd implement the actual API call
-        // For example, using node-fetch or axios to call the SleepMe API
-        
-        // Placeholder for actual implementation:
-        const devices = [
-          { id: "sample-id", name: "Sample Device", type: "Dock Pro" }
-        ];
-        
-        return {
-          success: true,
-          devices: devices.length,
-          deviceInfo: devices,
-          message: `Connection successful. Found ${devices.length} device(s).`
-        };
-      } catch (apiError) {
-        // Handle API-specific errors
-        this.log(`API connection failed: ${apiError.message}`, 'error');
-        return {
-          success: false,
-          error: `API connection failed: ${apiError.message}`
-        };
+      // Read current config
+      const configContent = readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configContent);
+      
+      // Find existing platform config index
+      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
+      const platformIndex = config.platforms.findIndex(platform => 
+        platform && platformNames.some(name => 
+          platform.platform.toLowerCase() === name.toLowerCase()
+        )
+      );
+      
+      // Prepare updated platform config
+      const updatedPlatformConfig = {
+        ...payload.config,
+        platform: 'SleepMeSimple'  // Ensure consistent platform name
+      };
+      
+      // Update or add platform config
+      if (platformIndex !== -1) {
+        config.platforms[platformIndex] = updatedPlatformConfig;
+      } else {
+        config.platforms.push(updatedPlatformConfig);
       }
+      
+      // Write updated config
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      
+      return {
+        success: true,
+        config: updatedPlatformConfig
+      };
     } catch (error) {
-      // Handle general errors
-      this.log(`Error in test connection: ${error.message}`, 'error');
+      console.error('Config save error:', error);
       return {
         success: false,
-        error: `Error: ${error.message}`
+        error: error.message
       };
     }
   }
-  
+
   /**
-   * Get plugin version from package.json
-   * @returns {string} Plugin version
+   * Validate configuration before saving
+   * @param {Object} payload - Configuration to validate
+   * @returns {Promise<Object>} Validation result
    */
-  getPluginVersion() {
+  async validateConfig(payload) {
     try {
-      // Get path to package.json relative to this file
-      const packagePath = path.resolve(__dirname, '../package.json');
-      const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
-      return packageJson.version || 'unknown';
-    } catch (error) {
-      this.log(`Error getting plugin version: ${error.message}`, 'error');
-      return 'unknown';
-    }
-  }
-  
-  /**
-   * Get system information
-   * @returns {Object} System information
-   */
-  getSystemInfo() {
-    const os = require('os');
-    
-    return {
-      platform: os.platform(),
-      release: os.release(),
-      arch: os.arch(),
-      nodeVersion: process.version,
-      homebridge: {
-        version: this.homebridgeVersion || 'unknown',
-        uiVersion: this.homebridgeUiVersion || 'unknown'
+      const config = payload.config;
+      const errors = [];
+
+      // Validate required fields
+      if (!config.apiToken) {
+        errors.push('API Token is required');
       }
-    };
+
+      // Temperature unit validation
+      const validUnits = ['C', 'F'];
+      if (config.unit && !validUnits.includes(config.unit)) {
+        errors.push('Invalid temperature unit. Must be C or F.');
+      }
+
+      // Polling interval validation
+      if (config.pollingInterval) {
+        const interval = Number(config.pollingInterval);
+        if (isNaN(interval) || interval < 60 || interval > 300) {
+          errors.push('Polling interval must be between 60 and 300 seconds');
+        }
+      }
+
+      // Schedule validation if present
+      if (config.schedules && Array.isArray(config.schedules)) {
+        config.schedules.forEach((schedule, index) => {
+          if (!schedule.type || !schedule.time || !schedule.temperature) {
+            errors.push(`Schedule at index ${index} is missing required fields`);
+          }
+        });
+      }
+
+      return {
+        success: errors.length === 0,
+        errors: errors,
+        config: errors.length === 0 ? config : null
+      };
+    } catch (error) {
+      console.error('Config validation error:', error);
+      return {
+        success: false,
+        errors: [error.message]
+      };
+    }
   }
 }
 

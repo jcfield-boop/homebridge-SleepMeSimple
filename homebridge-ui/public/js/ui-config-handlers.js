@@ -1,146 +1,57 @@
-/**
- * Load configuration from Homebridge
- * Enhanced with robust error handling and comprehensive diagnostics
- * @returns {Promise<Object>} The loaded plugin configuration
- */
 window.loadConfig = async function() {
     try {
         console.log('Starting configuration loading process...');
         
-        // STEP 1: Check if Homebridge API is available and wait if needed
-        if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
-            console.warn('Homebridge API not fully available yet, waiting...');
-            
-            // Wait for up to 3 seconds for API to initialize
-            for (let i = 0; i < 30; i++) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                if (homebridge && typeof homebridge.getPluginConfig === 'function') {
-                    console.log('Homebridge API now available after waiting');
-                    break;
+        // Use the new /config/load endpoint
+        const response = await homebridge.request('/config/load');
+        
+        if (!response.success) {
+            console.warn('Configuration load unsuccessful:', response.error);
+            NotificationManager.warning(
+                response.error || 'Unable to load configuration', 
+                'Configuration Load'
+            );
+            return {};
+        }
+        
+        const config = response.config;
+        
+        // Populate form with loaded configuration
+        if (config) {
+            try {
+                // Existing population logic
+                populateFormWithConfig(config);
+                
+                // If schedules exist, render them
+                if (Array.isArray(config.schedules)) {
+                    window.schedules = JSON.parse(JSON.stringify(config.schedules));
+                    
+                    if (typeof window.renderScheduleList === 'function') {
+                        window.renderScheduleList();
+                    }
                 }
-            }
-            
-            // Final check after waiting
-            if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
-                // Use NotificationManager to show error to user
+                
+                NotificationManager.success(
+                    'Configuration loaded successfully', 
+                    'Configuration Management'
+                );
+                
+                return config;
+            } catch (populationError) {
+                console.error('Error populating form:', populationError);
                 NotificationManager.error(
-                    'Homebridge API not available. Please reload the page.', 
+                    `Error processing configuration: ${populationError.message}`, 
                     'Configuration Error'
                 );
                 return {};
             }
         }
         
-        // STEP 2: Load configuration with timeout protection
-        console.log('Requesting plugin configuration from Homebridge API...');
-        let pluginConfig;
-        
-        try {
-            // Use timeout promise to prevent hanging if getPluginConfig never resolves
-            const configPromise = homebridge.getPluginConfig();
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Configuration loading timed out after 5 seconds')), 5000);
-            });
-            
-            // Race between actual config loading and timeout
-            pluginConfig = await Promise.race([configPromise, timeoutPromise]);
-            console.log('Raw configuration received:', pluginConfig);
-        } catch (loadError) {
-            console.error('Error loading configuration:', loadError);
-            NotificationManager.error(
-                `Failed to load configuration: ${loadError.message}`, 
-                'Configuration Load Error'
-            );
-            
-            // Try to get diagnostic information from server
-            try {
-                const diagnostics = await homebridge.request('/config/check', {});
-                console.log('Configuration diagnostics:', diagnostics);
-                
-                if (!diagnostics.success) {
-                    NotificationManager.error(
-                        `Config file issue: ${diagnostics.error || 'Unknown error'}`,
-                        'Configuration Access Problem'
-                    );
-                }
-            } catch (diagError) {
-                console.error('Failed to get config diagnostics:', diagError);
-            }
-            
-            return {};
-        }
-        
-        // STEP 3: Validate configuration structure
-        if (!Array.isArray(pluginConfig)) {
-            console.error('Invalid configuration format received - not an array:', typeof pluginConfig);
-            NotificationManager.error(
-                'Invalid configuration format received from Homebridge', 
-                'Configuration Format Error'
-            );
-            return {};
-        }
-        
-        // STEP 4: Find our platform configuration with comprehensive search
-        // First look for exact match
-        let config = pluginConfig.find(cfg => cfg && cfg.platform === 'SleepMeSimple');
-        
-        // If not found, try alternative names
-        if (!config) {
-            const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-            config = pluginConfig.find(cfg => 
-                cfg && cfg.platform && platformNames.some(name => 
-                    cfg.platform.toLowerCase() === name.toLowerCase())
-            );
-            
-            if (config && config.platform !== 'SleepMeSimple') {
-                console.warn(`Found platform with alternate name: ${config.platform}`);
-            }
-        }
-        
-        // If still not found, log information for troubleshooting
-        if (!config) {
-            console.warn('SleepMeSimple platform not found in config.json.');
-            const availablePlatforms = pluginConfig
-                .filter(cfg => cfg && cfg.platform)
-                .map(cfg => cfg.platform);
-                
-            console.log('Available platforms:', availablePlatforms.join(', ') || 'none');
-            
-            // Show warning to user
-            NotificationManager.warning(
-                'SleepMeSimple platform not found in your Homebridge configuration',
-                'Platform Missing'
-            );
-            
-            // Return empty object as fallback
-            return {};
-        }
-        
-        // STEP 5: Log successful configuration load
-        console.log('Successfully found platform configuration:', config);
-        
-        // STEP 6: Populate UI form with loaded configuration
-        // This is the critical step where values are displayed in the UI
-        try {
-            populateFormWithConfig(config);
-        } catch (populateError) {
-            console.error('Error populating form with config:', populateError);
-            // Continue despite population error - partial config is better than none
-        }
-        
-        // STEP 7: Notify user of success and return config
-        NotificationManager.success(
-            'Configuration loaded successfully', 
-            'Configuration Management', 
-            { autoHide: true }
-        );
-        
-        return config;
+        return {};
     } catch (error) {
-        // Global error handler for unexpected errors
-        console.error('Unexpected error loading configuration:', error);
+        console.error('Unexpected configuration loading error:', error);
         NotificationManager.error(
-            `Configuration loading failed: ${error.message}`, 
+            `Unexpected error loading configuration: ${error.message}`, 
             'System Error'
         );
         return {};

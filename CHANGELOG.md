@@ -1,4 +1,23 @@
 # Changelog
+## 6.1.6 (2025-05-20)
+
+### Added
+- Robust server-side configuration handling using Plugin UI Utils
+- Comprehensive configuration loading, saving, and validation endpoints
+- Enhanced error handling with structured error responses
+- Flexible platform configuration detection
+
+### Improved
+- Thorough validation for configuration fields
+- Comprehensive checks for API token, temperature units, polling intervals
+- Improved schedule structure validation
+- Detailed error reporting for configuration issues
+
+### Technical
+- Refactored configuration management to follow Homebridge Plugin UI Utils best practices
+- Improved error handling and response structure
+- Added more flexible configuration parsing
+- Enhanced logging and diagnostics for configuration operations
 ## 6.1.4 (2025-05-15)
 
 ### Fixed
