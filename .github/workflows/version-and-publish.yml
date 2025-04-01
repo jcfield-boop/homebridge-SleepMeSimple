@@ -62,6 +62,13 @@ jobs:
         echo "JS Files in UI:"
         find dist/homebridge-ui/public/js -type f | sort
 
+    - name: Commit Build Artifacts
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add dist
+        git commit -m "Build artifacts for release" || echo "No changes to commit"
+
     - name: Bump Version
       run: |
         git config user.name github-actions
