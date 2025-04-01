@@ -1,5 +1,5 @@
 // homebridge-ui/server.js
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 
@@ -14,6 +14,9 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
     
+    // Prevent automatic events immediately after initialization
+    this._preventAutomaticEvents();
+    
     // Register request handlers for specific endpoints
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/check', this.checkConfigFile.bind(this));
@@ -23,6 +26,38 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     
     // Signal readiness
     this.ready();
+  }
+  
+  /**
+   * Prevent automatic events that cause unwanted toasts
+   * @private
+   */
+  _preventAutomaticEvents() {
+    // Override pushEvent to filter automatic events
+    const originalPushEvent = this.pushEvent;
+    this.pushEvent = function(event, data) {
+      // List of events to filter
+      const filteredEvents = ['log', 'logs', 'config', 'ready', 'checkConfig'];
+      
+      // Only pass through non-filtered events
+      if (!filteredEvents.includes(event)) {
+        originalPushEvent.call(this, event, data);
+      } else {
+        console.log(`[Server] Filtered event: ${event}`);
+      }
+    };
+    
+    // Override log fetching to prevent "Fetching server logs" toast
+    this.fetchLogs = function() {
+      console.log('[Server] Log fetching bypassed');
+      return Promise.resolve([]);
+    };
+    
+    // Override config checking to prevent automatic checks
+    this._checkConfig = function() {
+      console.log('[Server] Automatic config check bypassed');
+      return Promise.resolve(true);
+    };
   }
   
   /**
