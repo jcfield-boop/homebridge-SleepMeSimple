@@ -36,13 +36,8 @@ jobs:
     - name: Clean
       run: npm run clean
       
-    - name: Build TypeScript
-      run: tsc
-      
-    - name: Build UI Files
-      run: |
-        mkdir -p dist/homebridge-ui
-        cp -r homebridge-ui/. dist/homebridge-ui/
+    - name: Build TypeScript and UI
+      run: npm run build
         
     - name: Verify Build
       run: |
@@ -62,20 +57,36 @@ jobs:
         echo "JS Files in UI:"
         find dist/homebridge-ui/public/js -type f | sort
 
-    - name: Commit Build Artifacts
+    # This key step handles the uncommitted changes
+    - name: Handle Build Artifacts
       run: |
         git config user.name github-actions
         git config user.email github-actions@github.com
-        git add dist
-        git commit -m "Build artifacts for release" || echo "No changes to commit"
+        
+        # Check for changes
+        if [[ -n $(git status --porcelain) ]]; then
+          echo "Uncommitted changes found, will stash them"
+          git stash -u
+        else
+          echo "Working directory is clean"
+        fi
 
     - name: Bump Version
       run: |
         git config user.name github-actions
         git config user.email github-actions@github.com
         npm version ${{ github.event.inputs.version_type || 'patch' }}
+        
+    - name: Push Changes
+      run: |
         git push
         git push --tags
+
+    # Rebuild after version bump to ensure version is included in build
+    - name: Clean and Rebuild with New Version
+      run: |
+        npm run clean
+        npm run build
 
     - name: Publish to NPM
       run: npm publish --access public
@@ -86,4 +97,4 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         generate_release_notes: true
-        tag_name: v${{ github.ref_name }}
+        tag_name: v$(node -p "require('./package.json').version")
