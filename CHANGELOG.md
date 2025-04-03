@@ -1,5 +1,22 @@
 # Changelog
+## 6.1.13 (2025-04-07)
 
+### Fixed
+- **Configuration Persistence**: Resolved issue where logLevel and schedules settings weren't being saved to config.json
+  - Updated server.js with comprehensive logging and validation for each configuration field
+  - Fixed logLevel property definition in config.schema.json to use proper string enum format
+  - Implemented explicit type conversion to ensure correct data types in saved configuration
+  - Added verification step to confirm configuration values are properly saved
+  - Enhanced schedules array handling with proper structure validation
+  - Improved error handling with detailed error responses
+  - Added extensive debug logging throughout the configuration process
+
+### Technical
+- **Schema Definition**: Updated config.schema.json with proper type definitions and validation rules
+- **API Usage**: Ensured proper use of HomebridgePluginUiServer methods for configuration management
+- **Type Handling**: Added explicit type conversion for all configuration values
+- **Verification**: Added post-save verification step with detailed logging
+- **Schedule Handling**: Implemented robust processing for schedule array items
 ## 6.1.12 (2025-04-06)
 
 ### Fixed
