@@ -1,4 +1,22 @@
 # Changelog
+
+## 6.1.11 (2025-04-04)
+
+### Fixed
+- **Configuration Loading**: Fixed critical issue with server.js not properly reading configuration parameters at startup
+  - Replaced direct filesystem access with proper Homebridge Plugin UI Utils API methods
+  - Fixed platform identification to consistently use exact platform name
+  - Enhanced error handling with more specific error codes and detailed messages
+  - Improved configuration loading process with better logging
+  - Reorganized server-side code for better maintainability
+
+### Improved
+- **API Usage**: Better adherence to Homebridge Plugin UI Utils best practices
+  - Used `getPluginConfig()` instead of direct file access
+  - Improved error handling and recovery mechanisms
+  - Enhanced logging with more detailed context information
+  - Added better validation of configuration data
+
 ## 6.1.9 (2025-04-03)
 
 ### Fixed

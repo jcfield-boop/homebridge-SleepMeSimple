@@ -1,10 +1,6 @@
 // homebridge-ui/server.js
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
-import { readFileSync, existsSync } from 'fs';
 import path from 'path';
-
-// API URL for SleepMe services
-const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * SleepMe UI Server 
@@ -16,7 +12,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     
     // Register request handlers for specific endpoints
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
-    this.onRequest('/config/check', this.checkConfigFile.bind(this));
     this.onRequest('/config/load', this.loadConfig.bind(this));
     
     // Simple console logging without UI events
@@ -47,113 +42,42 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Check if we can access the config.json file
-   * @returns {Promise<Object>} Status of config file access
-   */
-  async checkConfigFile() {
-    try {
-      const configPath = this.homebridgeConfigPath;
-      this.log(`Checking config file at: ${configPath}`);
-      
-      // Check if file exists
-      if (!existsSync(configPath)) {
-        this.log('Config file not found', 'warn');
-        return {
-          success: false,
-          message: 'Config file not found',
-          path: configPath
-        };
-      }
-      
-      // Read and parse config file
-      const configContents = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configContents);
-      
-      // Check for our platform
-      const platforms = config.platforms || [];
-      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-      
-      // Try to find our platform by any of the possible names
-      const ourPlatform = platforms.find(p => 
-        p.platform && platformNames.includes(p.platform.toLowerCase())
-      );
-      
-      return {
-        success: true,
-        platformFound: !!ourPlatform,
-        platformConfig: ourPlatform ? {
-          name: ourPlatform.name || 'SleepMe Simple',
-          hasApiToken: !!ourPlatform.apiToken,
-          unit: ourPlatform.unit || 'C',
-          pollingInterval: ourPlatform.pollingInterval || 90,
-          logLevel: ourPlatform.logLevel || 'normal',
-          enableSchedules: !!ourPlatform.enableSchedules,
-          scheduleCount: Array.isArray(ourPlatform.schedules) ? ourPlatform.schedules.length : 0
-        } : null,
-        path: configPath
-      };
-    } catch (error) {
-      this.log(`Error checking config file: ${error.message}`, 'error');
-      return {
-        success: false,
-        error: error.message,
-        path: this.homebridgeConfigPath || 'unknown'
-      };
-    }
-  }
-  
-  /**
-   * Load the plugin configuration
+   * Load the plugin configuration using Homebridge API
    * @returns {Promise<Object>} Response with plugin configuration
    */
   async loadConfig() {
     try {
       this.log('Loading plugin configuration');
       
-      // Get the config path
-      const configPath = this.homebridgeConfigPath;
+      // Use Homebridge API to get plugin config instead of direct file access
+      const pluginConfig = await this.homebridge.getPluginConfig();
       
-      // Check if file exists
-      if (!existsSync(configPath)) {
-        this.log('Config file not found', 'warn');
+      this.log(`Retrieved ${pluginConfig.length} plugin config entries`);
+      
+      // Find our platform configuration
+      const platformConfig = Array.isArray(pluginConfig) ? 
+        pluginConfig.find(config => config && config.platform === 'SleepMeSimple') : null;
+      
+      if (!platformConfig) {
+        this.log('SleepMeSimple platform configuration not found', 'warn');
         return {
           success: false,
-          error: 'Config file not found'
+          error: 'Platform configuration not found',
+          searchedPlatform: 'SleepMeSimple'
         };
       }
       
-      // Read and parse config file
-      const configContents = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configContents);
-      
-      // Check for our platform
-      const platforms = config.platforms || [];
-      const platformNames = ['SleepMeSimple', 'sleepmebasic', 'sleepme', 'sleepme-simple'];
-      
-      // Try to find our platform by any of the possible names
-      const ourPlatform = platforms.find(p => 
-        p.platform && platformNames.includes(p.platform.toLowerCase())
-      );
-      
-      if (!ourPlatform) {
-        this.log('Platform not found in config', 'warn');
-        return {
-          success: false,
-          error: 'Platform not found in configuration'
-        };
-      }
-      
-      this.log(`Found platform configuration: ${ourPlatform.name || 'SleepMe Simple'}`);
+      this.log(`Found SleepMeSimple platform configuration: ${platformConfig.name || 'SleepMe Simple'}`);
       
       return {
         success: true,
-        config: ourPlatform
+        config: platformConfig
       };
     } catch (error) {
       this.log(`Error loading configuration: ${error.message}`, 'error');
       return {
         success: false,
-        error: error.message
+        error: `Configuration error: ${error.message}`
       };
     }
   }
@@ -219,9 +143,16 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
    */
   getPluginVersion() {
     try {
-      // Get path to package.json relative to this file
+      // Get plugin info from Homebridge API instead of reading package.json directly
+      const pluginInfo = this.homebridge ? this.homebridge.getPluginInfo() : null;
+      
+      if (pluginInfo && pluginInfo.version) {
+        return pluginInfo.version;
+      }
+      
+      // Fallback to package.json if needed
       const packagePath = path.resolve(__dirname, '../package.json');
-      const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+      const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
       return packageJson.version || 'unknown';
     } catch (error) {
       this.log(`Error getting plugin version: ${error.message}`, 'error');
