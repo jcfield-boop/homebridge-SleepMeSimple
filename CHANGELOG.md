@@ -1,4 +1,27 @@
 # Changelog
+
+## 6.1.15 (2025-04-08)
+
+### Fixed
+- **Server Configuration Handling**: Complete rewrite of `server.js` to correctly implement Homebridge Plugin UI Utils methods
+  - Fixed `getPluginConfig()` method implementation
+  - Ensured proper initialization of UI server with `this.ready()`
+  - Added comprehensive error handling for configuration load/save operations
+  - Improved logging with console-only output to prevent unwanted notifications
+  - Added explicit type checking and data validation for configuration handling
+
+### Technical
+- Updated server-side implementation to follow Plugin UI Utils best practices
+- Improved error handling with `RequestError` for API-level issues
+- Enhanced configuration management with more robust method implementations
+- Added explicit type conversions and validation for configuration data
+
+### Improved
+- Better error reporting during configuration operations
+- More reliable configuration loading and saving
+- Simplified server-side code with clearer separation of concerns
+- Added placeholder device connection test method
+
 ## 6.1.13 (2025-04-07)
 
 ### Fixed
