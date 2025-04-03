@@ -50,26 +50,6 @@ jobs:
           echo "Error: index.html is missing from UI build!"
           exit 1
         fi
-        
-        echo "UI Files in dist:"
-        find dist/homebridge-ui -type f | grep -v "node_modules" | sort
-        
-        echo "JS Files in UI:"
-        find dist/homebridge-ui/public/js -type f | sort
-
-    # This key step handles the uncommitted changes
-    - name: Handle Build Artifacts
-      run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        
-        # Check for changes
-        if [[ -n $(git status --porcelain) ]]; then
-          echo "Uncommitted changes found, will stash them"
-          git stash -u
-        else
-          echo "Working directory is clean"
-        fi
 
     - name: Bump Version
       run: |
@@ -82,8 +62,7 @@ jobs:
         git push
         git push --tags
 
-    # Rebuild after version bump to ensure version is included in build
-    - name: Clean and Rebuild with New Version
+    - name: Rebuild after Version Bump
       run: |
         npm run clean
         npm run build
@@ -97,4 +76,6 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         generate_release_notes: true
-        tag_name: v$(node -p "require('./package.json').version")
+        tag_name: v${{ github.ref_name }}
+        # Directly use the tag that was just created
+        tag: v${{ github.ref_name }}
