@@ -1,5 +1,21 @@
 # Changelog
 
+## 6.1.12 (2025-04-06)
+
+### Fixed
+- **Configuration Persistence**: Resolved issue where logLevel, temperature unit, and polling interval settings weren't being saved to config.json
+  - Updated server.js to correctly use Homebridge Plugin UI Utils methods for configuration management
+  - Fixed incorrect API usage that was preventing configuration values from being properly stored
+  - Implemented proper error handling using RequestError for more specific error responses
+  - Added detailed logging of configuration values during save operations for better debugging
+  - Ensured complete platform configuration structure is maintained during updates
+
+### Technical
+- **API Usage**: Updated to use the correct HomebridgePluginUiServer methods (getPluginConfig, updatePluginConfig, savePluginConfig)
+- **Verification**: Added saved configuration details to response for verification
+- **Error Handling**: Enhanced with proper RequestError implementation for better client feedback
+- **Debugging**: Improved logging around configuration operations for easier troubleshooting
+
 ## 6.1.11 (2025-04-04)
 
 ### Fixed

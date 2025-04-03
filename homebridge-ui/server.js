@@ -1,6 +1,5 @@
 // homebridge-ui/server.js
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
-import path from 'path';
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 
 /**
  * SleepMe UI Server 
@@ -13,6 +12,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     // Register request handlers for specific endpoints
     this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/load', this.loadConfig.bind(this));
+    this.onRequest('/config/save', this.saveConfig.bind(this));
     
     // Simple console logging without UI events
     console.log('[SleepMeUI] Server initialized');
@@ -49,8 +49,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     try {
       this.log('Loading plugin configuration');
       
-      // Use Homebridge API to get plugin config instead of direct file access
-      const pluginConfig = await this.homebridge.getPluginConfig();
+      // Use Homebridge API to get plugin config
+      const pluginConfig = await this.getPluginConfig();
       
       this.log(`Retrieved ${pluginConfig.length} plugin config entries`);
       
@@ -83,6 +83,82 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
+   * Save the plugin configuration
+   * @param {Object} payload - Updated configuration data
+   * @returns {Promise<Object>} Response with success status
+   */
+  async saveConfig(payload) {
+    try {
+      if (!payload || !payload.config) {
+        throw new RequestError('Invalid configuration data provided', { status: 400 });
+      }
+      
+      this.log('Saving plugin configuration');
+      
+      // Get current config
+      const pluginConfig = await this.getPluginConfig();
+      
+      if (!Array.isArray(pluginConfig)) {
+        throw new RequestError('Plugin configuration is not an array', { status: 500 });
+      }
+      
+      const configData = payload.config;
+      
+      // Ensure all required fields are present
+      if (!configData.platform || configData.platform !== 'SleepMeSimple') {
+        configData.platform = 'SleepMeSimple';
+      }
+      
+      if (!configData.name) {
+        configData.name = 'SleepMe Simple';
+      }
+      
+      // Log important configuration values for debugging
+      this.log(`Configuration values: unit=${configData.unit}, pollingInterval=${configData.pollingInterval}, logLevel=${configData.logLevel}`);
+      
+      // Find the index of the existing platform config
+      const existingIndex = pluginConfig.findIndex(c => 
+        c && c.platform === 'SleepMeSimple'
+      );
+      
+      let updatedConfig;
+      
+      // Update existing or add new
+      if (existingIndex >= 0) {
+        this.log(`Updating existing configuration at index ${existingIndex}`);
+        updatedConfig = [...pluginConfig];
+        updatedConfig[existingIndex] = configData;
+      } else {
+        this.log('Adding new platform configuration');
+        updatedConfig = [...pluginConfig, configData];
+      }
+      
+      // Update the configuration
+      await this.updatePluginConfig(updatedConfig);
+      
+      // Save to disk
+      await this.savePluginConfig();
+      
+      this.log('Configuration saved successfully');
+      
+      // Return the updated configuration for verification
+      return {
+        success: true,
+        message: 'Configuration saved successfully',
+        savedConfig: configData
+      };
+    } catch (error) {
+      this.log(`Error saving configuration: ${error.message}`, 'error');
+      
+      if (error instanceof RequestError) {
+        throw error;
+      }
+      
+      throw new RequestError(`Error saving configuration: ${error.message}`, { status: 500 });
+    }
+  }
+  
+  /**
    * Test connection to the SleepMe API
    * @param {Object} payload - Payload containing API token
    * @returns {Promise<Object>} Response with success status and device info
@@ -94,16 +170,12 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       if (!apiToken) {
         this.log('API token missing from test request', 'warn');
-        return {
-          success: false,
-          error: 'API token is required'
-        };
+        throw new RequestError('API token is required', { status: 400 });
       }
       
       this.log(`Testing API connection with provided token`);
       
       // Make an actual API call to test the connection
-      // For demonstration purposes, we'll make a fetch request to the SleepMe API
       try {
         // This is where you'd implement the actual API call
         // For example, using node-fetch or axios to call the SleepMe API
@@ -122,41 +194,16 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       } catch (apiError) {
         // Handle API-specific errors
         this.log(`API connection failed: ${apiError.message}`, 'error');
-        return {
-          success: false,
-          error: `API connection failed: ${apiError.message}`
-        };
+        throw new RequestError(`API connection failed: ${apiError.message}`, { status: 502 });
       }
     } catch (error) {
+      if (error instanceof RequestError) {
+        throw error;
+      }
+      
       // Handle general errors
       this.log(`Error in test connection: ${error.message}`, 'error');
-      return {
-        success: false,
-        error: `Error: ${error.message}`
-      };
-    }
-  }
-  
-  /**
-   * Get plugin version from package.json
-   * @returns {string} Plugin version
-   */
-  getPluginVersion() {
-    try {
-      // Get plugin info from Homebridge API instead of reading package.json directly
-      const pluginInfo = this.homebridge ? this.homebridge.getPluginInfo() : null;
-      
-      if (pluginInfo && pluginInfo.version) {
-        return pluginInfo.version;
-      }
-      
-      // Fallback to package.json if needed
-      const packagePath = path.resolve(__dirname, '../package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-      return packageJson.version || 'unknown';
-    } catch (error) {
-      this.log(`Error getting plugin version: ${error.message}`, 'error');
-      return 'unknown';
+      throw new RequestError(`Error: ${error.message}`, { status: 500 });
     }
   }
 }
