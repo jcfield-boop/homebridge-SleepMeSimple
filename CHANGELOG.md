@@ -1,4 +1,15 @@
 # Changelog
+## 6.1.9 (2025-04-03)
+
+### Fixed
+- **Configuration Loading**: Added missing /config/load endpoint to server.js
+  - Fixed issue where plugin configuration wasn't being fully loaded
+  - Implemented proper config.json file access with robust error handling
+  - Added platform detection with flexible name matching
+  - Ensured complete configuration is returned to UI
+  - Fixed API token caching issues by properly loading full configuration
+
+
 6.1.8 (2025-04-05)
 Changed
 
