@@ -116,6 +116,16 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Log important configuration values for debugging
       this.log(`Configuration values: unit=${configData.unit}, pollingInterval=${configData.pollingInterval}, logLevel=${configData.logLevel}`);
       
+      // In the saveConfig function, add this after the logging of configuration values:
+if (Array.isArray(configData.schedules)) {
+  this.log(`Saving ${configData.schedules.length} schedules to configuration`);
+  if (configData.schedules.length > 0) {
+    this.log(`First schedule: type=${configData.schedules[0].type}, time=${configData.schedules[0].time}, temp=${configData.schedules[0].temperature}`);
+  }
+} else {
+  this.log('No schedules array in configuration data');
+}
+      
       // Find the index of the existing platform config
       const existingIndex = pluginConfig.findIndex(c => 
         c && c.platform === 'SleepMeSimple'
@@ -136,7 +146,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Update the configuration
       await this.updatePluginConfig(updatedConfig);
       
-      // Save to disk
+      // Save to config.json via homebridge API
       await this.savePluginConfig();
       
       this.log('Configuration saved successfully');
