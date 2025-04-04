@@ -1,74 +1,71 @@
 import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 
-// Create a minimal server that just initializes properly
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
     
-    // Set up minimal handlers
+    // Register the essential endpoints
     this.onRequest('/config/load', async () => {
-      console.log('[Server] Loading configuration...');
+      console.log('Loading configuration...');
       try {
-        const config = await this.getPluginConfig();
-        console.log('[Server] Got config:', config ? 'success' : 'failed');
+        // This is the key method that needs to work
+        const pluginConfig = await this.getPluginConfig();
+        console.log('Config loaded successfully:', pluginConfig ? 'yes' : 'no');
         
-        const platformConfig = Array.isArray(config) ? 
-          config.find(item => item && item.platform === 'SleepMeSimple') : null;
-          
-        return { 
-          success: !!platformConfig, 
-          config: platformConfig || {} 
-        };
+        const platformConfig = Array.isArray(pluginConfig) ? 
+          pluginConfig.find(config => config && config.platform === 'SleepMeSimple') : null;
+        
+        return { success: true, config: platformConfig || {} };
       } catch (error) {
-        console.error('[Server] Config error:', error.message);
+        console.error('Config loading error:', error.message);
         return { success: false, error: error.message };
       }
     });
     
     this.onRequest('/config/save', async (payload) => {
-      console.log('[Server] Saving configuration...');
+      console.log('Saving configuration...');
+      if (!payload || !payload.config) {
+        return { success: false, error: 'No configuration provided' };
+      }
+      
       try {
-        if (!payload || !payload.config) {
-          return { success: false, error: 'No configuration provided' };
-        }
+        // These are the key methods that need to work
+        const pluginConfig = await this.getPluginConfig();
+        const index = Array.isArray(pluginConfig) ? 
+          pluginConfig.findIndex(c => c && c.platform === 'SleepMeSimple') : -1;
         
-        const config = await this.getPluginConfig();
-        if (!Array.isArray(config)) {
-          return { success: false, error: 'Invalid plugin configuration' };
-        }
-        
-        const index = config.findIndex(c => c && c.platform === 'SleepMeSimple');
-        let newConfig;
-        
+        let updatedConfig;
         if (index >= 0) {
-          newConfig = [...config];
-          newConfig[index] = payload.config;
+          updatedConfig = [...pluginConfig];
+          updatedConfig[index] = payload.config;
         } else {
-          newConfig = [...config, payload.config];
+          updatedConfig = [...(Array.isArray(pluginConfig) ? pluginConfig : []), payload.config];
         }
         
-        await this.updatePluginConfig(newConfig);
+        await this.updatePluginConfig(updatedConfig);
         await this.savePluginConfig();
         
         return { success: true };
       } catch (error) {
-        console.error('[Server] Save error:', error.message);
+        console.error('Config saving error:', error.message);
         return { success: false, error: error.message };
       }
     });
     
     this.onRequest('/device/test', async (payload) => {
       return { 
-        success: true,
+        success: true, 
         devices: 1,
-        deviceInfo: [{ id: "sample-id", name: "Sample Device" }]
+        deviceInfo: [{ id: "test-id", name: "Test Device" }]
       };
     });
     
-    console.log('[Server] Initialization complete - server ready');
+    console.log('SleepMe UI Server initialized');
     this.ready();
   }
 }
 
-// Export the server instance
-export default new SleepMeUiServer();
+// Create the server instance using the correct pattern
+(() => {
+  return new SleepMeUiServer();
+})();
