@@ -1,4 +1,4 @@
-const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 
 /**
  * SleepMe UI Server 
@@ -69,14 +69,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       this.log(`Found SleepMeSimple platform configuration: ${platformConfig.name || 'SleepMe Simple'}`);
       
-      // Log important configuration values for debugging
-      this.log(`Loaded config values: unit=${platformConfig.unit}, pollingInterval=${platformConfig.pollingInterval}, logLevel=${platformConfig.logLevel}`);
-      if (platformConfig.enableSchedules && Array.isArray(platformConfig.schedules)) {
-        this.log(`Found ${platformConfig.schedules.length} schedules in configuration`);
-      } else {
-        this.log('No schedules found in configuration');
-      }
-      
       return {
         success: true,
         config: platformConfig
@@ -121,14 +113,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         configData.name = 'SleepMe Simple';
       }
       
-      // Explicitly log all important configuration values for debugging
-      this.log(`Saving configuration values: unit=${configData.unit}, pollingInterval=${configData.pollingInterval}, logLevel=${configData.logLevel}`);
-      
-      // Ensure type correctness for fields
-      if (typeof configData.pollingInterval === 'string') {
-        configData.pollingInterval = parseInt(configData.pollingInterval, 10);
-      }
-      
       // Ensure schedules are properly structured if enabled
       if (configData.enableSchedules === true) {
         if (!Array.isArray(configData.schedules)) {
@@ -136,8 +120,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         }
         
         if (configData.schedules.length > 0) {
-          this.log(`Saving ${configData.schedules.length} schedules`);
-          
           // Ensure each schedule has the correct structure
           configData.schedules = configData.schedules.map(schedule => {
             return {
@@ -149,20 +131,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
               unit: String(schedule.unit || configData.unit || 'C')
             };
           });
-          
-          // Log the first schedule for verification
-          if (configData.schedules.length > 0) {
-            this.log(`First schedule: type=${configData.schedules[0].type}, ` +
-                   `time=${configData.schedules[0].time}, ` + 
-                   `temp=${configData.schedules[0].temperature}`);
-          }
-        } else {
-          this.log('No schedules to save');
         }
       } else {
         // If schedules are disabled, ensure the array is empty
         configData.schedules = [];
-        this.log('Schedules disabled, clearing schedule array');
       }
       
       // Find the index of the existing platform config
@@ -188,31 +160,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Save to disk
       await this.savePluginConfig();
       
-      // Verify the configuration was saved
-      const verifyConfig = await this.getPluginConfig();
-      const savedPlatformConfig = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
-      
-      // Log verification results
-      if (savedPlatformConfig) {
-        this.log(`Verification successful. Saved config has: ` + 
-               `unit=${savedPlatformConfig.unit}, ` +
-               `pollingInterval=${savedPlatformConfig.pollingInterval}, ` +
-               `logLevel=${savedPlatformConfig.logLevel}`);
-        
-        if (savedPlatformConfig.enableSchedules && Array.isArray(savedPlatformConfig.schedules)) {
-          this.log(`Verified ${savedPlatformConfig.schedules.length} schedules saved`);
-        }
-      } else {
-        this.log('Verification failed - platform config not found after save', 'warn');
-      }
-      
-      this.log('Configuration saved successfully');
-      
-      // Return the updated configuration for verification
       return {
         success: true,
         message: 'Configuration saved successfully',
-        savedConfig: savedPlatformConfig || configData
+        savedConfig: configData
       };
     } catch (error) {
       this.log(`Error saving configuration: ${error.message}`, 'error');
@@ -245,7 +196,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Make an actual API call to test the connection
       try {
         // This is a placeholder for your actual API call implementation
-        // Replace with your actual API logic when ready
         const devices = [
           { id: "sample-id", name: "Sample Device", type: "Dock Pro" }
         ];
@@ -273,7 +223,5 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Create and export a new instance
-(() => {
-  return new SleepMeUiServer();
-})();
+// Create and export a new instance - using ES module style
+export default new SleepMeUiServer();

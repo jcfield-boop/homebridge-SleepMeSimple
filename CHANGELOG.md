@@ -1,5 +1,25 @@
 # Changelog
-## 6.1.22 (2025-04-XX)
+
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Critical UI Launch Fix**: Completely rewrote server.js implementation to fix custom UI initialization failures
+  - Fixed server module type error by using ES module syntax instead of CommonJS
+  - Changed require() to import statements for proper compatibility with package.json "type": "module"
+  - Fixed initialization sequence to correctly call super() first and this.ready() afterward
+  - Corrected API method usage for configuration management
+  - Added proper error handling with RequestError for detailed user feedback
+  - Updated server instantiation pattern for ES modules
+
+### Improved
+- **Configuration Handling**: Enhanced configuration processing with better validation
+  - Added comprehensive type conversion for all configuration values
+  - Improved schedule structure handling with explicit formatting
+  - Enhanced verification after saving configuration
+  - Added detailed logging throughout configuration operations
+  - Fixed handling of temperature units in schedules
+
+## 6.1.22 (2025-04-04)
 
 ### Fixed
 - **Critical UI Launch Fix**: Completely rewrote server.js implementation to fix custom UI initialization failures
