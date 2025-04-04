@@ -1,4 +1,28 @@
 # Changelog
+## 6.1.32 (2025-04-06)
+
+### Fixed
+- **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
+  - Fixed "getPluginConfig not available on parent prototype" error by using direct prototype access
+  - Implemented multiple fallback mechanisms for configuration access
+  - Added direct prototype method calls with proper binding
+  - Improved error handling with graceful degradation
+  - Enhanced logging with detailed operation status
+  - Simplified server implementation with cleaner class structure
+  - Ensured consistent IIFE pattern for proper server instantiation
+  
+### Technical
+- **Inheritance Pattern**: Changed to direct prototype access with proper binding
+- **Error Propagation**: Improved error object structure for better debugging
+- **Logging**: Added operation context and timestamps to server logs
+- **Configuration Management**: Ensured proper JSON handling and serialization
+- **Module Pattern**: Refined ES module implementation for better compatibility
+- **UI Integration**: Fixed server response handling to properly update UI components
+- **Instance Creation**: Maintained correct instantiation pattern required by Homebridge
+
+### Details
+The root cause was related to how the HomebridgePluginUiServer methods were being accessed. When using ES modules, explicit parent method access via the prototype chain is required to ensure proper method resolution. This approach guarantees that built-in Homebridge configuration management methods work correctly regardless of execution environment.
+
 ## 6.1.31 (2025-04-06)
 
 ### Fixed
