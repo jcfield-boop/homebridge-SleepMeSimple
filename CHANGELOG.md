@@ -1,4 +1,24 @@
 # Changelog
+## 6.1.33 (2025-04-06)
+
+### Fixed
+- **Custom UI Configuration Fix**: Completely rebuilt server.js following the exact Homebridge Plugin UI documentation
+  - Fixed configuration loading and saving by properly inheriting the HomebridgePluginUiServer methods
+  - Implemented recommended handler patterns from the documentation
+  - Added proper error handling with detailed messages
+  - Enhanced console logging for better troubleshooting
+  - Simplified implementation to focus on core functionality
+  - Followed constructor best practices (super first, ready last)
+  - Used correct method naming conventions for better readability
+  
+### Technical
+- **Method Naming**: Used clear, self-documenting handler method names
+- **Error Handling**: Improved error reporting with consistent structure
+- **Logging**: Added detailed console logging throughout
+- **Implementation Pattern**: Followed documentation examples precisely
+- **Initialization Sequence**: Properly ordered constructor operations
+- **Instance Creation**: Used recommended IIFE pattern for instantiation
+
 ## 6.1.32 (2025-04-06)
 
 ### Fixed
