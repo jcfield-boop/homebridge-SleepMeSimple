@@ -1,4 +1,5 @@
-const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
+// homebridge-ui/server.js
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 
 /**
  * SleepMe UI Server 
@@ -6,7 +7,6 @@ const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-u
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
-    // Always call super() first
     super();
     
     // Register request handlers for specific endpoints
@@ -14,15 +14,15 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/config/load', this.loadConfig.bind(this));
     this.onRequest('/config/save', this.saveConfig.bind(this));
     
-    // Console logging to avoid UI notifications
+    // Simple console logging without UI events
     console.log('[SleepMeUI] Server initialized');
     
-    // Signal readiness - must be called after setting up request handlers
+    // Signal readiness
     this.ready();
   }
   
   /**
-   * Simple server-side logging
+   * Server-side logging that doesn't trigger UI notifications
    * @param {string} message - Log message
    * @param {string} level - Log level (info, warn, error)
    */
@@ -42,14 +42,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Load plugin configuration
+   * Load the plugin configuration using Homebridge API
    * @returns {Promise<Object>} Response with plugin configuration
    */
   async loadConfig() {
     try {
       this.log('Loading plugin configuration');
       
-      // Get plugin config
+      // Use Homebridge API to get plugin config
       const pluginConfig = await this.getPluginConfig();
       
       this.log(`Retrieved ${pluginConfig.length} plugin config entries`);
@@ -60,15 +60,22 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       
       if (!platformConfig) {
         this.log('SleepMeSimple platform configuration not found', 'warn');
-        
-        // Return a default config if not found
         return {
           success: false,
-          error: 'Platform configuration not found'
+          error: 'Platform configuration not found',
+          searchedPlatform: 'SleepMeSimple'
         };
       }
       
-      this.log(`Found platform configuration: ${platformConfig.name || 'SleepMe Simple'}`);
+      this.log(`Found SleepMeSimple platform configuration: ${platformConfig.name || 'SleepMe Simple'}`);
+      
+      // Log important configuration values for debugging
+      this.log(`Loaded config values: unit=${platformConfig.unit}, pollingInterval=${platformConfig.pollingInterval}, logLevel=${platformConfig.logLevel}`);
+      if (platformConfig.enableSchedules && Array.isArray(platformConfig.schedules)) {
+        this.log(`Found ${platformConfig.schedules.length} schedules in configuration`);
+      } else {
+        this.log('No schedules found in configuration');
+      }
       
       return {
         success: true,
@@ -84,7 +91,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Save plugin configuration
+   * Save the plugin configuration
    * @param {Object} payload - Updated configuration data
    * @returns {Promise<Object>} Response with success status
    */
@@ -114,6 +121,50 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         configData.name = 'SleepMe Simple';
       }
       
+      // Explicitly log all important configuration values for debugging
+      this.log(`Saving configuration values: unit=${configData.unit}, pollingInterval=${configData.pollingInterval}, logLevel=${configData.logLevel}`);
+      
+      // Ensure type correctness for fields
+      if (typeof configData.pollingInterval === 'string') {
+        configData.pollingInterval = parseInt(configData.pollingInterval, 10);
+      }
+      
+      // Ensure schedules are properly structured if enabled
+      if (configData.enableSchedules === true) {
+        if (!Array.isArray(configData.schedules)) {
+          configData.schedules = [];
+        }
+        
+        if (configData.schedules.length > 0) {
+          this.log(`Saving ${configData.schedules.length} schedules`);
+          
+          // Ensure each schedule has the correct structure
+          configData.schedules = configData.schedules.map(schedule => {
+            return {
+              type: String(schedule.type || 'Everyday'),
+              time: String(schedule.time || '00:00'),
+              temperature: Number(schedule.temperature || 21),
+              day: schedule.day !== undefined ? Number(schedule.day) : undefined,
+              description: schedule.description ? String(schedule.description) : undefined,
+              unit: String(schedule.unit || configData.unit || 'C')
+            };
+          });
+          
+          // Log the first schedule for verification
+          if (configData.schedules.length > 0) {
+            this.log(`First schedule: type=${configData.schedules[0].type}, ` +
+                   `time=${configData.schedules[0].time}, ` + 
+                   `temp=${configData.schedules[0].temperature}`);
+          }
+        } else {
+          this.log('No schedules to save');
+        }
+      } else {
+        // If schedules are disabled, ensure the array is empty
+        configData.schedules = [];
+        this.log('Schedules disabled, clearing schedule array');
+      }
+      
       // Find the index of the existing platform config
       const existingIndex = pluginConfig.findIndex(c => 
         c && c.platform === 'SleepMeSimple'
@@ -141,11 +192,27 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       const verifyConfig = await this.getPluginConfig();
       const savedPlatformConfig = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
       
+      // Log verification results
+      if (savedPlatformConfig) {
+        this.log(`Verification successful. Saved config has: ` + 
+               `unit=${savedPlatformConfig.unit}, ` +
+               `pollingInterval=${savedPlatformConfig.pollingInterval}, ` +
+               `logLevel=${savedPlatformConfig.logLevel}`);
+        
+        if (savedPlatformConfig.enableSchedules && Array.isArray(savedPlatformConfig.schedules)) {
+          this.log(`Verified ${savedPlatformConfig.schedules.length} schedules saved`);
+        }
+      } else {
+        this.log('Verification failed - platform config not found after save', 'warn');
+      }
+      
+      this.log('Configuration saved successfully');
+      
       // Return the updated configuration for verification
       return {
         success: true,
         message: 'Configuration saved successfully',
-        config: savedPlatformConfig || configData
+        savedConfig: savedPlatformConfig || configData
       };
     } catch (error) {
       this.log(`Error saving configuration: ${error.message}`, 'error');
@@ -178,7 +245,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       // Make an actual API call to test the connection
       try {
         // This is where you'd implement the actual API call
-        // For example, using axios to call the SleepMe API
+        // For example, using node-fetch or axios to call the SleepMe API
         
         // Placeholder for actual implementation:
         const devices = [
