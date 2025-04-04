@@ -1,5 +1,23 @@
 # Changelog
+## 6.2.0 (2025-04-05)
 
+### Fixed
+- **Critical Configuration Persistence**: Fixed configuration loading and saving in Custom UI
+  - Completely rewrote server.js to properly implement HomebridgePluginUiServer methods
+  - Fixed configuration data processing with proper type conversion
+  - Implemented verification after save operations to confirm changes
+  - Added comprehensive error handling with detailed logging
+  - Fixed schedule data structure to ensure proper format in config.json
+  - Enhanced platform configuration detection with reliable matching
+
+### Technical
+- **Server Implementation**: Better adherence to Homebridge Plugin UI Utils best practices
+  - Used proper initialization sequence (super() first, this.ready() last)
+  - Implemented strong type validation for all configuration values
+  - Added detailed console logging throughout the process
+  - Enhanced error reporting with descriptive messages
+  - Improved configuration data structure handling
+  - Fixed schedule formatting with proper data validation
 ## 6.1.35 (2025-04-07)
 
 ### Fixed
