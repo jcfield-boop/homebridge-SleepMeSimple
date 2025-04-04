@@ -1,5 +1,14 @@
 # Changelog
+## 6.1.22 (2025-04-04)
 
+### Fixed
+- **Critical UI Launch Issue**: Completely rewrote server.js with a minimalist approach 
+  - Fixed "getPluginConfig is not a function" error by simplifying class structure
+  - Used ES module syntax (import/export) to match package.json "type": "module"
+  - Implemented inline request handlers with simplified logic
+  - Added extensive console logging for better debugging
+  - Ensured proper inheritance from HomebridgePluginUiServer
+  - Fixed server instantiation to work with ES modules
 ## 6.1.22 (2025-04-04)
 
 ### Fixed
