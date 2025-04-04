@@ -1,5 +1,38 @@
 # Changelog
 
+## 6.1.16 (2025-04-10)
+
+### Fixed
+- **Configuration Management**: Complete overhaul of config.json read/write functionality
+  - Fixed inconsistent API usage for Homebridge Plugin UI Utils methods
+  - Implemented proper processing of schedules with explicit type conversions
+  - Enhanced validation of configuration data during both load and save operations
+  - Added comprehensive error handling with detailed status updates
+  - Fixed schedule persistence issues with proper data structure management
+  - Improved temperature unit conversion for schedules
+  - Added detailed verification steps after saving configuration
+  - Enhanced console logging throughout configuration operations
+  - Implemented proper handling of advanced configuration settings
+
+### Technical
+- **Schedule Processing**: Added robust data validation for schedules
+  - Implemented deep copy of schedule objects to prevent reference issues
+  - Added proper type conversion for all schedule properties
+  - Corrected handling of optional properties (day, description)
+  - Fixed unit conversion between Celsius and Fahrenheit
+  - Added validation of temperature ranges based on selected unit
+  - Enhanced template schedule information preservation
+  - Added comprehensive logging for schedule processing operations
+
+### Improved
+- **Error Handling**: Enhanced user feedback for configuration operations
+  - Added proper status element updates throughout all operations
+  - Implemented NotificationManager integration for user notifications
+  - Added console logging with context for better debugging
+  - Improved validation error messages with specific details
+  - Added proper timeout handling for long-running operations
+  - Improved API test functionality with better error reporting
+
 ## 6.1.15 (2025-04-08)
 
 ### Fixed
