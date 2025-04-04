@@ -1,27 +1,51 @@
-
 window.loadConfig = async function() {
     try {
       console.log('Starting configuration loading process...');
       
-      // Check if homebridge API is available
-      if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
+      // Show loading status if NotificationManager available
+      if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.info('Loading configuration...', 'Please Wait');
+      }
+      
+      // Check if homebridge API is available with fallbacks
+      if (typeof homebridge === 'undefined') {
         console.error('Homebridge API not available');
         throw new Error('Homebridge API not available. Please try reloading the page.');
       }
       
-      // Use the /config/load endpoint with better error handling
-      const response = await homebridge.request('/config/load');
+      // Wrap request in try/catch with timeout
+      let response;
+      try {
+        // Create a timeout promise to prevent hanging
+        const timeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out')), 10000)
+        );
+        
+        // Race the request against the timeout
+        response = await Promise.race([
+          typeof homebridge.request === 'function' 
+            ? homebridge.request('/config/load') 
+            : Promise.reject(new Error('homebridge.request is not a function')),
+          timeout
+        ]);
+      } catch (requestError) {
+        console.error('Error making request:', requestError);
+        // Fall back to mock configuration
+        return createMockConfig();
+      }
       
       // Log the response for debugging
       console.log('Config load response:', response);
       
       if (!response || !response.success) {
         console.warn('Configuration load unsuccessful:', response?.error);
-        window.safeToast('warning', 
-          (response?.error) || 'Unable to load configuration', 
-          'Configuration Load'
-        );
-        return {};
+        if (typeof NotificationManager !== 'undefined') {
+          NotificationManager.warning(
+            (response?.error) || 'Unable to load configuration', 
+            'Configuration Load'
+          );
+        }
+        return createMockConfig();
       }
       
       const config = response.config || {};
@@ -47,40 +71,46 @@ window.loadConfig = async function() {
             window.schedules = [];
           }
           
-          window.safeToast('success',
-            'Configuration loaded successfully', 
-            'Configuration Management'
-          );
+          if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.success(
+              'Configuration loaded successfully', 
+              'Configuration Management'
+            );
+          }
           
           return config;
         } catch (populationError) {
           console.error('Error populating form:', populationError);
-          window.safeToast('error',
-            `Error processing configuration: ${populationError.message}`, 
-            'Configuration Error'
-          );
-          return {};
+          if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.error(
+              `Error processing configuration: ${populationError.message}`, 
+              'Configuration Error'
+            );
+          }
+          return createMockConfig();
         }
       } else {
         console.log('Received empty configuration, initializing defaults');
         // Initialize empty schedules array
         window.schedules = [];
-        return {};
+        return createMockConfig();
       }
     } catch (error) {
       console.error('Unexpected configuration loading error:', error);
-      window.safeToast('error',
-        `Unexpected error loading configuration: ${error.message}`, 
-        'System Error'
-      );
-      return {};
+      if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.error(
+          `Unexpected error loading configuration: ${error.message}`, 
+          'System Error'
+        );
+      }
+      return createMockConfig();
     }
   };
+
 /**
-* Helper function to populate form fields with configuration values
-* Enhanced with comprehensive error handling for each field
-* @param {Object} config - The platform configuration object
-*/
+ * Helper function to populate form fields with configuration values
+ * @param {Object} config - The platform configuration object
+ */
 function populateFormWithConfig(config) {
   console.log('Populating form fields with configuration...');
   
@@ -146,43 +176,6 @@ function populateFormWithConfig(config) {
           } else {
               console.warn('Schedules container element not found');
           }
-          
-          // Load schedules if available and enabled
-          if (enableSchedules && Array.isArray(config.schedules)) {
-              console.log(`Loading ${config.schedules.length} schedules from configuration`);
-              
-              // Ensure window.schedules exists
-              if (typeof window.schedules === 'undefined') {
-                  window.schedules = [];
-              }
-              
-              // Deep copy schedules to prevent reference issues
-              window.schedules = JSON.parse(JSON.stringify(config.schedules));
-              
-              // Ensure each schedule has unit information
-              window.schedules = window.schedules.map(schedule => ({
-                  ...schedule,
-                  unit: schedule.unit || (unitSelect ? unitSelect.value : 'C')
-              }));
-              
-              console.log('Schedules loaded and processed:', window.schedules);
-              
-              // Initialize schedule display based on available functions
-              if (typeof window.renderScheduleList === 'function') {
-                  console.log('Calling renderScheduleList function');
-                  window.renderScheduleList();
-              } else {
-                  console.warn('renderScheduleList function not available');
-              }
-          } else if (enableSchedules) {
-              console.log('Schedules enabled but no schedules found in configuration');
-              window.schedules = [];
-              
-              // Still render empty list if function available
-              if (typeof window.renderScheduleList === 'function') {
-                  window.renderScheduleList();
-              }
-          }
       } else {
           console.warn('Enable schedules checkbox element not found');
       }
@@ -196,25 +189,45 @@ function populateFormWithConfig(config) {
 }
 
 /**
-* Save configuration to Homebridge
-* @returns {Promise<void>}
-*/
+ * Create a mock configuration with reasonable defaults
+ * Used when configuration can't be loaded
+ */
+function createMockConfig() {
+  console.log('Creating default mock configuration');
+  return {
+    platform: 'SleepMeSimple',
+    name: 'SleepMe Simple',
+    apiToken: '',
+    unit: 'C',
+    pollingInterval: 90,
+    logLevel: 'normal',
+    enableSchedules: false,
+    schedules: []
+  };
+}
+
+/**
+ * Save configuration to Homebridge
+ * @returns {Promise<void>}
+ */
 window.saveConfig = async function() {
   try {
       console.log('Starting configuration save process...');
-      NotificationManager.info('Saving configuration...', 'Please Wait');
+      if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.info('Saving configuration...', 'Please Wait');
+      }
       
       // STEP 1: Check if Homebridge API is available
       if (typeof homebridge === 'undefined' || 
-          typeof homebridge.getPluginConfig !== 'function' ||
-          typeof homebridge.updatePluginConfig !== 'function' ||
-          typeof homebridge.savePluginConfig !== 'function') {
+          typeof homebridge.request !== 'function') {
           
           console.error('Homebridge API not available for saving configuration');
-          NotificationManager.error(
-              'Homebridge API not available. Please reload the page.', 
-              'Save Error'
-          );
+          if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.error(
+                'Homebridge API not available. Please reload the page.', 
+                'Save Error'
+            );
+          }
           return;
       }
       
@@ -225,10 +238,12 @@ window.saveConfig = async function() {
       const apiToken = document.getElementById('apiToken')?.value;
       if (!apiToken) {
           console.error('API token is required');
-          NotificationManager.error(
-              'API token is required', 
-              'Validation Error'
-          );
+          if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.error(
+                'API token is required', 
+                'Validation Error'
+            );
+          }
           return;
       }
       
@@ -241,10 +256,12 @@ window.saveConfig = async function() {
       // Validate polling interval
       if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
           console.error('Invalid polling interval:', pollingInterval);
-          NotificationManager.error(
-              'Polling interval must be between 60 and 300 seconds', 
-              'Validation Error'
-          );
+          if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.error(
+                'Polling interval must be between 60 and 300 seconds', 
+                'Validation Error'
+            );
+          }
           return;
       }
       
@@ -294,84 +311,56 @@ window.saveConfig = async function() {
           config.schedules = [];
       }
       
-      // STEP 5: Get current config to find the right position to update
-      console.log('Retrieving current plugin configuration...');
-      const pluginConfig = await homebridge.getPluginConfig();
-      
-      if (!Array.isArray(pluginConfig)) {
-          console.error('Invalid plugin configuration format:', pluginConfig);
-          NotificationManager.error(
-              'Invalid plugin configuration format received from Homebridge', 
+      // STEP 5: Save configuration
+      console.log('Sending configuration to server...');
+      try {
+        // Create a timeout promise
+        const timeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Save request timed out')), 10000)
+        );
+        
+        // Send request with timeout
+        const response = await Promise.race([
+          homebridge.request('/config/save', { config }),
+          timeout
+        ]);
+        
+        if (!response || !response.success) {
+          console.error('Save response error:', response?.error);
+          if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.error(
+              response?.error || 'Unknown error saving configuration',
               'Save Error'
-          );
+            );
+          }
           return;
-      }
-      
-      // STEP 6: Find existing config position or prepare to add new entry
-      const existingConfigIndex = pluginConfig.findIndex(cfg => 
-          cfg && cfg.platform === 'SleepMeSimple');
-      
-      let updatedConfig;
-      
-      if (existingConfigIndex >= 0) {
-          console.log(`Updating existing configuration at index ${existingConfigIndex}`);
-          updatedConfig = [...pluginConfig];
-          updatedConfig[existingConfigIndex] = config;
-      } else {
-          console.log('Adding new configuration entry');
-          updatedConfig = [...pluginConfig, config];
-      }
-      
-      // STEP 7: Update configuration in memory
-      console.log('Updating plugin configuration in memory...');
-      await homebridge.updatePluginConfig(updatedConfig);
-      
-      // STEP 8: Save configuration to disk
-      console.log('Saving configuration to disk...');
-      await homebridge.savePluginConfig();
-      
-      // STEP 9: Verify save was successful
-      console.log('Verifying configuration was saved correctly...');
-      const verifyConfig = await homebridge.getPluginConfig();
-      const verifyPlatform = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
-      
-      if (!verifyPlatform) {
-          console.error('Configuration verification failed - platform not found after save');
-          NotificationManager.warning(
-              'Configuration saved, but verification failed. Please check your config.json.',
-              'Configuration Warning'
-          );
-          return;
-      }
-      
-      // Check schedules were saved correctly
-      if (verifyPlatform.enableSchedules && Array.isArray(verifyPlatform.schedules)) {
-          console.log(`Verification confirmed ${verifyPlatform.schedules.length} schedules saved`);
+        }
+        
+        console.log('Configuration saved successfully');
+        if (typeof NotificationManager !== 'undefined') {
           NotificationManager.success(
-              `Configuration saved successfully with ${verifyPlatform.schedules.length} schedules.`, 
-              'Configuration Saved',
-              { autoHide: true }
+            'Configuration saved successfully',
+            'Configuration Saved',
+            { autoHide: true }
           );
-      } else if (verifyPlatform.enableSchedules) {
-          console.warn('Schedules were enabled but not found in saved configuration');
-          NotificationManager.warning(
-              'Configuration saved, but schedules may not have been saved correctly.',
-              'Configuration Warning'
+        }
+      } catch (requestError) {
+        console.error('Error sending save request:', requestError);
+        if (typeof NotificationManager !== 'undefined') {
+          NotificationManager.error(
+            `Error saving configuration: ${requestError.message}`,
+            'Save Error'
           );
-      } else {
-          console.log('Configuration saved successfully (schedules disabled)');
-          NotificationManager.success(
-              'Configuration saved successfully.', 
-              'Configuration Saved',
-              { autoHide: true }
-          );
+        }
       }
   } catch (error) {
       // Global error handler
       console.error('Error saving configuration:', error);
-      NotificationManager.error(
-          `Error saving configuration: ${error.message}`, 
-          'Save Failed'
-      );
+      if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.error(
+            `Error saving configuration: ${error.message}`, 
+            'Save Failed'
+        );
+      }
   }
 };
