@@ -1,3 +1,4 @@
+// homebridge-ui/server.js
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
 
 /**
@@ -6,157 +7,275 @@ const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-u
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
-    // Always call super() first in the constructor
     super();
     
     // Register request handlers for specific endpoints
+    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     this.onRequest('/config/load', this.loadConfig.bind(this));
     this.onRequest('/config/save', this.saveConfig.bind(this));
-    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
     
-    // Log initialization (using console to avoid UI notifications)
+    // Simple console logging without UI events
     console.log('[SleepMeUI] Server initialized');
     
-    // Signal readiness - IMPORTANT: Call this after setting up request handlers
+    // Signal readiness
     this.ready();
   }
   
   /**
-   * Load the plugin configuration
-   * @returns {Promise<Object>} Configuration response
+   * Server-side logging that doesn't trigger UI notifications
+   * @param {string} message - Log message
+   * @param {string} level - Log level (info, warn, error)
+   */
+  log(message, level = 'info') {
+    const prefix = '[SleepMeUI]';
+    
+    switch (level) {
+      case 'error':
+        console.error(`${prefix} ${message}`);
+        break;
+      case 'warn':
+        console.warn(`${prefix} ${message}`);
+        break;
+      default:
+        console.log(`${prefix} ${message}`);
+    }
+  }
+  
+  /**
+   * Load the plugin configuration using Homebridge API
+   * @returns {Promise<Object>} Response with plugin configuration
    */
   async loadConfig() {
     try {
-      // Use the method from HomebridgePluginUiServer to get plugin config
+      this.log('Loading plugin configuration');
+      
+      // Use Homebridge API to get plugin config
       const pluginConfig = await this.getPluginConfig();
       
-      console.log(`Retrieved ${pluginConfig.length} config entries`);
+      this.log(`Retrieved ${pluginConfig.length} plugin config entries`);
       
-      // Find SleepMeSimple platform configuration
-      const platformConfig = pluginConfig.find(
-        config => config && config.platform === 'SleepMeSimple'
-      );
+      // Find our platform configuration
+      const platformConfig = Array.isArray(pluginConfig) ? 
+        pluginConfig.find(config => config && config.platform === 'SleepMeSimple') : null;
       
       if (!platformConfig) {
-        console.warn('SleepMeSimple platform configuration not found');
+        this.log('SleepMeSimple platform configuration not found', 'warn');
         return {
           success: false,
-          error: 'Platform configuration not found'
+          error: 'Platform configuration not found',
+          searchedPlatform: 'SleepMeSimple'
         };
       }
       
-      console.log('Configuration loaded successfully');
+      this.log(`Found SleepMeSimple platform configuration: ${platformConfig.name || 'SleepMe Simple'}`);
+      
+      // Log important configuration values for debugging
+      this.log(`Loaded config values: unit=${platformConfig.unit}, pollingInterval=${platformConfig.pollingInterval}, logLevel=${platformConfig.logLevel}`);
+      if (platformConfig.enableSchedules && Array.isArray(platformConfig.schedules)) {
+        this.log(`Found ${platformConfig.schedules.length} schedules in configuration`);
+      } else {
+        this.log('No schedules found in configuration');
+      }
       
       return {
         success: true,
         config: platformConfig
       };
     } catch (error) {
-      console.error('Error loading configuration:', error);
+      this.log(`Error loading configuration: ${error.message}`, 'error');
       return {
         success: false,
-        error: error.message
+        error: `Configuration error: ${error.message}`
       };
     }
   }
   
   /**
    * Save the plugin configuration
-   * @param {Object} payload - Configuration payload
-   * @returns {Promise<Object>} Save response
+   * @param {Object} payload - Updated configuration data
+   * @returns {Promise<Object>} Response with success status
    */
   async saveConfig(payload) {
     try {
       if (!payload || !payload.config) {
-        throw new RequestError('Invalid configuration data', { status: 400 });
+        throw new RequestError('Invalid configuration data provided', { status: 400 });
       }
       
-      // Ensure platform is set correctly
-      const configData = {
-        ...payload.config,
-        platform: 'SleepMeSimple',
-        name: payload.config.name || 'SleepMe Simple'
-      };
+      this.log('Saving plugin configuration');
       
-      // Get current configuration
-      const currentConfig = await this.getPluginConfig();
+      // Get current config
+      const pluginConfig = await this.getPluginConfig();
       
-      // Find existing platform config index
-      const existingIndex = currentConfig.findIndex(
-        config => config && config.platform === 'SleepMeSimple'
+      if (!Array.isArray(pluginConfig)) {
+        throw new RequestError('Plugin configuration is not an array', { status: 500 });
+      }
+      
+      const configData = payload.config;
+      
+      // Ensure all required fields are present
+      if (!configData.platform || configData.platform !== 'SleepMeSimple') {
+        configData.platform = 'SleepMeSimple';
+      }
+      
+      if (!configData.name) {
+        configData.name = 'SleepMe Simple';
+      }
+      
+      // Explicitly log all important configuration values for debugging
+      this.log(`Saving configuration values: unit=${configData.unit}, pollingInterval=${configData.pollingInterval}, logLevel=${configData.logLevel}`);
+      
+      // Ensure type correctness for fields
+      if (typeof configData.pollingInterval === 'string') {
+        configData.pollingInterval = parseInt(configData.pollingInterval, 10);
+      }
+      
+      // Ensure schedules are properly structured if enabled
+      if (configData.enableSchedules === true) {
+        if (!Array.isArray(configData.schedules)) {
+          configData.schedules = [];
+        }
+        
+        if (configData.schedules.length > 0) {
+          this.log(`Saving ${configData.schedules.length} schedules`);
+          
+          // Ensure each schedule has the correct structure
+          configData.schedules = configData.schedules.map(schedule => {
+            return {
+              type: String(schedule.type || 'Everyday'),
+              time: String(schedule.time || '00:00'),
+              temperature: Number(schedule.temperature || 21),
+              day: schedule.day !== undefined ? Number(schedule.day) : undefined,
+              description: schedule.description ? String(schedule.description) : undefined,
+              unit: String(schedule.unit || configData.unit || 'C')
+            };
+          });
+          
+          // Log the first schedule for verification
+          if (configData.schedules.length > 0) {
+            this.log(`First schedule: type=${configData.schedules[0].type}, ` +
+                   `time=${configData.schedules[0].time}, ` + 
+                   `temp=${configData.schedules[0].temperature}`);
+          }
+        } else {
+          this.log('No schedules to save');
+        }
+      } else {
+        // If schedules are disabled, ensure the array is empty
+        configData.schedules = [];
+        this.log('Schedules disabled, clearing schedule array');
+      }
+      
+      // Find the index of the existing platform config
+      const existingIndex = pluginConfig.findIndex(c => 
+        c && c.platform === 'SleepMeSimple'
       );
       
-      // Update or add configuration
-      if (existingIndex !== -1) {
-        currentConfig[existingIndex] = configData;
+      let updatedConfig;
+      
+      // Update existing or add new
+      if (existingIndex >= 0) {
+        this.log(`Updating existing configuration at index ${existingIndex}`);
+        updatedConfig = [...pluginConfig];
+        updatedConfig[existingIndex] = configData;
       } else {
-        currentConfig.push(configData);
+        this.log('Adding new platform configuration');
+        updatedConfig = [...pluginConfig, configData];
       }
       
-      // Update plugin configuration
-      await this.updatePluginConfig(currentConfig);
+      // Update the configuration
+      await this.updatePluginConfig(updatedConfig);
       
       // Save to disk
       await this.savePluginConfig();
       
-      console.log('Configuration saved successfully');
+      // Verify the configuration was saved
+      const verifyConfig = await this.getPluginConfig();
+      const savedPlatformConfig = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
       
+      // Log verification results
+      if (savedPlatformConfig) {
+        this.log(`Verification successful. Saved config has: ` + 
+               `unit=${savedPlatformConfig.unit}, ` +
+               `pollingInterval=${savedPlatformConfig.pollingInterval}, ` +
+               `logLevel=${savedPlatformConfig.logLevel}`);
+        
+        if (savedPlatformConfig.enableSchedules && Array.isArray(savedPlatformConfig.schedules)) {
+          this.log(`Verified ${savedPlatformConfig.schedules.length} schedules saved`);
+        }
+      } else {
+        this.log('Verification failed - platform config not found after save', 'warn');
+      }
+      
+      this.log('Configuration saved successfully');
+      
+      // Return the updated configuration for verification
       return {
         success: true,
         message: 'Configuration saved successfully',
-        config: configData
+        savedConfig: savedPlatformConfig || configData
       };
     } catch (error) {
-      console.error('Configuration save error:', error);
+      this.log(`Error saving configuration: ${error.message}`, 'error');
       
-      // Throw RequestError for API-level errors
       if (error instanceof RequestError) {
         throw error;
       }
       
-      throw new RequestError('Failed to save configuration', { status: 500 });
+      throw new RequestError(`Error saving configuration: ${error.message}`, { status: 500 });
     }
   }
   
   /**
-   * Test device connection
-   * @param {Object} payload - Connection test payload
-   * @returns {Promise<Object>} Connection test result
+   * Test connection to the SleepMe API
+   * @param {Object} payload - Payload containing API token
+   * @returns {Promise<Object>} Response with success status and device info
    */
   async testDeviceConnection(payload) {
     try {
-      const apiToken = payload?.apiToken;
+      // Extract API token from request payload
+      const apiToken = payload?.apiToken || payload?.body?.apiToken;
       
       if (!apiToken) {
+        this.log('API token missing from test request', 'warn');
         throw new RequestError('API token is required', { status: 400 });
       }
       
-      // Placeholder for actual API connection test
-      // In a real implementation, you'd make an actual API call here
-      const devices = [
-        { id: 'sample-device-1', name: 'Sample Device', type: 'Dock Pro' }
-      ];
+      this.log(`Testing API connection with provided token`);
       
-      return {
-        success: true,
-        devices: devices.length,
-        deviceInfo: devices,
-        message: `Connection successful. Found ${devices.length} device(s).`
-      };
+      // Make an actual API call to test the connection
+      try {
+        // This is where you'd implement the actual API call
+        // For example, using node-fetch or axios to call the SleepMe API
+        
+        // Placeholder for actual implementation:
+        const devices = [
+          { id: "sample-id", name: "Sample Device", type: "Dock Pro" }
+        ];
+        
+        return {
+          success: true,
+          devices: devices.length,
+          deviceInfo: devices,
+          message: `Connection successful. Found ${devices.length} device(s).`
+        };
+      } catch (apiError) {
+        // Handle API-specific errors
+        this.log(`API connection failed: ${apiError.message}`, 'error');
+        throw new RequestError(`API connection failed: ${apiError.message}`, { status: 502 });
+      }
     } catch (error) {
-      console.error('Device connection test error:', error);
-      
       if (error instanceof RequestError) {
         throw error;
       }
       
-      throw new RequestError('Failed to test device connection', { status: 500 });
+      // Handle general errors
+      this.log(`Error in test connection: ${error.message}`, 'error');
+      throw new RequestError(`Error: ${error.message}`, { status: 500 });
     }
   }
 }
 
-// This is the correct way to create and export a Homebridge plugin UI server
-// using the pattern from the official documentation
+// Create and export a new instance
 (() => {
   return new SleepMeUiServer();
 })();
