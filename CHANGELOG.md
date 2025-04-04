@@ -1,5 +1,20 @@
 # Changelog
+## 6.1.16 (2025-04-12)
 
+### Fixed
+- **UI Server Initialization**: Completely rewrote server.js with minimal implementation
+  - Created stripped-down server implementation following exact Homebridge documentation
+  - Fixed module loading issues causing UI spinner to hang indefinitely
+  - Simplified error handling to prevent initialization failures
+  - Implemented bare minimum handlers for configuration and device testing
+  - Followed canonical pattern from Homebridge Plugin UI Utils examples
+
+### Technical
+- **Server Implementation**: Created minimal working implementation following official examples
+- **Module Format**: Used CommonJS module format for maximum compatibility
+- **Error Handling**: Simplified to prevent initialization failures
+- **Code Structure**: Followed canonical class pattern from documentation
+- **Initialization**: Used proper IIFE pattern for server instantiation
 ## 6.1.16 (2025-04-11)
 
 ### Fixed
