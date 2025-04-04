@@ -1,4 +1,30 @@
 # Changelog
+## 6.1.22 (2025-04-XX)
+
+### Fixed
+- **Critical UI Launch Fix**: Completely rewrote server.js implementation to fix custom UI initialization failures
+  - Switched from ES modules (import/export) to CommonJS (require) for proper compatibility
+  - Fixed initialization sequence to correctly call super() first and this.ready() afterward
+  - Corrected API method usage for configuration management
+  - Added proper error handling with RequestError for detailed user feedback
+  - Implemented the correct IIFE pattern for server instantiation
+
+### Improved
+- **Configuration Handling**: Enhanced configuration processing with better validation
+  - Added comprehensive type conversion for all configuration values
+  - Improved schedule structure handling with explicit formatting
+  - Enhanced verification after saving configuration
+  - Added detailed logging throughout configuration operations
+  - Fixed handling of temperature units in schedules
+
+### Technical
+- **Robust Error Handling**: Implemented more comprehensive error management
+  - Added custom logging that avoids triggering toast notifications
+  - Enhanced error context with detailed information
+  - Improved error recovery with appropriate status codes
+  - Added verification steps after configuration operations
+  - Better handling of edge cases like missing configuration
+
 ##6.1.21
 Key improvements in this version:
 
