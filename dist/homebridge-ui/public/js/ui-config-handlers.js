@@ -3,33 +3,48 @@ window.loadConfig = async function() {
     try {
       console.log('Starting configuration loading process...');
       
-      // Use the /config/load endpoint
+      // Check if homebridge API is available
+      if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
+        console.error('Homebridge API not available');
+        throw new Error('Homebridge API not available. Please try reloading the page.');
+      }
+      
+      // Use the /config/load endpoint with better error handling
       const response = await homebridge.request('/config/load');
       
-      if (!response.success) {
-        console.warn('Configuration load unsuccessful:', response.error);
+      // Log the response for debugging
+      console.log('Config load response:', response);
+      
+      if (!response || !response.success) {
+        console.warn('Configuration load unsuccessful:', response?.error);
         window.safeToast('warning', 
-          response.error || 'Unable to load configuration', 
+          (response?.error) || 'Unable to load configuration', 
           'Configuration Load'
         );
         return {};
       }
       
-      const config = response.config;
+      const config = response.config || {};
       
       // Populate form with loaded configuration
-      if (config) {
+      if (Object.keys(config).length > 0) {
         try {
-          // Existing population logic
+          console.log('Populating form with config:', config);
           populateFormWithConfig(config);
           
           // If schedules exist, render them
           if (Array.isArray(config.schedules)) {
+            console.log(`Loading ${config.schedules.length} schedules from config`);
             window.schedules = JSON.parse(JSON.stringify(config.schedules));
             
             if (typeof window.renderScheduleList === 'function') {
               window.renderScheduleList();
+            } else {
+              console.warn('renderScheduleList function not available');
             }
+          } else {
+            // Initialize empty schedules array if none exist
+            window.schedules = [];
           }
           
           window.safeToast('success',
@@ -46,9 +61,12 @@ window.loadConfig = async function() {
           );
           return {};
         }
+      } else {
+        console.log('Received empty configuration, initializing defaults');
+        // Initialize empty schedules array
+        window.schedules = [];
+        return {};
       }
-      
-      return {};
     } catch (error) {
       console.error('Unexpected configuration loading error:', error);
       window.safeToast('error',
