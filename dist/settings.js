@@ -75,7 +75,7 @@ export var LogLevel;
     LogLevel["NORMAL"] = "normal";
     LogLevel["DEBUG"] = "debug";
     LogLevel["VERBOSE"] = "verbose";
-})(LogLevel || (LogLevel = {}));
+})(LogLevel = LogLevel || (LogLevel = {}));
 /**
  * Request priority levels for more intelligent queue management
  */
@@ -85,5 +85,5 @@ export var RequestPriority;
     RequestPriority["HIGH"] = "high";
     RequestPriority["NORMAL"] = "normal";
     RequestPriority["LOW"] = "low"; // Background operations
-})(RequestPriority || (RequestPriority = {}));
+})(RequestPriority = RequestPriority || (RequestPriority = {}));
 //# sourceMappingURL=settings.js.map

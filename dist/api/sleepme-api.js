@@ -101,7 +101,7 @@ export class SleepMeApi {
             const response = await this.makeRequest({
                 method: 'GET',
                 url: '/devices',
-                priority: RequestPriority.HIGH, // Device discovery is a high priority operation
+                priority: RequestPriority.HIGH,
                 operationType: 'getDevices'
             });
             // Handle different API response formats
@@ -365,7 +365,7 @@ export class SleepMeApi {
                 method: 'PATCH',
                 url: `/devices/${deviceId}`,
                 data: settings,
-                priority: RequestPriority.CRITICAL, // User-initiated actions are critical priority
+                priority: RequestPriority.CRITICAL,
                 deviceId,
                 operationType: 'updateDeviceSettings'
             });

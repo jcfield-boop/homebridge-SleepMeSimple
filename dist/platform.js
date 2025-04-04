@@ -240,7 +240,7 @@ export class SleepMeSimplePlatform {
                 // Map config devices to the format expected by the rest of the code
                 devices = configuredDevices.map(device => ({
                     id: device.id,
-                    name: device.name || `SleepMe Device (${device.id})`, // Default name if not specified
+                    name: device.name || `SleepMe Device (${device.id})`,
                     attachments: [] // Add required fields with default values
                 }));
             }

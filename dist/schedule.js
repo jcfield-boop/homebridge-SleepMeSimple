@@ -8,7 +8,7 @@ export var ScheduleType;
     ScheduleType["WEEKEND"] = "Weekend";
     ScheduleType["SPECIFIC_DAY"] = "Specific Day";
     ScheduleType["WARM_HUG"] = "Warm Hug";
-})(ScheduleType || (ScheduleType = {}));
+})(ScheduleType = ScheduleType || (ScheduleType = {}));
 /**
  * Days of the week (0 = Sunday, 6 = Saturday)
  */
@@ -21,7 +21,7 @@ export var DayOfWeek;
     DayOfWeek[DayOfWeek["THURSDAY"] = 4] = "THURSDAY";
     DayOfWeek[DayOfWeek["FRIDAY"] = 5] = "FRIDAY";
     DayOfWeek[DayOfWeek["SATURDAY"] = 6] = "SATURDAY";
-})(DayOfWeek || (DayOfWeek = {}));
+})(DayOfWeek = DayOfWeek || (DayOfWeek = {}));
 /**
  * Schedule Manager class
  * Handles the scheduling of temperature changes
