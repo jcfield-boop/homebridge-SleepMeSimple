@@ -1,5 +1,19 @@
 # Changelog
+## 6.1.16 (2025-04-11)
 
+### Fixed
+- **Custom UI Server**: Fixed broken server.js implementation
+  - Switched from ES modules to CommonJS for better compatibility
+  - Corrected the instantiation and export pattern to match documentation
+  - Fixed module loading issues that prevented the UI from working
+  - Maintained all functionality while correcting implementation approach
+  - Followed exact patterns from Homebridge Plugin UI Utils documentation
+
+### Technical
+- **Module System**: Changed from ES Modules (import/export) to CommonJS (require/module.exports)
+- **Initialization**: Corrected IIFE pattern for proper server instantiation
+- **Error Handling**: Fixed error reporting format to match Homebridge expectations
+- **API Usage**: Maintained correct HomebridgePluginUiServer method implementation
 ## 6.1.16 (2025-04-10)
 
 ### Fixed
