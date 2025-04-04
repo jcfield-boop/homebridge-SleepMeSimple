@@ -1,4 +1,22 @@
 # Changelog
+## 6.1.20 (2025-04-12)
+
+### Fixed
+- **Schedule Persistence**: Targeted fix for schedule data not saving to config.json
+  - Improved schedule object processing before saving to configuration
+  - Added proper type conversion for all schedule properties
+  - Fixed handling of optional properties like 'day' and 'description'
+  - Added deep copying of schedule objects to prevent reference issues
+  - Enhanced schedule verification after saving
+  - Improved console logging for schedule processing operations
+  - Maintained compatibility with existing code structure
+  
+### Technical
+- **Data Processing**: Added targeted schedule object cleaning logic
+- **Type Safety**: Implemented proper type conversion for schedule values
+- **Validation**: Added proper verification of saved configuration
+- **Logging**: Enhanced debugging information for schedule processing
+
 ## 6.1.16 (2025-04-12)
 
 ### Fixed
