@@ -1,4 +1,27 @@
 # Changelog
+## 6.1.34 (2025-04-06)
+
+### Fixed
+- **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
+  - Fixed "this.getPluginConfig is not a function" error by using direct prototype access
+  - Created wrapper functions for parent class methods to ensure proper method binding
+  - Implemented detailed logging for better error tracing
+  - Fixed ES modules compatibility issues with parent class method access
+  - Maintained correct constructor initialization sequence (super first, ready last)
+  - Used the exact IIFE instantiation pattern from documentation
+  
+### Technical
+- **Inheritance Pattern**: Changed to direct prototype access with proper binding
+- **Error Propagation**: Improved error object structure for better debugging
+- **Logging**: Added operation context and timestamps to server logs
+- **Configuration Management**: Ensured proper JSON handling and serialization
+- **Module Pattern**: Refined ES module implementation for better compatibility
+- **UI Integration**: Fixed server response handling to properly update UI components
+- **Instance Creation**: Maintained correct instantiation pattern required by Homebridge
+
+### Details
+The root cause was related to how the HomebridgePluginUiServer methods were being accessed. When using ES modules, explicit parent method access via the prototype chain is required to ensure proper method resolution. This approach guarantees that built-in Homebridge configuration management methods work correctly regardless of execution environment.
+
 ## 6.1.33 (2025-04-06)
 
 ### Fixed
