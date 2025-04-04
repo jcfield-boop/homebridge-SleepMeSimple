@@ -1,4 +1,24 @@
 # Changelog
+
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Complete UI Launch Solution**: Fixed both server and client-side issues causing the spinning cog
+  - Created ultra-minimal server.js implementation focused on maximum reliability
+  - Used ES module syntax consistently throughout the server code
+  - Implemented defensive client-side JavaScript with automatic retries
+  - Added safety wrappers around all Homebridge API methods
+  - Enhanced error handling throughout the codebase
+  - Fixed timing issues with Homebridge API availability
+  - Added detailed logging to help diagnose initialization problems
+
+### Improved
+- **API Communication**: Enhanced reliability of client-server communication
+  - Simplified request handling with focused error management
+  - Added explicit error reporting for configuration operations
+  - Enhanced console logging for better troubleshooting
+  - Improved status reporting throughout the configuration process
+  - Implemented fallback mechanisms for UI notifications
 ## 6.1.22 (2025-04-04)
 
 ### Fixed
