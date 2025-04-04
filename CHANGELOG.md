@@ -3,6 +3,24 @@
 ## 6.1.22 (2025-04-04)
 
 ### Fixed
+- **Configuration Methods Fix**: Resolved critical issue with customUI methods for reading/writing config.json
+  - Fixed server.js implementation to properly extend HomebridgePluginUiServer
+  - Correctly implemented getPluginConfig, updatePluginConfig, and savePluginConfig methods
+  - Ensured proper initialization sequence with super() first and this.ready() at the end
+  - Added robust error handling for configuration operations
+  - Fixed server instantiation to match the pattern of server-minimal.js
+
+### Improved
+- **Server Reliability**: Enhanced server-side implementation for better stability
+  - Simplified request handlers with focused functionality
+  - Added detailed logging throughout configuration process
+  - Implemented proper error reporting for all operations
+  - Enhanced configuration data validation
+  - Added configuration verification after save operations
+
+## 6.1.22 (2025-04-04)
+
+### Fixed
 - **Complete UI Launch Solution**: Fixed both server and client-side issues causing the spinning cog
   - Created ultra-minimal server.js implementation focused on maximum reliability
   - Used ES module syntax consistently throughout the server code
