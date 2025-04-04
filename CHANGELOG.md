@@ -1,4 +1,21 @@
 # Changelog
+
+## 6.1.16 (2025-04-11)
+
+### Fixed
+- **Custom UI Server**: Fixed server.js implementation causing spinning cog UI issue
+  - Changed from ES modules (import/export) to CommonJS (require) for better compatibility
+  - Maintained complete functionality of configuration loading and saving
+  - Fixed module loading issues that caused UI to hang during initialization
+  - Preserved extensive error handling and verification processes
+  - Kept detailed logging for troubleshooting configuration issues
+
+### Technical
+- **Module Format**: Changed server.js module format from ES Modules to CommonJS
+- **Import Style**: Replaced import statements with require() calls
+- **Function Signature**: Maintained all function signatures and implementation details
+- **Initialization**: Preserved IIFE pattern for proper server instantiation
+
 ## 6.1.16 (2025-04-11)
 
 ### Fixed
