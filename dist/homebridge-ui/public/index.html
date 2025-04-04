@@ -34,6 +34,9 @@
         
         console.log('Global variables and safety functions initialized');
       </script>
+         </script>
+         <!-- Add safety wrappers for Homebridge API methods -->
+         <script src="js/ui-config-fix.js"></script>
    <style>
     /* Core Variables */
 :root {
@@ -1083,6 +1086,8 @@ button.edit:hover {
     </div>
 
 <!-- Scripts with version-based cache busting -->
+<!-- Scripts with version-based cache busting -->
+<script src="js/ui-config-fix.js?v={{version}}"></script>
 <script src="js/notification-manager.js?v={{version}}"></script>
 <script src="js/ui-validation-functions.js?v={{version}}"></script>
 <script src="js/ui-config-handlers.js?v={{version}}"></script>

@@ -1,63 +1,63 @@
+
 window.loadConfig = async function() {
-  try {
+    try {
       console.log('Starting configuration loading process...');
       
       // Use the /config/load endpoint
       const response = await homebridge.request('/config/load');
       
       if (!response.success) {
-          console.warn('Configuration load unsuccessful:', response.error);
-          NotificationManager.warning(
-              response.error || 'Unable to load configuration', 
-              'Configuration Load'
-          );
-          return {};
+        console.warn('Configuration load unsuccessful:', response.error);
+        window.safeToast('warning', 
+          response.error || 'Unable to load configuration', 
+          'Configuration Load'
+        );
+        return {};
       }
       
       const config = response.config;
       
       // Populate form with loaded configuration
       if (config) {
-          try {
-              // Existing population logic
-              populateFormWithConfig(config);
-              
-              // If schedules exist, render them
-              if (Array.isArray(config.schedules)) {
-                  window.schedules = JSON.parse(JSON.stringify(config.schedules));
-                  
-                  if (typeof window.renderScheduleList === 'function') {
-                      window.renderScheduleList();
-                  }
-              }
-              
-              NotificationManager.success(
-                  'Configuration loaded successfully', 
-                  'Configuration Management'
-              );
-              
-              return config;
-          } catch (populationError) {
-              console.error('Error populating form:', populationError);
-              NotificationManager.error(
-                  `Error processing configuration: ${populationError.message}`, 
-                  'Configuration Error'
-              );
-              return {};
+        try {
+          // Existing population logic
+          populateFormWithConfig(config);
+          
+          // If schedules exist, render them
+          if (Array.isArray(config.schedules)) {
+            window.schedules = JSON.parse(JSON.stringify(config.schedules));
+            
+            if (typeof window.renderScheduleList === 'function') {
+              window.renderScheduleList();
+            }
           }
+          
+          window.safeToast('success',
+            'Configuration loaded successfully', 
+            'Configuration Management'
+          );
+          
+          return config;
+        } catch (populationError) {
+          console.error('Error populating form:', populationError);
+          window.safeToast('error',
+            `Error processing configuration: ${populationError.message}`, 
+            'Configuration Error'
+          );
+          return {};
+        }
       }
       
       return {};
-  } catch (error) {
+    } catch (error) {
       console.error('Unexpected configuration loading error:', error);
-      NotificationManager.error(
-          `Unexpected error loading configuration: ${error.message}`, 
-          'System Error'
+      window.safeToast('error',
+        `Unexpected error loading configuration: ${error.message}`, 
+        'System Error'
       );
       return {};
-  }
-};
-
+    }
+  };
 /**
 * Helper function to populate form fields with configuration values
 * Enhanced with comprehensive error handling for each field
