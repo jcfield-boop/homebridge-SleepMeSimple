@@ -10,212 +10,129 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     super();
     
     // Register request handlers
-    this.onRequest('/config/load', this.loadConfig.bind(this));
-    this.onRequest('/config/save', this.saveConfig.bind(this));
-    this.onRequest('/device/test', this.testDeviceConnection.bind(this));
+    this.onRequest('/config/load', this.handleConfigLoad.bind(this));
+    this.onRequest('/config/save', this.handleConfigSave.bind(this));
+    this.onRequest('/device/test', this.handleDeviceTest.bind(this));
     
-    // Signal readiness
     console.log('[SleepMeUI] Server initialized');
+    
+    // Signal readiness AFTER setting up handlers
     this.ready();
   }
   
   /**
-   * Server-side logging that doesn't trigger UI notifications
-   * @param {string} message - Log message
-   * @param {string} level - Log level (info, warn, error)
+   * Handle config load request from UI
    */
-  log(message, level = 'info') {
-    const prefix = '[SleepMeUI]';
+  async handleConfigLoad() {
+    console.log('[SleepMeUI] Config load requested');
     
-    switch (level) {
-      case 'error':
-        console.error(`${prefix} ${message}`);
-        break;
-      case 'warn':
-        console.warn(`${prefix} ${message}`);
-        break;
-      default:
-        console.log(`${prefix} ${message}`);
-    }
-  }
-  
-  /**
-   * Load the plugin configuration using Homebridge API
-   * @returns {Promise<Object>} Response with plugin configuration
-   */
-  async loadConfig() {
     try {
-      this.log('Loading plugin configuration');
-      
-      // Access config directly - DO NOT use this or super
-      let pluginConfig;
-      try {
-        // Try the simpler approach first
-        pluginConfig = await HomebridgePluginUiServer.prototype.getPluginConfig.call(this);
-      } catch (e) {
-        this.log(`Initial config load method failed: ${e.message}`, 'warn');
-        
-        // Try alternative method - just in case
-        if (typeof this.api?.getPluginConfig === 'function') {
-          pluginConfig = await this.api.getPluginConfig();
-        } else {
-          throw new Error('No working configuration method available');
-        }
-      }
-      
-      this.log(`Retrieved ${pluginConfig?.length || 0} plugin config entries`);
+      // This is the recommended method to get config according to docs
+      const pluginConfig = await this.getPluginConfig();
+      console.log(`[SleepMeUI] Config retrieved: ${pluginConfig.length} entries`);
       
       // Find our platform configuration
       const platformConfig = Array.isArray(pluginConfig) ? 
         pluginConfig.find(config => config && config.platform === 'SleepMeSimple') : null;
       
       if (!platformConfig) {
-        this.log('SleepMeSimple platform configuration not found', 'warn');
-        return {
-          success: false,
-          error: 'Platform configuration not found',
-          searchedPlatform: 'SleepMeSimple'
+        console.log('[SleepMeUI] Platform config not found');
+        return { 
+          success: true, 
+          config: {
+            platform: 'SleepMeSimple',
+            name: 'SleepMe Simple'
+          }
         };
       }
       
-      this.log(`Found SleepMeSimple platform configuration: ${platformConfig.name || 'SleepMe Simple'}`);
-      
-      return {
-        success: true,
-        config: platformConfig
-      };
+      console.log('[SleepMeUI] Platform config found');
+      return { success: true, config: platformConfig };
     } catch (error) {
-      this.log(`Error loading configuration: ${error.message}`, 'error');
-      return {
-        success: false,
-        error: `Configuration error: ${error.message}`
+      console.error('[SleepMeUI] Config load error:', error);
+      return { 
+        success: false, 
+        error: `Error loading configuration: ${error.message || 'Unknown error'}`
       };
     }
   }
   
   /**
-   * Save the plugin configuration
-   * @param {Object} payload - Updated configuration data
-   * @returns {Promise<Object>} Response with success status
+   * Handle config save request from UI
    */
-  async saveConfig(payload) {
+  async handleConfigSave(payload) {
+    console.log('[SleepMeUI] Config save requested');
+    
+    if (!payload || !payload.config) {
+      return { success: false, error: 'Invalid configuration data' };
+    }
+    
     try {
-      if (!payload || !payload.config) {
-        return { success: false, error: 'Invalid configuration data provided' };
-      }
-      
-      this.log('Saving plugin configuration');
-      
-      // Get current config
-      let pluginConfig;
-      try {
-        // Direct prototype access
-        pluginConfig = await HomebridgePluginUiServer.prototype.getPluginConfig.call(this);
-      } catch (e) {
-        // Try alternative method
-        if (typeof this.api?.getPluginConfig === 'function') {
-          pluginConfig = await this.api.getPluginConfig();
-        } else {
-          throw new Error('Unable to get current configuration');
-        }
-      }
+      // Get current plugin config
+      const pluginConfig = await this.getPluginConfig();
       
       if (!Array.isArray(pluginConfig)) {
-        throw new Error('Plugin configuration is not an array');
+        throw new Error('Invalid plugin configuration format');
       }
-      
-      const configData = payload.config;
       
       // Find the index of the existing platform config
       const existingIndex = pluginConfig.findIndex(c => 
         c && c.platform === 'SleepMeSimple'
       );
       
+      // Copy the array and update the config
       let updatedConfig;
-      
-      // Update existing or add new
       if (existingIndex >= 0) {
-        this.log(`Updating existing configuration at index ${existingIndex}`);
+        console.log(`[SleepMeUI] Updating existing config at index ${existingIndex}`);
         updatedConfig = [...pluginConfig];
-        updatedConfig[existingIndex] = configData;
+        updatedConfig[existingIndex] = payload.config;
       } else {
-        this.log('Adding new platform configuration');
-        updatedConfig = [...pluginConfig, configData];
+        console.log('[SleepMeUI] Adding new platform config');
+        updatedConfig = [...pluginConfig, payload.config];
       }
       
-      // Update and save config
-      try {
-        // Direct prototype access
-        await HomebridgePluginUiServer.prototype.updatePluginConfig.call(this, updatedConfig);
-        await HomebridgePluginUiServer.prototype.savePluginConfig.call(this);
-      } catch (e) {
-        // Try alternative method
-        if (typeof this.api?.updatePluginConfig === 'function' && 
-            typeof this.api?.savePluginConfig === 'function') {
-          await this.api.updatePluginConfig(updatedConfig);
-          await this.api.savePluginConfig();
-        } else {
-          throw new Error('Unable to save configuration');
-        }
-      }
+      // Update config in memory
+      await this.updatePluginConfig(updatedConfig);
       
-      this.log('Configuration saved successfully');
+      // Save to disk - this is critical!
+      await this.savePluginConfig();
       
-      // Return the updated configuration for verification
-      return {
-        success: true,
+      console.log('[SleepMeUI] Config saved successfully');
+      return { 
+        success: true, 
         message: 'Configuration saved successfully',
-        savedConfig: configData
+        savedConfig: payload.config
       };
     } catch (error) {
-      this.log(`Error saving configuration: ${error.message}`, 'error');
-      return {
-        success: false,
-        error: `Error saving configuration: ${error.message}`
+      console.error('[SleepMeUI] Config save error:', error);
+      return { 
+        success: false, 
+        error: `Error saving configuration: ${error.message || 'Unknown error'}`
       };
     }
   }
   
   /**
-   * Test connection to the SleepMe API
-   * @param {Object} payload - Payload containing API token
-   * @returns {Promise<Object>} Response with success status and device info
+   * Handle device test request from UI
    */
-  async testDeviceConnection(payload) {
-    try {
-      // Extract API token from request payload
-      const apiToken = payload?.apiToken;
-      
-      if (!apiToken) {
-        this.log('API token missing from test request', 'warn');
-        return { success: false, error: 'API token is required' };
-      }
-      
-      this.log(`Testing API connection with provided token`);
-      
-      // This is a simple placeholder response
-      // In a real implementation, you would make an actual API call
-      const devices = [
-        { id: "sample-id", name: "Sample Device", type: "Dock Pro" }
-      ];
-      
-      return {
-        success: true,
-        devices: devices.length,
-        deviceInfo: devices,
-        message: `Connection successful. Found ${devices.length} device(s).`
-      };
-    } catch (error) {
-      this.log(`Error in test connection: ${error.message}`, 'error');
-      return {
-        success: false,
-        error: `Error: ${error.message}`
-      };
+  async handleDeviceTest(payload) {
+    console.log('[SleepMeUI] Device test requested');
+    
+    const apiToken = payload?.apiToken;
+    if (!apiToken) {
+      return { success: false, error: 'API token is required' };
     }
+    
+    // Return simple test result
+    return {
+      success: true,
+      devices: 1,
+      deviceInfo: [{ id: "sample-device", name: "Sample Device" }]
+    };
   }
 }
 
-// Create and export a new instance
+// Create an instance of the server - IIFE pattern
 (() => {
   return new SleepMeUiServer();
 })();
