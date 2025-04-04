@@ -1,5 +1,5 @@
 # Changelog
-## 6.1.30 (2025-04-06)
+## 6.1.31 (2025-04-06)
 
 ### Fixed
 - **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
