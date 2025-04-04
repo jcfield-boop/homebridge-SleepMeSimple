@@ -1,4 +1,29 @@
 # Changelog
+
+## 6.1.35 (2025-04-07)
+
+### Fixed
+- **Custom UI Critical Fix**: Resolved "Cannot read properties of undefined (reading 'call')" error
+  - Removed direct prototype access in favor of simpler method calls
+  - Implemented comprehensive fallback mechanisms for configuration loading
+  - Added request timeout protection to prevent UI hanging
+  - Enhanced error handling with informative user feedback
+  - Created default configuration values when server response fails
+  - Added detailed logging throughout the process for better debugging
+  
+### Improved
+- **Client-Side Robustness**: Enhanced UI handlers with better error recovery
+  - Implemented timeout protection for all server requests
+  - Added default configuration if server response fails
+  - Improved error message specificity for easier troubleshooting
+  - Created UI consistency regardless of server errors
+  
+### Technical
+- **Error Handling**: Comprehensive try/catch blocks throughout the code
+- **Timeout Handling**: Added request timeouts to prevent UI hanging
+- **Fallback Values**: Smart defaults when expected values aren't available
+- **Diagnostic Logging**: Enhanced logging for operation tracing
+- **Configuration Structure**: Ensured consistent configuration format
 ## 6.1.34 (2025-04-06)
 
 ### Fixed
