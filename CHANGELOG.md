@@ -1,4 +1,19 @@
 # Changelog
+##6.1.21
+Key improvements in this version:
+
+Using CommonJS syntax with require() instead of ES modules
+Simplified error handling with proper checks
+Added more robust handling for configuration loading
+Made sure to call super() first in the constructor
+Added explicit check for Array.isArray() before using array methods
+Included proper IIFE pattern at the end
+Added fallback handling for configuration not found
+Simplified the API testing implementation
+Added more detailed logging
+
+This version should resolve the "this.getPluginConfig is not a function" error by ensuring that the server properly extends HomebridgePluginUiServer and follows the expected patterns for Homebridge plugin UI servers.
+
 ## 6.1.20 (2025-04-12)
 
 ### Fixed
