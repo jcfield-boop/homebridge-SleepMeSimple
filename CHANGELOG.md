@@ -1,5 +1,17 @@
 # Changelog
+## 6.1.28 (2025-04-05)
 
+### Fixed
+- **Custom UI Configuration Handling**: Completely rebuilt server.js implementation to fix reading/writing config via plugin UI
+  - Fixed ES module import/export pattern to match package.json "type": "module"
+  - Implemented proper inheritance chain with HomebridgePluginUiServer
+  - Corrected initialization sequence (super() first, this.ready() last)
+  - Added robust configuration processing with proper validation
+  - Enhanced error handling with RequestError for better client feedback
+  - Implemented detailed logging throughout configuration operations
+  - Added explicit verification after save operations
+  - Fixed IIFE pattern for ES module server instantiation
+  - Ensured proper schedule formatting for configuration storage
 ## 6.1.22 (2025-04-04)
 
 ### Fixed
