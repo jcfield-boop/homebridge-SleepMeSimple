@@ -1,5 +1,34 @@
 # Changelog
 
+6.5.6 (2025-04-20)
+Fixed
+
+Critical Schedule Display Fix: Resolved issue where schedules were loaded from config.json but not displayed in UI
+
+Fixed schedule initialization sequence in ui-config-handlers.js to properly populate window.schedules
+Added explicit initialization of window.schedules array prior to rendering
+Enhanced verification of config.enableSchedules flag before processing schedule data
+Improved DOM element verification to ensure schedule list container exists
+Added proper deep copying of schedule data using JSON.parse(JSON.stringify())
+Implemented delayed rendering with setTimeout to ensure DOM is fully processed
+Added comprehensive error handling throughout schedule initialization process
+Enhanced logging for better troubleshooting of schedule rendering issues
+Fixed race condition between config loading and UI rendering
+Added verification steps for renderScheduleList function availability
+
+
+
+Technical
+
+Enhanced State Management: Improved schedule data handling with better initialization sequence
+
+Improved data flow between configuration loading and UI rendering
+Fixed timing issues between async operations
+Enhanced DOM readiness checking before manipulation
+Added proper event sequencing for reliable initialization
+Implemented explicit state verification at critical points
+
+
 ## 6.5.2 (2025-04-05)
 
 ### Fixed
