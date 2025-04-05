@@ -1,4 +1,42 @@
 # Changelog
+
+## 6.5.1 (2025-04-20)
+
+### Fixed
+- **Complete Configuration Persistence Solution**: Thoroughly fixed issues with reading and writing configuration in the Custom UI
+  - Implemented proper CommonJS syntax in server.js for compatibility with homebridge-ui/package.json settings
+  - Fixed method binding issues by explicitly using .bind(this) for all request handlers
+  - Implemented comprehensive configuration processing with proper type conversions
+  - Added robust schedule data structure management for consistent storage
+  - Enhanced validation for all configuration values before saving
+  - Added verification steps to confirm configuration changes were applied
+  - Implemented detailed console logging throughout the configuration process
+  - Fixed context preservation in server methods to prevent "getPluginConfig is not a function" errors
+  - Added proper deep copying of configuration objects to prevent reference issues
+
+### Improved
+- **Enhanced Configuration Management**: Better handling of configuration structure and values
+  - Added proper unit conversion for temperature settings between Celsius and Fahrenheit
+  - Improved handling of advanced settings with correct storage format
+  - Enhanced schedule template information preservation across edit operations
+  - Added detailed validation for all schedule properties
+  - Implemented better error recovery with default configuration fallbacks
+  - Added timeout protection to prevent UI hanging during API operations
+  - Enhanced status reporting with more informative success/error messages
+  - Improved debug visibility with comprehensive console logging
+  - Fixed edge cases in configuration structure management
+
+### Technical
+- **Better Module Compatibility**: Fixed module system incompatibilities
+  - Aligned server.js implementation with homebridge-ui/package.json "type": "commonjs" setting
+  - Used proper CommonJS require() syntax instead of ES module imports
+  - Maintained correct method inheritance chain for HomebridgePluginUiServer
+  - Implemented proper IIFE pattern for CommonJS server instantiation
+  - Enhanced request handling with focused error management
+  - Added defensive programming throughout the codebase
+  - Improved encapsulation with private helper methods
+  - Created robust error boundaries for critical operations
+
 ## 6.3.4 (2025-04-15)
 
 ### Fixed
