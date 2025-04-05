@@ -1,6 +1,33 @@
 # Changelog
 # CHANGELOG
+## 6.3.3 (2025-04-15)
 
+### Fixed
+- **Custom UI Configuration Management**: Complete solution for configuration read/write functionality
+  - Reimplemented server.js using official Homebridge Plugin UI documentation patterns
+  - Resolved longstanding issues with HomebridgePluginUiServer method inheritance
+  - Fixed schedule persistence with proper data cleaning and type conversion
+  - Added verification step after configuration saves to ensure data integrity
+  - Enhanced error handling with graceful fallbacks to default configuration
+  - Improved console logging for better troubleshooting visibility
+
+### Key Improvements
+- **Method Access**: Used correct inheritance pattern for accessing parent class methods
+  - Ensured proper HomebridgePluginUiServer method availability throughout code execution
+  - Used direct method calls following documentation examples
+  - Simplified request handler implementation with inline functions
+  - Added deep copying of configuration objects to prevent reference issues
+  - Implemented comprehensive data validation for all configuration properties
+  - Added explicit type conversion for proper configuration structure
+
+### Technical
+- **Architecture**: Better adherence to Homebridge Plugin UI Utils architecture
+  - Maintained pure ES module syntax (import/export) matching package.json "type": "module"
+  - Followed exact HomebridgePluginUiServer initialization sequence (super first, ready last)
+  - Used correct IIFE instantiation pattern for ES modules
+  - Improved error boundaries with RequestError for better client feedback
+  - Enhanced schedule data handling with proper schema compliance
+  - Added diagnostic logging with operation context for easier troubleshooting
 ## 6.3.2 (2025-04-10)
 
 ### Fixed
