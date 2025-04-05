@@ -1,17 +1,26 @@
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
+import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
 
 /**
- * SleepMe UI Server for Homebridge
+ * SleepMe UI Server 
+ * Handles backend functionality for the custom UI
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     // Always call super first
     super();
     
-    // Set up request handlers before ready() call
-    this.onRequest('/config/load', this.handleConfigLoad.bind(this));
-    this.onRequest('/config/save', this.handleConfigSave.bind(this));
-    this.onRequest('/device/test', this.handleDeviceTest.bind(this));
+    // Register request handlers for specific endpoints
+    this.onRequest('/config/load', async (payload) => {
+      return await this.handleConfigLoad(payload);
+    });
+    
+    this.onRequest('/config/save', async (payload) => {
+      return await this.handleConfigSave(payload);
+    });
+    
+    this.onRequest('/device/test', async (payload) => {
+      return await this.handleDeviceTest(payload);
+    });
     
     console.log('[SleepMeUI] Server initialized');
     
@@ -22,7 +31,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   /**
    * Handle loading configuration
    */
-  async handleConfigLoad(request) {
+  async handleConfigLoad(payload) {
     console.log('[SleepMeUI] Loading configuration');
     
     try {
@@ -38,13 +47,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         schedules: []
       };
       
-      // Try loading the plugin config
+      // Get plugin configuration
       let pluginConfig;
       try {
-        pluginConfig = await this.getPluginConfig();
-        console.log('[SleepMeUI] Successfully loaded plugin config');
+        // Using function directly from parent class (not referencing this or super)
+        pluginConfig = await HomebridgePluginUiServer.prototype.getPluginConfig.call(this);
+        console.log('[SleepMeUI] Successfully got plugin config');
       } catch (e) {
-        console.error('[SleepMeUI] Failed to load plugin config:', e.message);
+        console.error('[SleepMeUI] Error getting plugin config:', e.message);
         return { success: true, config: defaultConfig };
       }
       
@@ -59,7 +69,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       );
       
       if (!platformConfig) {
-        console.log('[SleepMeUI] Platform configuration not found, returning default');
+        console.log('[SleepMeUI] Platform configuration not found, returning default config');
         return { success: true, config: defaultConfig };
       }
       
@@ -67,8 +77,19 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       return { success: true, config: platformConfig };
     } catch (error) {
       console.error('[SleepMeUI] Error loading configuration:', error.message);
+      // Return default config even on error to prevent UI failure
       return { 
-        success: false, 
+        success: true, 
+        config: {
+          platform: 'SleepMeSimple',
+          name: 'SleepMe Simple',
+          apiToken: '',
+          unit: 'C',
+          pollingInterval: 90,
+          logLevel: 'normal',
+          enableSchedules: false,
+          schedules: []
+        },
         error: `Error loading configuration: ${error.message}`
       };
     }
@@ -77,16 +98,16 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   /**
    * Handle saving configuration
    */
-  async handleConfigSave(request) {
+  async handleConfigSave(payload) {
     console.log('[SleepMeUI] Saving configuration');
     
-    if (!request || !request.config) {
+    if (!payload || !payload.config) {
       return { success: false, error: 'No configuration provided' };
     }
     
     try {
       // Validate config data
-      const configData = request.config;
+      const configData = payload.config;
       
       // Ensure platform and name are present
       if (!configData.platform || configData.platform !== 'SleepMeSimple') {
@@ -125,18 +146,20 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         configData.schedules = [];
       }
       
-      // Try to get current config
+      // Get current config
       let pluginConfig;
       try {
-        pluginConfig = await this.getPluginConfig();
+        // Using function directly from parent class
+        pluginConfig = await HomebridgePluginUiServer.prototype.getPluginConfig.call(this);
         console.log('[SleepMeUI] Successfully loaded existing config');
       } catch (e) {
         console.error('[SleepMeUI] Error loading existing config:', e.message);
+        // Start with empty array if can't get existing config
         pluginConfig = [];
       }
       
       if (!Array.isArray(pluginConfig)) {
-        console.warn('[SleepMeUI] Plugin config is not an array, using empty array');
+        console.warn('[SleepMeUI] Plugin config is not an array, using empty array instead');
         pluginConfig = [];
       }
       
@@ -156,12 +179,14 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         updatedConfig = [...pluginConfig, configData];
       }
       
-      // Update config in memory and save to disk
+      // Try updating and saving config
       try {
-        await this.updatePluginConfig(updatedConfig);
+        // Update config in memory using function directly from parent class
+        await HomebridgePluginUiServer.prototype.updatePluginConfig.call(this, updatedConfig);
         console.log('[SleepMeUI] Updated plugin config in memory');
         
-        await this.savePluginConfig();
+        // Save to disk using function directly from parent class
+        await HomebridgePluginUiServer.prototype.savePluginConfig.call(this);
         console.log('[SleepMeUI] Saved config to disk');
       } catch (e) {
         console.error('[SleepMeUI] Error saving config:', e.message);
@@ -189,10 +214,10 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   /**
    * Handle device test request
    */
-  async handleDeviceTest(request) {
+  async handleDeviceTest(payload) {
     console.log('[SleepMeUI] Testing device connection');
     
-    const apiToken = request?.apiToken;
+    const apiToken = payload?.apiToken;
     if (!apiToken) {
       return { success: false, error: 'API token is required' };
     }
@@ -206,7 +231,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
 }
 
-// Create an instance - MUST use this exact pattern with CommonJS
+// Create an instance - MUST use this exact IIFE pattern with ES modules
 (() => {
   return new SleepMeUiServer();
 })();
