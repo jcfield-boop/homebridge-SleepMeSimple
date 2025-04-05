@@ -1,5 +1,3 @@
-// Add to ui-config-handlers.js
-
 window.loadConfig = async function() {
   try {
     console.log('Starting configuration loading process...');
@@ -29,7 +27,8 @@ window.loadConfig = async function() {
         // Populate form with loaded configuration
         populateFormWithConfig(config);
         
-        // CRITICAL: Initialize window.schedules BEFORE trying to render
+        // CRITICAL FIX: Initialize window.schedules BEFORE trying to render
+        // and use deep copy to avoid reference issues
         window.schedules = [];
         
         // Handle schedules if they exist
@@ -37,7 +36,12 @@ window.loadConfig = async function() {
           console.log(`Loading ${config.schedules.length} schedules from config`);
           
           // Create a deep copy of schedules to avoid reference issues
-          window.schedules = JSON.parse(JSON.stringify(config.schedules || []));
+          const schedules = JSON.parse(JSON.stringify(config.schedules || []));
+          window.schedules = schedules;
+          if (typeof window.ScheduleLoader !== 'undefined' && 
+              typeof window.ScheduleLoader.store === 'function') {
+            window.ScheduleLoader.store(schedules);
+          }
           
           console.log('Schedules loaded into memory:', window.schedules);
           
@@ -51,6 +55,7 @@ window.loadConfig = async function() {
               // Add slight delay to ensure DOM is fully processed
               setTimeout(() => {
                 try {
+                  console.log('Config loaded, rendering schedules');
                   window.renderScheduleList();
                   console.log('Schedule list rendered successfully');
                 } catch (renderError) {
@@ -81,7 +86,6 @@ window.loadConfig = async function() {
     return createMockConfig();
   }
 };
-
 /**
  * Helper function to populate form fields with configuration values
  * @param {Object} config - The platform configuration object
