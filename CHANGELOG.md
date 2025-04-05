@@ -1,5 +1,27 @@
 # Changelog
+# CHANGELOG
 
+## 6.3.2 (2025-04-10)
+
+### Fixed
+- **Configuration Method Access**: Resolved "Cannot access configuration methods" error
+  - Implemented direct prototype method access for HomebridgePluginUiServer methods
+  - Used explicit function binding with .call(this) to ensure proper context
+  - Added inline anonymous functions for request handlers to avoid binding issues
+  - Enhanced error handling throughout the configuration process
+  - Improved schedule data formatting with explicit type conversion
+  - Added detailed logging for better troubleshooting
+  - Ensured consistent configuration format for saved data
+
+### Technical
+- **Method Inheritance Fix**: Used reliable prototype chain access pattern
+  - Accessed methods directly from HomebridgePluginUiServer.prototype
+  - Maintained proper 'this' context with explicit .call(this)
+  - Preserved ES modules syntax for project compatibility
+  - Enhanced error resilience with multiple fallback mechanisms
+  - Added configuration verification after save operations
+  - Improved response formatting with consistent structure
+  - Fixed schedule data processing to ensure correct format
 ## 6.3.1 (2025-04-10)
 
 ### Fixed
