@@ -1,27 +1,31 @@
-import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 
 /**
- * SleepMe UI Server 
- * Handles backend functionality for the custom UI
+ * SleepMe UI Server
+ * Implements the HomebridgePluginUiServer interface with robust configuration handling
  */
 class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
-    // Always call super first
+    // Always call super first (required)
     super();
     
-    // Register request handlers for specific endpoints
-    this.onRequest('/config/load', async (payload) => {
-      return await this.handleConfigLoad(payload);
+    // Register request handlers with inline functions (not method references)
+    this.onRequest('/config/load', async () => {
+      return await this.loadConfiguration();
     });
     
     this.onRequest('/config/save', async (payload) => {
-      return await this.handleConfigSave(payload);
+      return await this.saveConfiguration(payload);
     });
     
     this.onRequest('/device/test', async (payload) => {
-      return await this.handleDeviceTest(payload);
+      return await this.testDeviceConnection(payload);
     });
     
+    // Add version tracking for better debugging
+    this.serverVersion = '1.0.0';
+    
+    // Log successful initialization
     console.log('[SleepMeUI] Server initialized');
     
     // Signal readiness - MUST be called last
@@ -29,38 +33,19 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   }
   
   /**
-   * Handle loading configuration
+   * Load configuration with robust error handling
    */
-  async handleConfigLoad(payload) {
+  async loadConfiguration() {
     console.log('[SleepMeUI] Loading configuration');
     
     try {
-      // Create a default config in case we can't load
-      const defaultConfig = {
-        platform: 'SleepMeSimple',
-        name: 'SleepMe Simple',
-        apiToken: '',
-        unit: 'C',
-        pollingInterval: 90,
-        logLevel: 'normal',
-        enableSchedules: false,
-        schedules: []
-      };
-      
-      // Get plugin configuration
-      let pluginConfig;
-      try {
-        // Using function directly from parent class (not referencing this or super)
-        pluginConfig = await HomebridgePluginUiServer.prototype.getPluginConfig.call(this);
-        console.log('[SleepMeUI] Successfully got plugin config');
-      } catch (e) {
-        console.error('[SleepMeUI] Error getting plugin config:', e.message);
-        return { success: true, config: defaultConfig };
-      }
+      // Get plugin configuration using the parent class method
+      const pluginConfig = await this.getPluginConfig();
+      console.log('[SleepMeUI] Plugin config loaded successfully', 
+        Array.isArray(pluginConfig) ? `(${pluginConfig.length} items)` : '(not an array)');
       
       if (!Array.isArray(pluginConfig)) {
-        console.warn('[SleepMeUI] Plugin config is not an array:', typeof pluginConfig);
-        return { success: true, config: defaultConfig };
+        throw new Error('Plugin configuration is not an array');
       }
       
       // Find the platform configuration
@@ -68,170 +53,195 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         config && config.platform === 'SleepMeSimple'
       );
       
-      if (!platformConfig) {
-        console.log('[SleepMeUI] Platform configuration not found, returning default config');
-        return { success: true, config: defaultConfig };
+      if (platformConfig) {
+        console.log('[SleepMeUI] Found platform configuration');
+        return { success: true, config: platformConfig };
+      } else {
+        console.log('[SleepMeUI] Platform configuration not found, returning default');
+        return { success: true, config: this.createDefaultConfig() };
       }
-      
-      console.log('[SleepMeUI] Found platform configuration');
-      return { success: true, config: platformConfig };
     } catch (error) {
       console.error('[SleepMeUI] Error loading configuration:', error.message);
-      // Return default config even on error to prevent UI failure
+      
+      // Return default config on error with error info
       return { 
         success: true, 
-        config: {
-          platform: 'SleepMeSimple',
-          name: 'SleepMe Simple',
-          apiToken: '',
-          unit: 'C',
-          pollingInterval: 90,
-          logLevel: 'normal',
-          enableSchedules: false,
-          schedules: []
-        },
+        config: this.createDefaultConfig(),
         error: `Error loading configuration: ${error.message}`
       };
     }
   }
   
   /**
-   * Handle saving configuration
+   * Create a default configuration
    */
-  async handleConfigSave(payload) {
+  createDefaultConfig() {
+    return {
+      platform: 'SleepMeSimple',
+      name: 'SleepMe Simple',
+      apiToken: '',
+      unit: 'C',
+      pollingInterval: 90,
+      logLevel: 'normal',
+      enableSchedules: false,
+      schedules: []
+    };
+  }
+  
+  /**
+   * Save configuration with validation and error handling
+   */
+  async saveConfiguration(payload) {
     console.log('[SleepMeUI] Saving configuration');
     
     if (!payload || !payload.config) {
-      return { success: false, error: 'No configuration provided' };
+      throw new RequestError('Missing configuration data', { status: 400 });
     }
     
     try {
-      // Validate config data
-      const configData = payload.config;
+      // Ensure we're working with a deep copy to avoid reference issues
+      const configData = JSON.parse(JSON.stringify(payload.config));
       
-      // Ensure platform and name are present
-      if (!configData.platform || configData.platform !== 'SleepMeSimple') {
-        configData.platform = 'SleepMeSimple';
-      }
+      // Process the configuration for proper storage
+      this.processConfigData(configData);
       
-      if (!configData.name) {
-        configData.name = 'SleepMe Simple';
-      }
-      
-      // Ensure proper types for all values
-      if (typeof configData.pollingInterval === 'string') {
-        configData.pollingInterval = parseInt(configData.pollingInterval, 10);
-      }
-      
-      // Ensure schedules are properly structured if enabled
-      if (configData.enableSchedules === true) {
-        if (!Array.isArray(configData.schedules)) {
-          configData.schedules = [];
-        }
-        
-        console.log(`[SleepMeUI] Processing ${configData.schedules.length} schedules`);
-        
-        // Ensure each schedule has the correct structure with proper types
-        configData.schedules = configData.schedules.map(schedule => {
-          return {
-            type: String(schedule.type || 'Everyday'),
-            time: String(schedule.time || '00:00'),
-            temperature: Number(schedule.temperature || 21),
-            day: schedule.day !== undefined ? Number(schedule.day) : undefined,
-            description: schedule.description ? String(schedule.description) : undefined,
-            unit: String(schedule.unit || configData.unit || 'C')
-          };
-        });
-      } else {
-        configData.schedules = [];
-      }
-      
-      // Get current config
-      let pluginConfig;
-      try {
-        // Using function directly from parent class
-        pluginConfig = await HomebridgePluginUiServer.prototype.getPluginConfig.call(this);
-        console.log('[SleepMeUI] Successfully loaded existing config');
-      } catch (e) {
-        console.error('[SleepMeUI] Error loading existing config:', e.message);
-        // Start with empty array if can't get existing config
-        pluginConfig = [];
-      }
+      // Get the current plugin configuration
+      const pluginConfig = await this.getPluginConfig();
       
       if (!Array.isArray(pluginConfig)) {
-        console.warn('[SleepMeUI] Plugin config is not an array, using empty array instead');
-        pluginConfig = [];
+        throw new Error('Plugin configuration is not an array');
       }
       
-      // Find existing config or prepare to add new
+      // Find or create our platform configuration
       const existingIndex = pluginConfig.findIndex(c => 
         c && c.platform === 'SleepMeSimple'
       );
       
-      // Create updated config array
-      let updatedConfig;
+      // Create a new plugin config array
+      const updatedConfig = [...pluginConfig];
+      
       if (existingIndex >= 0) {
+        // Update existing entry
         console.log(`[SleepMeUI] Updating existing config at index ${existingIndex}`);
-        updatedConfig = [...pluginConfig];
         updatedConfig[existingIndex] = configData;
       } else {
+        // Add new entry
         console.log('[SleepMeUI] Adding new platform config');
-        updatedConfig = [...pluginConfig, configData];
+        updatedConfig.push(configData);
       }
       
-      // Try updating and saving config
-      try {
-        // Update config in memory using function directly from parent class
-        await HomebridgePluginUiServer.prototype.updatePluginConfig.call(this, updatedConfig);
-        console.log('[SleepMeUI] Updated plugin config in memory');
-        
-        // Save to disk using function directly from parent class
-        await HomebridgePluginUiServer.prototype.savePluginConfig.call(this);
-        console.log('[SleepMeUI] Saved config to disk');
-      } catch (e) {
-        console.error('[SleepMeUI] Error saving config:', e.message);
-        return { 
-          success: false, 
-          error: `Error saving configuration: ${e.message}`
-        };
+      // Update the configuration in memory
+      await this.updatePluginConfig(updatedConfig);
+      console.log('[SleepMeUI] Configuration updated in memory');
+      
+      // Save to disk
+      await this.savePluginConfig();
+      console.log('[SleepMeUI] Configuration saved to disk');
+      
+      // Verify configuration was saved correctly
+      const verificationConfig = await this.getPluginConfig();
+      const verifiedPlatform = verificationConfig.find(c => c && c.platform === 'SleepMeSimple');
+      
+      if (!verifiedPlatform) {
+        throw new Error('Configuration verification failed');
       }
       
-      console.log('[SleepMeUI] Configuration saved successfully');
       return { 
         success: true, 
-        message: 'Configuration saved successfully',
-        savedConfig: configData
+        message: 'Configuration saved successfully'
       };
     } catch (error) {
-      console.error('[SleepMeUI] Error in save process:', error.message);
-      return { 
-        success: false, 
-        error: `Error saving configuration: ${error.message}`
-      };
+      console.error('[SleepMeUI] Error saving configuration:', error.message);
+      throw new RequestError(`Failed to save configuration: ${error.message}`, { status: 500 });
     }
   }
   
   /**
-   * Handle device test request
+   * Process configuration data for storage
    */
-  async handleDeviceTest(payload) {
-    console.log('[SleepMeUI] Testing device connection');
-    
-    const apiToken = payload?.apiToken;
-    if (!apiToken) {
-      return { success: false, error: 'API token is required' };
+  processConfigData(configData) {
+    // Ensure required fields with proper types
+    if (!configData.platform || configData.platform !== 'SleepMeSimple') {
+      configData.platform = 'SleepMeSimple';
     }
     
-    // Simple test result
+    if (!configData.name) {
+      configData.name = 'SleepMe Simple';
+    }
+    
+    // Convert string numbers to actual numbers
+    if (typeof configData.pollingInterval === 'string') {
+      configData.pollingInterval = parseInt(configData.pollingInterval, 10);
+    }
+    
+    // Process schedules if enabled
+    if (configData.enableSchedules === true) {
+      if (!Array.isArray(configData.schedules)) {
+        configData.schedules = [];
+      }
+      
+      console.log(`[SleepMeUI] Processing ${configData.schedules.length} schedules`);
+      
+      // Ensure each schedule has correct structure and types
+      configData.schedules = configData.schedules.map(schedule => {
+        // Create a clean schedule object with only schema-defined properties
+        const cleanedSchedule = {
+          type: String(schedule.type || 'Everyday'),
+          time: String(schedule.time || '00:00'),
+          temperature: Number(schedule.temperature || 21)
+        };
+        
+        // Only add optional properties if they exist
+        if (schedule.day !== undefined) {
+          cleanedSchedule.day = Number(schedule.day);
+        }
+        
+        if (schedule.description) {
+          cleanedSchedule.description = String(schedule.description);
+        }
+        
+        if (schedule.unit) {
+          cleanedSchedule.unit = String(schedule.unit);
+        }
+        
+        return cleanedSchedule;
+      });
+    } else {
+      // Always ensure schedules is an array even when disabled
+      configData.schedules = [];
+    }
+    
+    // Log the processed data
+    console.log('[SleepMeUI] Configuration processed successfully');
+  }
+  
+  /**
+   * Test device connection with API token
+   */
+  async testDeviceConnection(payload) {
+    console.log('[SleepMeUI] Testing device connection');
+    
+    if (!payload || !payload.apiToken) {
+      throw new RequestError('API token is required', { status: 400 });
+    }
+    
+    // This is a placeholder. In a real implementation, this would:
+    // 1. Make an API call to SleepMe using the provided token
+    // 2. Return actual device information
+    
+    // For now, return a simulated success response
     return {
       success: true,
-      devices: 1,
-      deviceInfo: [{ id: "sample-device", name: "Sample Device" }]
+      devices: 2,
+      deviceInfo: [
+        { id: "device-1", name: "SleepMe Bedroom" },
+        { id: "device-2", name: "SleepMe Guest Room" }
+      ]
     };
   }
 }
 
-// Create an instance - MUST use this exact IIFE pattern with ES modules
+// Create an instance using IIFE - this is the correct pattern for ES modules
 (() => {
   return new SleepMeUiServer();
 })();
