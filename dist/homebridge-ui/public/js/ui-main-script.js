@@ -1893,6 +1893,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.renderScheduleList();
                 }
             }
+        } else if (scheduleListElement) {
+            // NEW VERIFICATION STEP: Try to reload config if schedules were lost
+            console.log('Failsafe: Schedules missing but element exists, attempting to reload from config');
+            if (typeof window.loadConfig === 'function') {
+                window.loadConfig().then(() => {
+                    // Force render after reload
+                    if (typeof window.renderScheduleList === 'function' && 
+                        Array.isArray(window.schedules) && 
+                        window.schedules.length > 0) {
+                        console.log('Failsafe: Config reloaded, forcing schedule render');
+                        window.renderScheduleList();
+                    }
+                });
+            }
         } else {
             console.log('Failsafe: Conditions not met for schedule rendering:', {
                 scheduleListElementExists: !!scheduleListElement,
