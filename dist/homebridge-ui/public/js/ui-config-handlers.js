@@ -234,20 +234,21 @@ function createMockConfig() {
 
 /**
  * Save configuration to Homebridge
+ * @param {boolean} saveToFile - Whether to also save to config.json file
  * @returns {Promise<void>}
  */
-window.saveConfig = async function() {
+window.saveConfig = async function(saveToFile = true) {
   try {
-    console.log('Starting configuration save process...');
+    console.log(`Starting configuration ${saveToFile ? 'save' : 'update'} process...`);
     if (typeof NotificationManager !== 'undefined') {
-      NotificationManager.info('Saving configuration...', 'Please Wait');
+      NotificationManager.info(`${saveToFile ? 'Saving' : 'Updating'} configuration...`, 'Please Wait');
     }
     
     // STEP 1: Check if Homebridge API is available
     if (typeof homebridge === 'undefined' || 
         typeof homebridge.getPluginConfig !== 'function' ||
         typeof homebridge.updatePluginConfig !== 'function' ||
-        typeof homebridge.savePluginConfig !== 'function') {
+        (saveToFile && typeof homebridge.savePluginConfig !== 'function')) {
         
       console.error('Homebridge API methods not available');
       if (typeof NotificationManager !== 'undefined') {
@@ -365,8 +366,10 @@ window.saveConfig = async function() {
       const currentConfig = await homebridge.getPluginConfig();
       console.log('Current plugin config:', currentConfig);
       
+      // Create a completely new array to avoid reference issues
+      const updatedConfigArray = JSON.parse(JSON.stringify(currentConfig || []));
+      
       // Find our platform config or prepare to add it
-      let updatedConfigArray = [...currentConfig];
       const existingIndex = updatedConfigArray.findIndex(c => c && c.platform === 'SleepMeSimple');
       
       if (existingIndex >= 0) {
@@ -379,24 +382,27 @@ window.saveConfig = async function() {
         updatedConfigArray.push(config);
       }
       
-      // Update config in memory
-      console.log('Calling updatePluginConfig with:', updatedConfigArray);
+      // Update config in memory with the completely new array
+      console.log('Calling updatePluginConfig with:', JSON.stringify(updatedConfigArray).substring(0, 100) + '...');
       await homebridge.updatePluginConfig(updatedConfigArray);
       
-      // Save to disk
-      console.log('Calling savePluginConfig');
-      await homebridge.savePluginConfig();
+      // If requested, also save to file (only when user explicitly clicks Save button)
+      if (saveToFile) {
+        console.log('Calling savePluginConfig to write to disk');
+        await homebridge.savePluginConfig();
+        console.log('Configuration saved to disk successfully');
+      }
       
-      console.log('Configuration saved successfully');
+      console.log('Configuration process completed successfully');
       if (typeof NotificationManager !== 'undefined') {
         NotificationManager.success(
-          'Configuration saved successfully',
-          'Configuration Saved',
+          `Configuration ${saveToFile ? 'saved' : 'updated'} successfully`,
+          `Configuration ${saveToFile ? 'Saved' : 'Updated'}`,
           { autoHide: true }
         );
       }
       
-      // Verify save
+      // Verify update
       try {
         const verifyConfig = await homebridge.getPluginConfig();
         const saved = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
@@ -408,7 +414,7 @@ window.saveConfig = async function() {
       console.error('Error saving configuration:', saveError);
       if (typeof NotificationManager !== 'undefined') {
         NotificationManager.error(
-          `Error saving configuration: ${saveError.message}`,
+          `Error ${saveToFile ? 'saving' : 'updating'} configuration: ${saveError.message}`,
           'Save Error'
         );
       }
