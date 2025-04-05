@@ -1,33 +1,22 @@
-/**
- * SleepMe Simple UI Configuration Handlers
- * Manages loading and saving of plugin configuration
- */
+// Add to ui-config-handlers.js
 
-/**
- * Load configuration from server
- * @returns {Promise<Object>} The loaded configuration
- */
 window.loadConfig = async function() {
   try {
     console.log('Starting configuration loading process...');
     
-    // Show loading status if NotificationManager available
+    // Show loading status
     if (typeof NotificationManager !== 'undefined') {
       NotificationManager.info('Loading configuration...', 'Please Wait');
     }
     
-    // Check if homebridge API is available with fallbacks
+    // Check if homebridge API is available
     if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
       console.error('Homebridge API not available');
-      if (typeof NotificationManager !== 'undefined') {
-        NotificationManager.warning('Homebridge API not available', 'Configuration Load');
-      }
       return createMockConfig();
     }
     
     try {
-      // Get plugin config directly from client-side API
-      console.log('Using client-side homebridge.getPluginConfig()');
+      // Get plugin config
       const pluginConfig = await homebridge.getPluginConfig();
       console.log('Plugin config retrieved:', pluginConfig);
       
@@ -40,55 +29,55 @@ window.loadConfig = async function() {
         // Populate form with loaded configuration
         populateFormWithConfig(config);
         
+        // CRITICAL: Initialize window.schedules BEFORE trying to render
+        window.schedules = [];
+        
         // Handle schedules if they exist
-        if (Array.isArray(config.schedules)) {
+        if (config.enableSchedules === true && Array.isArray(config.schedules)) {
           console.log(`Loading ${config.schedules.length} schedules from config`);
-          window.schedules = JSON.parse(JSON.stringify(config.schedules));
           
-          if (typeof window.renderScheduleList === 'function') {
-            window.renderScheduleList();
+          // Create a deep copy of schedules to avoid reference issues
+          window.schedules = JSON.parse(JSON.stringify(config.schedules || []));
+          
+          console.log('Schedules loaded into memory:', window.schedules);
+          
+          // Ensure scheduleList element exists before rendering
+          const scheduleList = document.getElementById('scheduleList');
+          if (scheduleList) {
+            console.log('Schedule list element found, rendering schedules');
+            
+            // Ensure render function exists
+            if (typeof window.renderScheduleList === 'function') {
+              // Add slight delay to ensure DOM is fully processed
+              setTimeout(() => {
+                try {
+                  window.renderScheduleList();
+                  console.log('Schedule list rendered successfully');
+                } catch (renderError) {
+                  console.error('Error rendering schedule list:', renderError);
+                }
+              }, 300);
+            } else {
+              console.error('renderScheduleList function not available');
+            }
           } else {
-            console.warn('renderScheduleList function not available');
+            console.error('Schedule list element not found');
           }
         } else {
-          // Initialize empty schedules array if none exist
-          window.schedules = [];
-        }
-        
-        if (typeof NotificationManager !== 'undefined') {
-          NotificationManager.success(
-            'Configuration loaded successfully', 
-            'Configuration Management',
-            { autoHide: true }
-          );
+          console.log('Schedules not enabled or no schedules in config');
         }
         
         return config;
       } else {
         console.warn('Platform config not found, using default config');
-        if (typeof NotificationManager !== 'undefined') {
-          NotificationManager.warning('Platform configuration not found', 'Configuration Load');
-        }
         return createMockConfig();
       }
     } catch (error) {
       console.error('Error getting plugin config:', error);
-      if (typeof NotificationManager !== 'undefined') {
-        NotificationManager.error(
-          `Error loading configuration: ${error.message}`, 
-          'Configuration Error'
-        );
-      }
       return createMockConfig();
     }
   } catch (error) {
     console.error('Unexpected configuration loading error:', error);
-    if (typeof NotificationManager !== 'undefined') {
-      NotificationManager.error(
-        `Unexpected error loading configuration: ${error.message}`, 
-        'System Error'
-      );
-    }
     return createMockConfig();
   }
 };
