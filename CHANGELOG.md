@@ -1,5 +1,30 @@
 # Changelog
 
+# CHANGELOG
+
+## 6.3.0 (2025-04-10)
+
+### Fixed
+- **Custom UI Method Inheritance**: Resolved "this.getPluginConfig is not a function" error
+ - Added comprehensive validation of HomebridgePluginUiServer methods at startup
+ - Implemented cascading fallback mechanisms for accessing parent class methods
+ - Created multiple layers of error recovery to preserve UI functionality
+ - Enhanced error handling with proper RequestError usage
+ - Added explicit method existence checks before each operation
+ - Improved response structure with consistent success/error patterns
+ - Implemented safe default configuration when methods are unavailable
+ - Added detailed debug logging throughout method access attempts
+
+### Technical
+- **API Method Access**: Enhanced method availability with multiple access paths
+ - Added both direct (`this.method()`) and parent (`super.method()`) access attempts
+ - Implemented detailed validation of inheritance chain at initialization
+ - Created dedicated helper methods for common operations
+ - Enhanced configuration processing with strict type enforcement
+ - Added object structure validation before save operations
+ - Improved error propagation with standardized format
+ - Maintained ES modules syntax with proper instantiation pattern
+
 ## 6.3.0 (2025-04-10)
 
 ### Fixed
