@@ -1,6 +1,27 @@
 # Changelog
 
-# CHANGELOG
+## 6.3.1 (2025-04-10)
+
+### Fixed
+- **Complete Server.js Rewrite**: Resolved both configuration loading and saving issues
+  - Switched from ES modules to CommonJS for better compatibility with Homebridge
+  - Implemented robust error handling for all API operations
+  - Added comprehensive fallback mechanisms for configuration loading failures
+  - Fixed method inheritance issues causing "Cannot access configuration methods" errors
+  - Improved configuration structure validation and formatting
+  - Enhanced schedule data processing with explicit type conversion
+  - Added detailed logging throughout configuration operations
+  - Implemented verification checks after configuration updates
+
+### Technical
+- **Architecture Change**: Switched to more compatible module system
+  - Replaced ES modules (import/export) with CommonJS (require/module.exports)
+  - Fixed inheritance chain issues with HomebridgePluginUiServer
+  - Enhanced error propagation with consistent response formats
+  - Improved parameter handling and type conversion
+  - Added detailed verification at each step of configuration operations
+  - Implemented simpler and more robust instantiation pattern
+  - Enhanced configuration object validation and processing
 
 ## 6.3.0 (2025-04-10)
 
