@@ -1,6 +1,24 @@
 # Changelog
+## 6.5.7 (2025-04-20)
+### Fixed
+- **Critical Schedule Loading Fix**: Resolved issue where schedules were loaded from config.json but then lost before rendering
+  - Added proper deep copying of schedule data using JSON.parse(JSON.stringify())
+  - Fixed initialization order to ensure schedules aren't overwritten during startup
+  - Enhanced failsafe mechanism to reload configurations if schedules are lost
+  - Implemented explicit initialization of window.schedules array before rendering
+  - Added more comprehensive error handling throughout schedule loading process
+  - Improved schedule state verification with detailed logging
+  - Fixed race condition in schedule initialization process
 
-6.5.6 (2025-04-20)
+### Technical
+- **Improved State Management**: Enhanced schedule data persistence during initialization
+  - Used proper deep copy technique to prevent reference issues
+  - Added verification steps to confirm schedule data integrity
+  - Improved error recovery with config reloading mechanism
+  - Enhanced logging for better visibility into schedule loading process
+  - Fixed timing-related issues with delayed rendering
+
+##6.5.6 (2025-04-20)
 Fixed
 
 Critical Schedule Display Fix: Resolved issue where schedules were loaded from config.json but not displayed in UI
