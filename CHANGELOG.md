@@ -1,5 +1,23 @@
 # Changelog
-# CHANGELOG
+## 6.3.4 (2025-04-15)
+
+### Fixed
+- **Critical Config Access Solution**: Implemented working server.js with CommonJS format
+  - Resolved persistent "this.getPluginConfig is not a function" error
+  - Switched from ES modules to CommonJS to match official examples
+  - Used direct method calls without async/await for synchronous methods
+  - Implemented proper schedule object cleaning with conditional properties
+  - Added comprehensive error handling with meaningful user feedback
+  - Enhanced logging with operation context for easier troubleshooting
+
+### Technical
+- **Module System**: Reverted to CommonJS for maximum compatibility
+  - Removed ES module syntax that was causing inheritance issues
+  - Used direct method calls without prototype chain complexity
+  - Simplified request handler implementation
+  - Created robust error boundaries that maintain UI functionality
+  - Added defensive configuration structure management
+  - Enhanced schedule data validation for config.json compliance
 ## 6.3.3 (2025-04-15)
 
 ### Fixed
