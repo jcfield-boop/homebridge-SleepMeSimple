@@ -89,6 +89,9 @@
         if (typeof window.renderScheduleList === 'function') {
           window.renderScheduleList();
         }
+        if (typeof window.saveConfig === 'function') {
+          window.saveConfig(false);
+        }
       } catch (error) {
         NotificationManager.error(`Error: ${error.message}`, 'Schedule Error');
       }
@@ -264,7 +267,9 @@
           if (typeof window.renderScheduleList === 'function') {
             window.renderScheduleList();
           }
-          
+          if (typeof window.saveConfig === 'function') {
+            window.saveConfig(false);
+          }
           NotificationManager.success('Schedule removed successfully', 'Success', { autoHide: true });
         }
       );
@@ -611,6 +616,9 @@
       // Update UI
       if (typeof window.renderScheduleList === 'function') {
         window.renderScheduleList();
+      }
+      if (typeof window.saveConfig === 'function') {
+        window.saveConfig(false);
       }
       
       // Show notification

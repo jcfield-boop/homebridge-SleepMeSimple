@@ -47,8 +47,8 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         success: true,
         devices: 2,
         deviceInfo: [
-          { id: "sample-device-1", name: "SleepMe Bedroom" },
-          { id: "sample-device-2", name: "SleepMe Guest Room" }
+          { id: "sample-device-1", name: "Test SleepMe Bedroom" },
+          { id: "sample-device-2", name: "Test SleepMe Guest Room" }
         ]
       };
     });
