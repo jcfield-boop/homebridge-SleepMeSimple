@@ -1,6 +1,38 @@
 # Changelog
 
-## 6.5.1 (2025-04-20)
+## 6.5.2 (2025-04-05)
+
+### Fixed
+- **Critical Configuration Access Fix**: Completely redesigned configuration handling to resolve persistent issues with config.json access
+  - Shifted from server-side configuration handling to client-side direct API access
+  - Eliminated dependency on problematic HomebridgePluginUiServer inheritance methods
+  - Implemented minimal server that doesn't attempt to access configuration methods
+  - Used client-side Homebridge API methods (getPluginConfig, updatePluginConfig, savePluginConfig) directly
+  - Added comprehensive error handling with detailed console logging
+  - Implemented verification steps after save operations
+  - Fixed "this.getPluginConfig is not a function" error by bypassing server-side configuration handling
+
+### Improved
+- **Configuration Management**: Enhanced reliability and error handling
+  - Added detailed console logging throughout configuration process
+  - Implemented robust validation for all configuration values
+  - Enhanced schedule processing with proper data structure management
+  - Improved advanced settings handling with correct temperature unit conversions
+  - Added explicit verification of saved configuration
+  - Implemented multiple fallback mechanisms for error recovery
+  - Enhanced status reporting with more informative success/error messages
+
+### Technical
+- **Architecture Redesign**: Fundamental change to configuration handling approach
+  - Simplified server implementation to minimal functionality
+  - Shifted configuration responsibility entirely to client-side code
+  - Eliminated reliance on HomebridgePluginUiServer inheritance for configuration methods
+  - Improved separation of concerns between server and client code
+  - Used direct Homebridge client API methods instead of custom server endpoints
+  - Enhanced error boundaries with detailed console logging for troubleshooting
+  - Added defensive programming throughout the configuration process
+
+## 6.5.1 (2025-04-05)
 
 ### Fixed
 - **Complete Configuration Persistence Solution**: Thoroughly fixed issues with reading and writing configuration in the Custom UI
