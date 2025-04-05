@@ -42,15 +42,6 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
         return { success: false, error: 'API token is required' };
       }
       
-      // For demonstration, return mock data
-      return {
-        success: true,
-        devices: 2,
-        deviceInfo: [
-          { id: "sample-device-1", name: "Test SleepMe Bedroom" },
-          { id: "sample-device-2", name: "Test SleepMe Guest Room" }
-        ]
-      };
     });
     
     // Signal readiness
