@@ -1,4 +1,25 @@
 # Changelog
+
+## 6.3.0 (2025-04-10)
+
+### Fixed
+- **Custom UI Configuration Management**: Fixed server.js to properly use HomebridgePluginUiServer methods
+  - Removed all direct file system operations for better security and compatibility
+  - Used built-in `getPluginConfig()` method for configuration loading
+  - Implemented proper `updatePluginConfig()` and `savePluginConfig()` sequence
+  - Added configuration verification after save operations
+  - Enhanced error handling throughout configuration operations
+  - Improved schedule formatting with strict type conversion
+  - Optimized configuration structure management
+
+### Technical
+- **API Usage**: Enhanced adherence to Homebridge Plugin UI Utils best practices
+  - Maintained proper inheritance chain for HomebridgePluginUiServer
+  - Used built-in configuration methods instead of direct API access
+  - Preserved ES modules syntax for better Node.js compatibility
+  - Ensured correct initialization sequence (super first, ready last)
+  - Maintained proper IIFE pattern for server instantiation
+
 ## 6.2.0 (2025-04-05)
 
 ### Fixed

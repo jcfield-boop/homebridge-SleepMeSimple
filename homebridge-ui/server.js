@@ -27,7 +27,7 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     console.log('[SleepMeUI] Loading configuration');
     
     try {
-      // Get plugin configuration using the parent class method
+      // Get plugin configuration using the built-in method
       const pluginConfig = await this.getPluginConfig();
       console.log('[SleepMeUI] Successfully got plugin config');
       
