@@ -1,4 +1,31 @@
 # Changelog
+
+## 6.5.8 (2025-04-25)
+
+### Fixed
+- **Schedule Persistence Breakthrough**: Completely solved the issue of schedules not displaying in the UI
+  - Implemented dedicated ScheduleLoader module to safeguard schedule data throughout application lifecycle
+  - Added protected scope storage for schedules that can't be accidentally overwritten
+  - Implemented DOM observation to detect and recover from schedule rendering failures
+  - Added function wrapping to integrate with existing code without breaking changes
+  - Created robust schedule restoration system with multiple recovery mechanisms
+  - Fixed subtle race condition between configuration loading and schedule rendering
+  - Enhanced schedule data integrity with proper deep copying
+  - Added multiple verification points throughout the rendering process
+  - Implemented automatic schedule re-rendering when failures are detected
+  - Fixed "window.schedules is empty" issue with script scope isolation
+
+### Technical
+- **Enhanced Data Flow**: Improved data preservation between initialization stages
+  - Added module encapsulation with closure-based private data
+  - Enhanced function interception with proper context preservation
+  - Created non-destructive patching of core UI functions
+  - Implemented MutationObserver for real-time UI state monitoring
+  - Added multiple fallback mechanisms for error recovery
+  - Enhanced debugging with detailed console logging
+  - Fixed timing issues in asynchronous initialization sequence
+  - Improved error boundaries around critical operations
+  - Added explicit state tracking for schedule loading status
 ## 6.5.7 (2025-04-20)
 ### Fixed
 - **Critical Schedule Loading Fix**: Resolved issue where schedules were loaded from config.json but then lost before rendering

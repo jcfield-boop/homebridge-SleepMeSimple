@@ -36,7 +36,12 @@ window.loadConfig = async function() {
           console.log(`Loading ${config.schedules.length} schedules from config`);
           
           // Create a deep copy of schedules to avoid reference issues
-          window.schedules = JSON.parse(JSON.stringify(config.schedules || []));
+          const schedules = JSON.parse(JSON.stringify(config.schedules || []));
+          window.schedules = schedules;
+          if (typeof window.ScheduleLoader !== 'undefined' && 
+              typeof window.ScheduleLoader.store === 'function') {
+            window.ScheduleLoader.store(schedules);
+          }
           
           console.log('Schedules loaded into memory:', window.schedules);
           
