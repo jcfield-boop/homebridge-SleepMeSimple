@@ -71,7 +71,16 @@ window.loadConfig = async function() {
         } else {
           console.log('Schedules not enabled or no schedules in config');
         }
-        
+         // Clear the loading message
+    if (typeof NotificationManager !== 'undefined') {
+      // Hide the status message after a short delay
+      setTimeout(() => {
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+          statusElement.classList.add('hidden');
+        }
+      }, 500);
+    }
         return config;
       } else {
         console.warn('Platform config not found, using default config');
