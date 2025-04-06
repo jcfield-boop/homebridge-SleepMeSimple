@@ -1,5 +1,27 @@
 # Changelog
+## 6.6.1 (2025-04-14)
 
+### Fixed
+- **UI Conditional Elements**: Fixed issue where Day selection wasn't properly hidden by default
+  - Enhanced initialization of conditional UI elements with both class and style manipulation
+  - Added robust event listeners for visibility toggle based on schedule type
+  - Added explicit DOM state verification to ensure elements appear/disappear correctly
+  - Fixed initial state handling on page load
+
+- **Template Preview Functionality**: Repaired non-functional "Preview Schedules" button
+  - Completely rewrote template preview generation for better reliability
+  - Added proper container detection and element creation logic
+  - Enhanced template data access for consistent previewing
+  - Improved button generation with direct event binding
+  - Added better error handling and user feedback for preview operations
+  - Fixed temperature unit conversion in schedule previews
+
+### Technical
+- **DOM Manipulation**: Improved element state management with dual class/style approach
+  - Enhanced visibility toggling with both class manipulation and explicit style properties
+  - Added debugging information for state changes throughout UI interactions
+  - Improved error boundaries to prevent cascading failures in UI components
+  - Enhanced logging for easier troubleshooting of UI element states
 ## 6.6.0 (2025-04-12)
 
 ### Added

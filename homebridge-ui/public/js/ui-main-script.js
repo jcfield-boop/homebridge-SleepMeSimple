@@ -38,36 +38,45 @@
     initializeCollapsibleSections();
   }, 1000); // 1 second delay
     });
-    /**
- * Initialize conditional UI elements based on current selections
- */
-function initializeConditionalElements() {
-  console.log('Initializing conditional UI elements');
-  
-  // Initialize day select visibility based on current schedule type
-  const scheduleTypeSelect = document.getElementById('scheduleType');
-  const daySelectContainer = document.getElementById('daySelectContainer');
-  
-  if (scheduleTypeSelect && daySelectContainer) {
-    // Ensure it's hidden by default
-    daySelectContainer.classList.add('hidden');
-    
-    // Only show if "Specific Day" is currently selected
-    if (scheduleTypeSelect.value === 'Specific Day') {
-      daySelectContainer.classList.remove('hidden');
+    function initializeConditionalElements() {
+      console.log('Initializing conditional UI elements');
+      
+      // Initialize day select visibility based on current schedule type
+      const scheduleTypeSelect = document.getElementById('scheduleType');
+      const daySelectContainer = document.getElementById('daySelectContainer');
+      
+      if (scheduleTypeSelect && daySelectContainer) {
+        // Ensure it's hidden by default with both class and style
+        daySelectContainer.classList.add('hidden');
+        daySelectContainer.style.display = 'none';
+        
+        // Add event listener to handle changes
+        scheduleTypeSelect.addEventListener('change', function() {
+          const isSpecificDay = this.value === 'Specific Day';
+          daySelectContainer.classList.toggle('hidden', !isSpecificDay);
+          daySelectContainer.style.display = isSpecificDay ? 'block' : 'none';
+        });
+        
+        // Trigger initial state
+        const isSpecificDay = scheduleTypeSelect.value === 'Specific Day';
+        daySelectContainer.classList.toggle('hidden', !isSpecificDay);
+        daySelectContainer.style.display = isSpecificDay ? 'block' : 'none';
+      }
+      
+      // Initialize warm hug info visibility based on checkbox
+      const warmHugCheckbox = document.getElementById('warmHugEnabled');
+      const warmHugInfo = document.getElementById('warmHugInfo');
+      
+      if (warmHugCheckbox && warmHugInfo) {
+        // Ensure it's hidden by default
+        warmHugInfo.classList.add('hidden');
+        
+        // Add event listener
+        warmHugCheckbox.addEventListener('change', function() {
+          warmHugInfo.classList.toggle('hidden', !this.checked);
+        });
+      }
     }
-  }
-  
-  // Initialize warm hug info visibility based on checkbox
-  const warmHugCheckbox = document.getElementById('warmHugEnabled');
-  
-  if (warmHugCheckbox && warmHugInfo) {
-    // Ensure it's hidden by default unless checkbox is checked
-    warmHugCheckbox.addEventListener('change', function() {
-      warmHugInfo.classList.toggle('hidden', !this.checked);
-    });
-  }
-}
     /**
      * Initialize tab navigation
      */
