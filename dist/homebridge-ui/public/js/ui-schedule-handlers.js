@@ -329,194 +329,231 @@
     }
     
     /**
-     * Render the schedule list in the UI
-     * Groups schedules by type and displays them in a user-friendly format
-     */
-    window.renderScheduleList = function() {
-      const scheduleList = document.getElementById('scheduleList');
-      const unit = document.getElementById('unit');
+ * Get sleep phase category for a time
+ * Organizes times into sleep cycle phases rather than strict chronology
+ * @param {string} time - Time in 24-hour format (HH:MM)
+ * @returns {number} Phase category value for sorting (lower = earlier in sleep cycle)
+ */
+function getSleepPhaseOrder(time) {
+  const hourMinutes = time.split(':');
+  const hour = parseInt(hourMinutes[0], 10);
+  
+  // Define sleep cycle phases with associated sort values
+  if (hour >= 20 && hour <= 23) {
+    // Evening/Bedtime phase (8 PM - 11:59 PM): Sort first
+    return 0;
+  } else if (hour >= 0 && hour < 6) {
+    // Overnight phase (12 AM - 5:59 AM): Sort second
+    return 1;
+  } else if (hour >= 6 && hour < 10) {
+    // Morning/Wake-up phase (6 AM - 9:59 AM): Sort third
+    return 2;
+  } else {
+    // Other times: Sort last
+    return 3;
+  }
+}
+
+/**
+ * Render the schedule list in the UI
+ * Groups schedules by type and displays them in a user-friendly format
+ * Uses sleep cycle ordering instead of strict chronological ordering
+ */
+window.renderScheduleList = function() {
+  const scheduleList = document.getElementById('scheduleList');
+  const unit = document.getElementById('unit');
+  
+  if (!scheduleList || !unit) {
+    console.warn('Schedule list element or unit select not found');
+    return;
+  }
+  
+  // Clear the list
+  scheduleList.innerHTML = '';
+  
+  // Check if there are any schedules
+  if (!window.schedules || window.schedules.length === 0) {
+    scheduleList.innerHTML = '<p>No schedules configured.</p>';
+    return;
+  }
+  
+  // Group schedules by type
+  const groupedSchedules = {};
+  window.schedules.forEach((schedule, index) => {
+    if (!groupedSchedules[schedule.type]) {
+      groupedSchedules[schedule.type] = [];
+    }
+    groupedSchedules[schedule.type].push({...schedule, originalIndex: index});
+  });
+  
+  // Define schedule phases for color coding
+  const phases = {
+    COOL_DOWN: { name: 'Cool Down', class: 'phase-cooldown' },
+    DEEP_SLEEP: { name: 'Deep Sleep', class: 'phase-deep' },
+    REM: { name: 'REM Support', class: 'phase-rem' },
+    WAKE_UP: { name: 'Wake-up', class: 'phase-wakeup' }
+  };
+  
+  // Helper function to determine schedule phase
+  function getSchedulePhase(schedule) {
+    const desc = (schedule.description || '').toLowerCase();
+    const temp = schedule.temperature;
+    const scheduleUnit = schedule.unit || unit.value;
+    
+    // Convert to Celsius for comparison if needed
+    let tempC = temp;
+    if (scheduleUnit === 'F' && typeof convertFtoC === 'function') {
+      tempC = convertFtoC(temp);
+    }
+    
+    // Determine phase based on description and temperature
+    if (desc.includes('wake') || desc.includes('hug') || tempC > 25) {
+      return phases.WAKE_UP;
+    } else if (desc.includes('rem') || (tempC >= 22 && tempC <= 25)) {
+      return phases.REM;
+    } else if (desc.includes('deep') || tempC < 20) {
+      return phases.DEEP_SLEEP;
+    } else {
+      return phases.COOL_DOWN;
+    }
+  }
+  
+  // Process each group of schedules
+  Object.keys(groupedSchedules).forEach(type => {
+    // Create group container
+    const groupContainer = document.createElement('div');
+    groupContainer.className = 'schedule-group';
+    
+    // Add group title
+    const groupTitle = document.createElement('div');
+    groupTitle.className = 'schedule-group-title';
+    groupTitle.textContent = type;
+    groupContainer.appendChild(groupTitle);
+    
+    // Sort schedules by sleep phase rather than strict time
+    const sortedSchedules = [...groupedSchedules[type]].sort((a, b) => {
+      // First sort by sleep phase category
+      const phaseA = getSleepPhaseOrder(a.time || '00:00');
+      const phaseB = getSleepPhaseOrder(b.time || '00:00');
       
-      if (!scheduleList || !unit) {
-        console.warn('Schedule list element or unit select not found');
-        return;
+      if (phaseA !== phaseB) {
+        return phaseA - phaseB;
       }
       
-      // Clear the list
-      scheduleList.innerHTML = '';
+      // Within the same phase, sort by time
+      return (a.time || '').localeCompare(b.time || '');
+    });
+    
+    // Create elements for each schedule
+    sortedSchedules.forEach(schedule => {
+      // Rest of your existing code for creating schedule items...
+      const scheduleItem = document.createElement('div');
+      scheduleItem.className = 'schedule-item';
       
-      // Check if there are any schedules
-      if (!window.schedules || window.schedules.length === 0) {
-        scheduleList.innerHTML = '<p>No schedules configured.</p>';
-        return;
+      // Add template class if from a template
+      if (schedule.isFromTemplate) {
+        scheduleItem.classList.add('template-schedule');
       }
       
-      // Group schedules by type
-      const groupedSchedules = {};
-      window.schedules.forEach((schedule, index) => {
-        if (!groupedSchedules[schedule.type]) {
-          groupedSchedules[schedule.type] = [];
+      // Get schedule phase
+      const phase = getSchedulePhase(schedule);
+      
+      // Build display info
+      let displayInfo = '';
+      
+      // Add day for specific day schedules
+      if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        if (schedule.day >= 0 && schedule.day < days.length) {
+          displayInfo += `${days[schedule.day]} `;
         }
-        groupedSchedules[schedule.type].push({...schedule, originalIndex: index});
+      }
+      
+      // Handle temperature display with proper unit conversion
+      let displayTemp = schedule.temperature;
+      const currentUnit = unit.value;
+      
+      if (schedule.unit && schedule.unit !== currentUnit) {
+        if (schedule.unit === 'C' && currentUnit === 'F' && typeof convertCtoF === 'function') {
+          displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
+        } else if (schedule.unit === 'F' && currentUnit === 'C' && typeof convertFtoC === 'function') {
+          displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
+        }
+      }
+      
+      // Add time and temperature
+      displayInfo += `${schedule.time || '00:00'}: ${displayTemp}°${currentUnit}`;
+      
+      // Create schedule item elements
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'schedule-item-info';
+      
+      // Time and temperature
+      const timeTemp = document.createElement('div');
+      timeTemp.className = 'schedule-time';
+      timeTemp.textContent = displayInfo;
+      infoDiv.appendChild(timeTemp);
+      
+      // Phase label
+      const phaseLabel = document.createElement('span');
+      phaseLabel.className = `schedule-phase ${phase.class}`;
+      phaseLabel.textContent = schedule.description || phase.name;
+      
+      // Add template badge if applicable
+      if (schedule.isFromTemplate) {
+        const templateBadge = document.createElement('span');
+        templateBadge.className = 'template-badge';
+        templateBadge.title = `From template: ${schedule.templateSource || 'unknown'}`;
+        templateBadge.textContent = 'T';
+        phaseLabel.appendChild(templateBadge);
+      }
+      
+      infoDiv.appendChild(phaseLabel);
+      
+      // Action buttons
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'schedule-item-actions';
+      
+      // Edit button
+      const editBtn = document.createElement('button');
+      editBtn.className = 'edit';
+      editBtn.textContent = 'Edit';
+      editBtn.dataset.index = schedule.originalIndex;
+      editBtn.addEventListener('click', function() {
+        const index = parseInt(this.dataset.index, 10);
+        if (!isNaN(index) && typeof window.editSchedule === 'function') {
+          window.editSchedule(index);
+        }
       });
       
-      // Define schedule phases for color coding
-      const phases = {
-        COOL_DOWN: { name: 'Cool Down', class: 'phase-cooldown' },
-        DEEP_SLEEP: { name: 'Deep Sleep', class: 'phase-deep' },
-        REM: { name: 'REM Support', class: 'phase-rem' },
-        WAKE_UP: { name: 'Wake-up', class: 'phase-wakeup' }
-      };
-      
-      // Helper function to determine schedule phase
-      function getSchedulePhase(schedule) {
-        const desc = (schedule.description || '').toLowerCase();
-        const temp = schedule.temperature;
-        const scheduleUnit = schedule.unit || unit.value;
-        
-        // Convert to Celsius for comparison if needed
-        let tempC = temp;
-        if (scheduleUnit === 'F' && typeof convertFtoC === 'function') {
-          tempC = convertFtoC(temp);
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'danger';
+      removeBtn.textContent = 'Remove';
+      removeBtn.dataset.index = schedule.originalIndex;
+      removeBtn.addEventListener('click', function() {
+        const index = parseInt(this.dataset.index, 10);
+        if (!isNaN(index) && typeof window.removeSchedule === 'function') {
+          window.removeSchedule(index);
         }
-        
-        // Determine phase based on description and temperature
-        if (desc.includes('wake') || desc.includes('hug') || tempC > 25) {
-          return phases.WAKE_UP;
-        } else if (desc.includes('rem') || (tempC >= 22 && tempC <= 25)) {
-          return phases.REM;
-        } else if (desc.includes('deep') || tempC < 20) {
-          return phases.DEEP_SLEEP;
-        } else {
-          return phases.COOL_DOWN;
-        }
-      }
-      
-      // Process each group of schedules
-      Object.keys(groupedSchedules).forEach(type => {
-        // Create group container
-        const groupContainer = document.createElement('div');
-        groupContainer.className = 'schedule-group';
-        
-        // Add group title
-        const groupTitle = document.createElement('div');
-        groupTitle.className = 'schedule-group-title';
-        groupTitle.textContent = type;
-        groupContainer.appendChild(groupTitle);
-        
-        // Sort schedules by time
-        const sortedSchedules = [...groupedSchedules[type]].sort((a, b) => {
-          return (a.time || '').localeCompare(b.time || '');
-        });
-        
-        // Create elements for each schedule
-        sortedSchedules.forEach(schedule => {
-          const scheduleItem = document.createElement('div');
-          scheduleItem.className = 'schedule-item';
-          
-          // Add template class if from a template
-          if (schedule.isFromTemplate) {
-            scheduleItem.classList.add('template-schedule');
-          }
-          
-          // Get schedule phase
-          const phase = getSchedulePhase(schedule);
-          
-          // Build display info
-          let displayInfo = '';
-          
-          // Add day for specific day schedules
-          if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            if (schedule.day >= 0 && schedule.day < days.length) {
-              displayInfo += `${days[schedule.day]} `;
-            }
-          }
-          
-          // Handle temperature display with proper unit conversion
-          let displayTemp = schedule.temperature;
-          const currentUnit = unit.value;
-          
-          if (schedule.unit && schedule.unit !== currentUnit) {
-            if (schedule.unit === 'C' && currentUnit === 'F' && typeof convertCtoF === 'function') {
-              displayTemp = Math.round(convertCtoF(displayTemp) * 10) / 10;
-            } else if (schedule.unit === 'F' && currentUnit === 'C' && typeof convertFtoC === 'function') {
-              displayTemp = Math.round(convertFtoC(displayTemp) * 10) / 10;
-            }
-          }
-          
-          // Add time and temperature
-          displayInfo += `${schedule.time || '00:00'}: ${displayTemp}°${currentUnit}`;
-          
-          // Create schedule item elements
-          const infoDiv = document.createElement('div');
-          infoDiv.className = 'schedule-item-info';
-          
-          // Time and temperature
-          const timeTemp = document.createElement('div');
-          timeTemp.className = 'schedule-time';
-          timeTemp.textContent = displayInfo;
-          infoDiv.appendChild(timeTemp);
-          
-          // Phase label
-          const phaseLabel = document.createElement('span');
-          phaseLabel.className = `schedule-phase ${phase.class}`;
-          phaseLabel.textContent = schedule.description || phase.name;
-          
-          // Add template badge if applicable
-          if (schedule.isFromTemplate) {
-            const templateBadge = document.createElement('span');
-            templateBadge.className = 'template-badge';
-            templateBadge.title = `From template: ${schedule.templateSource || 'unknown'}`;
-            templateBadge.textContent = 'T';
-            phaseLabel.appendChild(templateBadge);
-          }
-          
-          infoDiv.appendChild(phaseLabel);
-          
-          // Action buttons
-          const actionsDiv = document.createElement('div');
-          actionsDiv.className = 'schedule-item-actions';
-          
-          // Edit button
-          const editBtn = document.createElement('button');
-          editBtn.className = 'edit';
-          editBtn.textContent = 'Edit';
-          editBtn.dataset.index = schedule.originalIndex;
-          editBtn.addEventListener('click', function() {
-            const index = parseInt(this.dataset.index, 10);
-            if (!isNaN(index) && typeof window.editSchedule === 'function') {
-              window.editSchedule(index);
-            }
-          });
-          
-          // Remove button
-          const removeBtn = document.createElement('button');
-          removeBtn.className = 'danger';
-          removeBtn.textContent = 'Remove';
-          removeBtn.dataset.index = schedule.originalIndex;
-          removeBtn.addEventListener('click', function() {
-            const index = parseInt(this.dataset.index, 10);
-            if (!isNaN(index) && typeof window.removeSchedule === 'function') {
-              window.removeSchedule(index);
-            }
-          });
-          
-          // Add buttons to actions
-          actionsDiv.appendChild(editBtn);
-          actionsDiv.appendChild(removeBtn);
-          
-          // Add elements to schedule item
-          scheduleItem.appendChild(infoDiv);
-          scheduleItem.appendChild(actionsDiv);
-          
-          // Add to group container
-          groupContainer.appendChild(scheduleItem);
-        });
-        
-        // Add group to schedule list
-        scheduleList.appendChild(groupContainer);
       });
-    };
+      
+      // Add buttons to actions
+      actionsDiv.appendChild(editBtn);
+      actionsDiv.appendChild(removeBtn);
+      
+      // Add elements to schedule item
+      scheduleItem.appendChild(infoDiv);
+      scheduleItem.appendChild(actionsDiv);
+      
+      // Add to group container
+      groupContainer.appendChild(scheduleItem);
+    });
+    
+    // Add group to schedule list
+    scheduleList.appendChild(groupContainer);
+  });
+};
     
     /**
      * Apply selected schedule templates
