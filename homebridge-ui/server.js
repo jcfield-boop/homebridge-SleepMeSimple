@@ -1,64 +1,83 @@
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
-
-class SleepMeUiServer extends HomebridgePluginUiServer {
-  constructor() {
-    super();
+// Update the device/test handler in server.js
+this.onRequest('/device/test', async (payload) => {
+  console.log('[SleepMeUI] /device/test handler called with token:', payload?.apiToken ? 'Present' : 'Missing');
+  
+  const apiToken = payload?.apiToken;
+  if (!apiToken) {
+    return { success: false, error: 'API token is required' };
+  }
+  
+  try {
+    // Make a request to the SleepMe API to test the connection
+    const axios = require('axios');
     
-    console.log('[SleepMeUI] Starting server initialization');
-    
-    // Register request handlers using anonymous functions
-    this.onRequest('/config/load', async () => {
-      try {
-        console.log('[SleepMeUI] /config/load handler called');
-        
-        // Directly use the UI's preferred approach instead
-        // Just return a minimal success response so client-side can handle it
-        return { 
-          success: true,
-          useClientSide: true
-        };
-      } catch (error) {
-        console.error('[SleepMeUI] Error in /config/load:', error);
-        return { success: false, error: error.message };
-      }
+    // Create a test request to fetch devices from the SleepMe API
+    const response = await axios({
+      method: 'GET',
+      url: 'https://api.developer.sleep.me/v1/devices',
+      headers: {
+        'Authorization': `Bearer ${apiToken}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000 // 10 second timeout
     });
     
-    this.onRequest('/config/save', async (payload) => {
-      try {
-        console.log('[SleepMeUI] /config/save handler called');
-        // Again, just return success so client handles it
-        return { success: true, useClientSide: true };
-      } catch (error) {
-        console.error('[SleepMeUI] Error in /config/save:', error);
-        return { success: false, error: error.message };
-      }
-    });
-    
-    this.onRequest('/device/test', async (payload) => {
-      console.log('[SleepMeUI] /device/test handler called with token:', payload?.apiToken ? 'Present' : 'Missing');
+    // Check if the request was successful and contains devices
+    if (response.status === 200) {
+      const devices = Array.isArray(response.data) ? response.data : 
+                     (response.data.devices ? response.data.devices : []);
       
-      const apiToken = payload?.apiToken;
-      if (!apiToken) {
-        return { success: false, error: 'API token is required' };
-      }
-      
-      // For demonstration, return mock data
       return {
         success: true,
-        devices: 1,
-        deviceInfo: [
-          { id: "sample-device-1", name: "Test SleepMe Bedroom" },
-        ]
+        devices: devices.length,
+        deviceInfo: devices.map(device => ({
+          id: device.id || 'unknown',
+          name: device.name || `Device ${device.id}`
+        }))
       };
-    });
+    } else {
+      return {
+        success: false,
+        error: `API returned status ${response.status}`,
+        details: 'The API connection was successful, but no devices were returned.'
+      };
+    }
+  } catch (error) {
+    console.error('[SleepMeUI] API test error:', error.message);
     
-    // Signal readiness
-    this.ready();
-    console.log('[SleepMeUI] Server initialization complete');
+    // Format a user-friendly error message based on the error
+    let errorMessage = 'Connection to SleepMe API failed';
+    let errorDetails = error.message;
+    
+    if (error.response) {
+      // The request was made and the server responded with a status code outside of 2xx
+      errorMessage = `API error: ${error.response.status}`;
+      
+      if (error.response.status === 401) {
+        errorDetails = 'Authentication failed. The API token appears to be invalid.';
+      } else if (error.response.status === 403) {
+        errorDetails = 'Access forbidden. Your API token might not have the required permissions.';
+      } else if (error.response.status === 429) {
+        errorDetails = 'Rate limit exceeded. Please try again later.';
+      }
+      
+      // Try to extract more details from the response if available
+      if (error.response.data) {
+        const data = error.response.data;
+        if (typeof data === 'object' && data.message) {
+          errorDetails += ` Server message: ${data.message}`;
+        }
+      }
+    } else if (error.request) {
+      // The request was made but no response was received
+      errorMessage = 'No response from SleepMe API';
+      errorDetails = 'The request was made but the server did not respond. Please check your network connection.';
+    }
+    
+    return {
+      success: false,
+      error: errorMessage,
+      details: errorDetails
+    };
   }
-}
-
-// Create an instance
-(() => {
-  return new SleepMeUiServer();
-})();
+});

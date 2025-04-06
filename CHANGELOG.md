@@ -1,5 +1,35 @@
 # Changelog
 
+## 6.5.10 (2025-04-28)
+
+### Fixed
+- **Real API Testing**: Completely replaced mock connection testing with actual SleepMe API validation
+  - Implemented proper API call to validate user's token against the real SleepMe API endpoint
+  - Added comprehensive response parsing with device detection and enumeration
+  - Enhanced error handling with specific messages for different error types (401, 403, 429)
+  - Implemented timeout protection to prevent UI hanging if API is unresponsive
+  - Added detailed error reporting with server-side message extraction when available
+  - Created proper loading indicator management during API testing
+  - Fixed response formatting to show actual connected devices when successful
+
+### Improved
+- **Error Feedback**: Enhanced user feedback for connection testing
+  - Added more descriptive error messages based on HTTP status codes
+  - Improved error details display for better troubleshooting guidance
+  - Added network error detection with friendly explanations
+  - Enhanced timeout handling with clear user feedback
+  - Implemented automatic spinner management throughout the test process
+  - Added detailed console logging for better debugging capabilities
+
+### Technical
+- **API Integration**: Better handling of SleepMe API communication
+  - Added proper authentication header formatting
+  - Enhanced response parsing with support for different API response formats
+  - Implemented consistent error structure between server and client
+  - Added timeout protection at both server and client levels
+  - Improved device information extraction and formatting
+  - Created more resilient promise handling with Promise.race for timeouts
+
 ## 6.5.8 (2025-04-25)
 
 ### Fixed

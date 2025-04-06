@@ -1585,55 +1585,89 @@ async function waitForHomebridgeReady() {
 }
 
 /**
- * Test connection to the SleepMe API
- * Enhanced with better error handling
+ * Test connection to the SleepMe API with improved error handling
  * @returns {Promise<void>}
  */
 async function testConnection() {
     try {
-        const apiTokenInput = document.getElementById('apiToken');
-        if (!apiTokenInput) {
-            console.error('API token input field not found');
-            return;
-        }
-        
-        const apiToken = apiTokenInput.value.trim();
-        if (!apiToken) {
-            // Use NotificationManager instead of direct DOM manipulation
-            NotificationManager.error('Please enter your API token', 'Validation Error');
-            return;
-        }
-        
-        console.log('Testing API connection...'); 
-        
-        if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
-            console.error('Homebridge API not available for API test');
-            return;
-        }
-        
-        // Make request to server
-        const response = await homebridge.request('/device/test', { apiToken });
-                
-        // Use NotificationManager instead of direct DOM manipulation
-        if (response.success) {
-            NotificationManager.success(
-                `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`,
-                'API Test'
-            );
-        } else {
-            NotificationManager.error(
-                response.error || 'Unknown error testing connection',
-                'API Test Failed'
-            );
-        }
-    } catch (error) {
-        console.error('Error testing connection:', error);
-        
-        // Use NotificationManager for error reporting
+      const apiTokenInput = document.getElementById('apiToken');
+      if (!apiTokenInput) {
+        console.error('API token input field not found');
+        NotificationManager.error('UI error: API token field not found', 'Test Error');
+        return;
+      }
+      
+      const apiToken = apiTokenInput.value.trim();
+      if (!apiToken) {
+        NotificationManager.error('Please enter your API token', 'Validation Error');
+        return;
+      }
+      
+      console.log('Testing API connection...'); 
+      NotificationManager.info('Testing connection to SleepMe API...', 'Please Wait');
+      
+      // Show loading indicator during the test
+      if (typeof homebridge !== 'undefined' && typeof homebridge.showSpinner === 'function') {
+        homebridge.showSpinner();
+      }
+      
+      if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
+        console.error('Homebridge API not available for API test');
         NotificationManager.error(
-            `Error testing connection: ${error.message}`,
-            'API Test Error'
+          'Homebridge API not available. Please reload the page.',
+          'Test Error'
         );
+        return;
+      }
+      
+      // Make request to server with timeout handling
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timed out')), 15000)
+      );
+      
+      const responsePromise = homebridge.request('/device/test', { apiToken });
+      
+      // Race the response against the timeout
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      
+      // Hide loading indicator
+      if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+        homebridge.hideSpinner();
+      }
+      
+      if (response.success) {
+        // Format device information if available
+        const deviceList = response.deviceInfo && response.deviceInfo.length > 0
+          ? response.deviceInfo.map(d => `${d.name} (${d.id})`).join(', ')
+          : 'No device details available';
+        
+        NotificationManager.success(
+          `Connection successful! Found ${response.devices} device(s): ${deviceList}`,
+          'API Test'
+        );
+      } else {
+        // Enhanced error reporting with details if available
+        const errorDetails = response.details 
+          ? `\n\nDetails: ${response.details}` 
+          : '';
+        
+        NotificationManager.error(
+          `${response.error || 'Unknown error testing connection'}${errorDetails}`,
+          'API Test Failed'
+        );
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      
+      // Hide loading indicator in case of error
+      if (typeof homebridge !== 'undefined' && typeof homebridge.hideSpinner === 'function') {
+        homebridge.hideSpinner();
+      }
+      
+      NotificationManager.error(
+        `Error testing connection: ${error.message}`,
+        'API Test Error'
+      );
     }
   }
 /**
