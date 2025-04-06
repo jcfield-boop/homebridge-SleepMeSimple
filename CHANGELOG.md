@@ -1,4 +1,37 @@
 # Changelog
+
+## 6.5.14 (2025-05-05)
+
+### Fixed
+- **UI Issues**: Resolved persistent UI status message and conditional display problems
+  - Fixed "Please Wait: Loading configuration..." message that remained on screen
+  - Enhanced day selector visibility to properly hide/show based on selection
+  - Improved initialization sequence for conditional UI elements
+  - Added additional error handling for UI state management
+  - Enhanced status message cleanup mechanism
+
+### Improved
+- **Sleep Cycle Sorting**: Enhanced schedule display with natural sleep cycle ordering
+  - Added intelligent sorting based on sleep phases rather than strict chronological ordering
+  - Organized schedules into bedtime (8PM-midnight), overnight (midnight-6AM), and morning (6AM-10AM) phases
+  - Maintained chronological sorting within each sleep phase
+  - Improved user experience by showing schedules in natural progression regardless of 24-hour clock values
+  - Enhanced visual grouping of related sleep cycle events
+  - Preserved all existing schedule display functionality including template badges and phase coloring
+
+### Changed
+- **UI Simplification**: Removed redundant UI elements for a cleaner interface
+  - Removed Test Connection button from main configuration form
+  - Removed Save Configuration button as changes are automatically saved
+  - Simplified schedule management UI with automatic saving
+
+### Fixed
+- **Terminology Consistency**: Renamed "Warm Hug" to "Warm Hug Wake Up" for clarity
+  - Updated all instances in schedule type dropdown
+  - Modified template definitions to use consistent naming
+  - Updated schedule rendering and UI display code
+  - Enhanced schedule form to use the more descriptive name
+  - Maintained all functionality while improving terminology clarity
 ## 6.5.13 (2025-05-03)
 
 ### Improved
