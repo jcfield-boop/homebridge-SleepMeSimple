@@ -328,7 +328,7 @@
       modal.style.display = 'flex';
     }
     
-    /**
+   /**
  * Get sleep phase category for a time
  * Organizes times into sleep cycle phases rather than strict chronology
  * @param {string} time - Time in 24-hour format (HH:MM)
@@ -446,7 +446,6 @@ window.renderScheduleList = function() {
     
     // Create elements for each schedule
     sortedSchedules.forEach(schedule => {
-      // Rest of your existing code for creating schedule items...
       const scheduleItem = document.createElement('div');
       scheduleItem.className = 'schedule-item';
       
