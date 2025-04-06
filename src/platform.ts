@@ -153,22 +153,43 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
             if (deviceIds.length > 0) {
               this.log.info(`Applying schedules to ${deviceIds.length} discovered devices`);
               
-              // Add schedules to each device if configured
-              if (Array.isArray(config.schedules) && config.schedules.length > 0) {
-                for (const deviceId of deviceIds) {
-                  const schedules: TemperatureSchedule[] = config.schedules.map((scheduleConfig: any) => ({
-                    type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
-                    day: scheduleConfig.type === 'Specific Day' ? 
-                      ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day) : undefined,
-                    time: scheduleConfig.time,
-                    temperature: scheduleConfig.temperature,
-                    description: scheduleConfig.description
-                  }));
-                  
-                  this._scheduleManager.setSchedules(deviceId, schedules);
-                  this.log.info(`Applied ${schedules.length} schedules to device ${deviceId}`);
-                }
-              } else {
+// In platform.ts - MODIFIED CODE
+// Inside the didFinishLaunching callback
+if (Array.isArray(config.schedules) && config.schedules.length > 0) {
+  for (const deviceId of deviceIds) {
+    const schedules: TemperatureSchedule[] = [];
+    
+    for (const scheduleConfig of config.schedules) {
+      // Create base schedule with required properties
+      const schedule: TemperatureSchedule = {
+        type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
+        time: scheduleConfig.time,
+        temperature: scheduleConfig.temperature
+      };
+      
+      // Add day for specific day schedules
+      if (scheduleConfig.type === 'Specific Day' && scheduleConfig.day !== undefined) {
+        schedule.day = ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day);
+      }
+      
+      // Add description if present
+      if (scheduleConfig.description) {
+        schedule.description = scheduleConfig.description;
+      }
+      
+      // Add warm hug flag if present
+      if (scheduleConfig.isWarmHug === true) {
+        schedule.isWarmHug = true;
+      }
+      
+      schedules.push(schedule);
+    }
+    
+    this._scheduleManager.setSchedules(deviceId, schedules);
+    this.log.info(`Applied ${schedules.length} schedules to device ${deviceId}`);
+  }
+}
+              else {
                 this.log.warn('No schedules defined in configuration');
               }
             } else {

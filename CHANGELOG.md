@@ -1,5 +1,35 @@
 # Changelog
 
+## 6.6.0 (2025-04-12)
+
+### Added
+- **Flexible Warm Hug Feature**: Transformed "Warm Hug Wake Up" from a schedule type to a checkbox option
+  - Added "Make this a Warm Hug Wake Up" checkbox that can be applied to any schedule type
+  - Enhanced schedule execution logic to check for isWarmHug flag instead of schedule type
+  - Added visual indicators in the UI to show which schedules use the warm hug feature
+  - Improved schedule management with more customization options
+
+### Changed
+- **Schedule Data Structure**: Updated TemperatureSchedule interface to use isWarmHug flag
+  - Removed ScheduleType.WARM_HUG from the enum
+  - Modified schedule processing to support the new flag-based system
+  - Simplified schedule type handling in the backend
+  - Ensured consistent naming with "Warm Hug Wake Up" throughout the UI
+
+### Fixed
+- **UI Element Visibility**: Fixed issue where Day selection field was not properly hidden by default
+  - Improved initialization sequence for conditional UI elements
+  - Added proper state handling for the day selection field
+  - Ensured warm hug info is shown only when the warm hug feature is enabled
+  - Enhanced error handling for UI element initialization
+
+### Technical Improvements
+- **Type Safety**: Enhanced TypeScript interfaces for better type checking
+  - Made description field properly optional in TemperatureSchedule interface
+  - Improved schedule parsing from configuration
+  - Added proper typing for all schedule properties
+  - Fixed ESLint warnings through proper interface definitions
+
 ## 6.5.14 (2025-05-05)
 
 ### Fixed

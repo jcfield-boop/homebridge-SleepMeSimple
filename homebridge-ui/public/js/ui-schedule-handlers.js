@@ -61,10 +61,12 @@
           schedule.day = parseInt(scheduleDay.value, 10);
         }
         
-        // Add description for warm hug
-        if (type === 'Warm Hug') {
-          schedule.description = 'Warm Hug Wake-up';
-        }
+       // Add warm hug flag if enabled
+const warmHugCheckbox = document.getElementById('warmHugEnabled');
+if (warmHugCheckbox && warmHugCheckbox.checked) {
+  schedule.isWarmHug = true;
+  schedule.description = 'Warm Hug Wake Up';
+}
         
         // Handle edit mode
         if (window.isEditing && window.editingScheduleIndex >= 0 && 
@@ -207,11 +209,15 @@
       // Set time
       scheduleTime.value = schedule.time || '00:00';
       
-      // Show/hide warm hug info
-      if (warmHugInfo) {
-        warmHugInfo.classList.toggle('hidden', schedule.type !== 'Warm Hug');
-      }
-      
+  // Set warm hug checkbox
+  const warmHugCheckbox = document.getElementById('warmHugEnabled');
+  if (warmHugCheckbox) {
+    warmHugCheckbox.checked = schedule.isWarmHug === true;
+  }
+        // Show warm hug info if it's a warm hug schedule
+  if (warmHugInfo) {
+    warmHugInfo.classList.toggle('hidden', !schedule.isWarmHug);
+  }
       // Convert temperature if needed
       let displayTemp = schedule.temperature;
       const currentUnit = unit.value;
@@ -399,13 +405,17 @@ window.renderScheduleList = function() {
     const desc = (schedule.description || '').toLowerCase();
     const temp = schedule.temperature;
     const scheduleUnit = schedule.unit || unit.value;
+    const isWarmHug = schedule.isWarmHug === true;
     
     // Convert to Celsius for comparison if needed
     let tempC = temp;
     if (scheduleUnit === 'F' && typeof convertFtoC === 'function') {
       tempC = convertFtoC(temp);
     }
-    
+      // If it's marked as warm hug, return wake-up phase regardless of temperature
+  if (isWarmHug) {
+    return phases.WAKE_UP;
+  }
     // Determine phase based on description and temperature
     if (desc.includes('wake') || desc.includes('hug') || tempC > 25) {
       return phases.WAKE_UP;
@@ -454,6 +464,13 @@ window.renderScheduleList = function() {
         scheduleItem.classList.add('template-schedule');
       }
       
+      if (schedule.isWarmHug) {
+        const phaseLabel = document.createElement('span');
+        phaseLabel.className = `schedule-phase ${phases.WAKE_UP.class}`;
+        phaseLabel.textContent = "Warm Hug Wake Up";
+        infoDiv.appendChild(phaseLabel);
+      }
+
       // Get schedule phase
       const phase = getSchedulePhase(schedule);
       
@@ -1070,10 +1087,10 @@ window.templates = {
     name: "Optimal Sleep Cycle",
     description: "Designed for complete sleep cycles with REM enhancement",
     schedules: [
-      { type: "Weekdays", time: "22:00", temperature: 21, description: "Cool Down" },
+      { type: "Weekdays", time: "21:30", temperature: 24, description: "Cool Down" },
       { type: "Weekdays", time: "23:00", temperature: 19, description: "Deep Sleep" },
-      { type: "Weekdays", time: "02:00", temperature: 23, description: "REM Support" },
-      { type: "Weekdays", time: "06:00", temperature: 26, description: "Warm Hug Wake-up" }
+      { type: "Weekdays", time: "02:00", temperature: 24, description: "REM Support" },
+      { type: "Weekdays", time: "06:00", temperature: 42, description: "Warm Hug Wake-up", isWarmHug: true }
     ]
   },
   nightOwl: {
@@ -1083,7 +1100,7 @@ window.templates = {
       { type: "Weekdays", time: "23:30", temperature: 21, description: "Cool Down" },
       { type: "Weekdays", time: "00:30", temperature: 19, description: "Deep Sleep" },
       { type: "Weekdays", time: "03:30", temperature: 23, description: "REM Support" },
-      { type: "Weekdays", time: "07:30", temperature: 26, description: "Warm Hug Wake-up" }
+      { type: "Weekdays", time: "07:30", temperature: 26, description: "Warm Hug Wake-up", isWarmHug: true }  
     ]
   },
   earlyBird: {
@@ -1093,7 +1110,7 @@ window.templates = {
       { type: "Weekdays", time: "21:00", temperature: 21, description: "Cool Down" },
       { type: "Weekdays", time: "22:00", temperature: 19, description: "Deep Sleep" },
       { type: "Weekdays", time: "01:00", temperature: 23, description: "REM Support" },
-      { type: "Weekdays", time: "05:00", temperature: 26, description: "Warm Hug Wake-up" }
+      { type: "Weekdays", time: "05:00", temperature: 26, description: "Warm Hug Wake-up", isWarmHug: true }
     ]
   },
   recovery: {
@@ -1103,7 +1120,7 @@ window.templates = {
       { type: "Weekend", time: "23:00", temperature: 21, description: "Cool Down" },
       { type: "Weekend", time: "00:00", temperature: 19, description: "Deep Sleep" },
       { type: "Weekend", time: "03:00", temperature: 23, description: "REM Support" },
-      { type: "Weekend", time: "08:00", temperature: 26, description: "Warm Hug Wake-up" }
+      { type: "Weekend", time: "08:00", temperature: 26, description: "Warm Hug Wake-up", isWarmHug: true } 
     ]
   },
   relaxed: {
@@ -1113,7 +1130,7 @@ window.templates = {
       { type: "Weekend", time: "23:30", temperature: 22, description: "Cool Down" },
       { type: "Weekend", time: "01:00", temperature: 20, description: "Deep Sleep" },
       { type: "Weekend", time: "04:00", temperature: 24, description: "REM Support" },
-      { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up" }
+      { type: "Weekend", time: "09:00", temperature: 26, description: "Warm Hug Wake-up", isWarmHug: true }
     ]
   }
 };

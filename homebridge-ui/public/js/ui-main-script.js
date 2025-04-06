@@ -20,15 +20,15 @@
       if (typeof NotificationManager !== 'undefined') {
         NotificationManager.init();
       }
-      
+     // Initialize conditional UI elements
+      initializeConditionalElements();
       // Initialize UI components
       initializeTabs();
       initializeCollapsibleSections();
       setupScheduleListeners();
       initializeTemplateHandlers();
       initializeWarmHugHandlers();
-        // Initialize conditional UI elements
-  initializeConditionalElements();
+
       
       // Initialize Homebridge connection
       initializeHomebridge();
@@ -58,17 +58,14 @@ function initializeConditionalElements() {
     }
   }
   
-  // Also initialize warm hug info visibility
-  const warmHugInfo = document.getElementById('warmHugInfo');
+  // Initialize warm hug info visibility based on checkbox
+  const warmHugCheckbox = document.getElementById('warmHugEnabled');
   
-  if (scheduleTypeSelect && warmHugInfo) {
-    // Ensure it's hidden by default
-    warmHugInfo.classList.add('hidden');
-    
-    // Only show if "Warm Hug Wake Up" is currently selected
-    if (scheduleTypeSelect.value === 'Warm Hug Wake Up') {
-      warmHugInfo.classList.remove('hidden');
-    }
+  if (warmHugCheckbox && warmHugInfo) {
+    // Ensure it's hidden by default unless checkbox is checked
+    warmHugCheckbox.addEventListener('change', function() {
+      warmHugInfo.classList.toggle('hidden', !this.checked);
+    });
   }
 }
     /**
@@ -212,13 +209,14 @@ function initializeConditionalElements() {
           if (daySelectContainer) {
             daySelectContainer.classList.toggle('hidden', this.value !== 'Specific Day');
           }
-          
-          if (warmHugInfo) {
-            warmHugInfo.classList.toggle('hidden', this.value !== 'Warm Hug');
-          }
         });
       }
-      
+      const warmHugCheckbox = document.getElementById('warmHugEnabled');
+if (warmHugCheckbox && warmHugInfo) {
+  warmHugCheckbox.addEventListener('change', function() {
+    warmHugInfo.classList.toggle('hidden', !this.checked);
+  });
+}
       // Schedule validation
       const scheduleTimeInput = document.getElementById('scheduleTime');
       const scheduleTemperatureInput = document.getElementById('scheduleTemperature');
