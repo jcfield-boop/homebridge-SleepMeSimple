@@ -11,8 +11,7 @@ export declare enum ScheduleType {
     EVERYDAY = "Everyday",
     WEEKDAYS = "Weekdays",
     WEEKEND = "Weekend",
-    SPECIFIC_DAY = "Specific Day",
-    WARM_HUG = "Warm Hug"
+    SPECIFIC_DAY = "Specific Day"
 }
 /**
  * Days of the week (0 = Sunday, 6 = Saturday)
@@ -34,6 +33,8 @@ export interface TemperatureSchedule {
     day?: DayOfWeek;
     time: string;
     temperature: number;
+    description?: string;
+    isWarmHug?: boolean;
     nextExecutionTime?: number;
     lastExecutionTime?: number;
 }
