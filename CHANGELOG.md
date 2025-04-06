@@ -1,5 +1,22 @@
 # Changelog
+## 6.5.12 (2025-04-30)
 
+### Improved
+- **Sleep Cycle Sorting**: Enhanced schedule display with natural sleep cycle ordering
+  - Added intelligent sorting based on sleep phases rather than strict chronological ordering
+  - Organized schedules into bedtime (8PM-midnight), overnight (midnight-6AM), and morning (6AM-10AM) phases
+  - Maintained chronological sorting within each sleep phase
+  - Improved user experience by showing schedules in natural progression regardless of 24-hour clock values
+  - Enhanced visual grouping of related sleep cycle events
+  - Preserved all existing schedule display functionality including template badges and phase coloring
+
+### Technical
+- **Schedule Organization**: Added more intuitive organization logic
+  - Implemented `getSleepPhaseOrder` function to categorize times into sleep cycle phases
+  - Created two-level sorting system (primary by sleep phase, secondary by time)
+  - Enhanced schedule grouping to better reflect natural sleep routines
+  - Maintained backwards compatibility with existing schedule data structure
+  - Added appropriate documentation for future maintenance
 ## 6.5.10 (2025-04-28)
 
 ### Fixed
