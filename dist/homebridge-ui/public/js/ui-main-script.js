@@ -27,6 +27,8 @@
       setupScheduleListeners();
       initializeTemplateHandlers();
       initializeWarmHugHandlers();
+        // Initialize conditional UI elements
+  initializeConditionalElements();
       
       // Initialize Homebridge connection
       initializeHomebridge();
@@ -36,7 +38,43 @@
     initializeCollapsibleSections();
   }, 1000); // 1 second delay
     });
+    /**
+ * Initialize conditional UI elements based on current selections
+ */
+function initializeConditionalElements() {
+  console.log('Initializing conditional UI elements');
+  
+  // Initialize day select visibility based on current schedule type
+  const scheduleTypeSelect = document.getElementById('scheduleType');
+  const daySelectContainer = document.getElementById('daySelectContainer');
+  
+  if (scheduleTypeSelect && daySelectContainer) {
+    // Ensure it's hidden by default
+    daySelectContainer.classList.add('hidden');
     
+    // Only show if "Specific Day" is currently selected
+    if (scheduleTypeSelect.value === 'Specific Day') {
+      daySelectContainer.classList.remove('hidden');
+    } else {
+      daySelectContainer.classList.add('hidden');
+    }
+  }
+  
+  // Also initialize warm hug info visibility
+  const warmHugInfo = document.getElementById('warmHugInfo');
+  
+  if (scheduleTypeSelect && warmHugInfo) {
+    // Ensure it's hidden by default
+    warmHugInfo.classList.add('hidden');
+    
+    // Only show if "Warm Hug Wake Up" is currently selected
+    if (scheduleTypeSelect.value === 'Warm Hug Wake Up') {
+      warmHugInfo.classList.remove('hidden');
+    } else {
+      warmHugInfo.classList.add('hidden');
+    }
+  }
+}
     /**
      * Initialize tab navigation
      */
