@@ -55,8 +55,6 @@ function initializeConditionalElements() {
     // Only show if "Specific Day" is currently selected
     if (scheduleTypeSelect.value === 'Specific Day') {
       daySelectContainer.classList.remove('hidden');
-    } else {
-      daySelectContainer.classList.add('hidden');
     }
   }
   
@@ -70,8 +68,6 @@ function initializeConditionalElements() {
     // Only show if "Warm Hug Wake Up" is currently selected
     if (scheduleTypeSelect.value === 'Warm Hug Wake Up') {
       warmHugInfo.classList.remove('hidden');
-    } else {
-      warmHugInfo.classList.add('hidden');
     }
   }
 }
