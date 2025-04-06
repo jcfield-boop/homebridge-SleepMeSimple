@@ -7,7 +7,6 @@ export var ScheduleType;
     ScheduleType["WEEKDAYS"] = "Weekdays";
     ScheduleType["WEEKEND"] = "Weekend";
     ScheduleType["SPECIFIC_DAY"] = "Specific Day";
-    ScheduleType["WARM_HUG"] = "Warm Hug";
 })(ScheduleType = ScheduleType || (ScheduleType = {}));
 /**
  * Days of the week (0 = Sunday, 6 = Saturday)
@@ -148,13 +147,13 @@ export class ScheduleManager {
                 else if (schedule.type === ScheduleType.SPECIFIC_DAY && schedule.day === currentDay) {
                     shouldRunToday = true;
                 }
-                else if (schedule.type === ScheduleType.WARM_HUG) {
+                else if (schedule.isWarmHug === true) {
                     // Warm hug follows same logic as other schedule types
-                    if (schedule.day !== undefined) {
-                        shouldRunToday = schedule.day === currentDay;
+                    if (schedule.isWarmHug) {
+                        this.startWarmHug(deviceId, schedule);
                     }
                     else {
-                        shouldRunToday = true; // Default to running every day
+                        this.executeSchedule(deviceId, schedule);
                     }
                 }
                 // Add debug logging
@@ -165,7 +164,7 @@ export class ScheduleManager {
                 if (shouldRunToday && now >= schedule.nextExecutionTime) {
                     this.logger.info(`Executing schedule ${index} (${schedule.type}) at ${schedule.time} ` +
                         `for device ${deviceId}: ${schedule.temperature}°C`);
-                    if (schedule.type === ScheduleType.WARM_HUG) {
+                    if (schedule.isWarmHug === true) {
                         this.startWarmHug(deviceId, schedule);
                     }
                     else {
@@ -279,8 +278,8 @@ export class ScheduleManager {
         // Create a date for today with the specified time
         const scheduleDate = new Date();
         scheduleDate.setHours(hours, minutes, 0, 0);
-        // For Warm Hug, subtract the duration to start earlier
-        if (schedule.type === ScheduleType.WARM_HUG) {
+        // For Warm Hug schedules, subtract the duration to start earlier
+        if (schedule.isWarmHug === true) {
             scheduleDate.setMinutes(scheduleDate.getMinutes() - this.warmHugConfig.duration);
         }
         // If the time has already passed today, move to the next applicable day
@@ -322,22 +321,6 @@ export class ScheduleManager {
                     }
                     else {
                         scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
-                    }
-                }
-                break;
-            case ScheduleType.WARM_HUG:
-                // Handle like regular schedules but start earlier (already adjusted above)
-                // Apply the same day-of-week logic as above types
-                if (schedule.day !== undefined) {
-                    // Wrap in a block
-                    {
-                        const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-                        if (daysUntilTargetDay === 0) {
-                            scheduleDate.setDate(scheduleDate.getDate() + 7);
-                        }
-                        else {
-                            scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
-                        }
                     }
                 }
                 break;
@@ -403,7 +386,6 @@ export class ScheduleManager {
             case 'Weekdays': return ScheduleType.WEEKDAYS;
             case 'Weekend': return ScheduleType.WEEKEND;
             case 'Specific Day': return ScheduleType.SPECIFIC_DAY;
-            case 'Warm Hug': return ScheduleType.WARM_HUG;
             default: return ScheduleType.EVERYDAY; // Default to everyday if unknown
         }
     }

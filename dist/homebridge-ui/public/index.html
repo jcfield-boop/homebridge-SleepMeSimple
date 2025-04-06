@@ -874,7 +874,6 @@ button.edit:hover {
               <option value="Weekdays">Weekdays</option>
               <option value="Weekend">Weekend</option>
               <option value="Specific Day">Specific Day</option>
-              <option value="Warm Hug Wake Up">Warm Hug</option>
             </select>
           </div>
           
@@ -901,6 +900,13 @@ button.edit:hover {
             <label for="scheduleTemperature">Temperature:</label>
             <div id="tempError" class="error-text">Please enter a valid temperature</div>
             <input type="number" id="scheduleTemperature" min="13" max="46" step="0.5" value="23" required>
+          </div>
+          
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="warmHugEnabled" name="warmHugEnabled">
+              Make this a Warm Hug Wake Up
+            </label>
           </div>
           
           <div class="form-group">
