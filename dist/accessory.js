@@ -144,7 +144,12 @@ export class SleepMeAccessory {
      * Set up the Thermostat service for temperature control
      */
     setupTemperatureControlService() {
-        // Remove any existing temperature or switch services to avoid duplication
+        // First, remove any existing services to ensure a clean start
+        const existingThermostatService = this.accessory.getService(this.platform.Service.Thermostat);
+        if (existingThermostatService) {
+            this.platform.log.info('Removing existing thermostat service for clean setup');
+            this.accessory.removeService(existingThermostatService);
+        }
         const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
         if (existingTempService) {
             this.platform.log.info('Removing existing temperature sensor service');
@@ -155,15 +160,13 @@ export class SleepMeAccessory {
             this.platform.log.info('Removing existing switch service');
             this.accessory.removeService(existingSwitchService);
         }
-        // Remove existing HeaterCooler service if present
         const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
         if (existingHeaterCoolerService) {
             this.platform.log.info('Removing existing HeaterCooler service');
             this.accessory.removeService(existingHeaterCoolerService);
         }
-        // Use Thermostat service for temperature control
-        this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
-            this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
+        // Create a new thermostat service
+        this.temperatureControlService = this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
         // Configure basic characteristics
         this.temperatureControlService
             .setCharacteristic(this.Characteristic.Name, this.displayName)
@@ -192,18 +195,26 @@ export class SleepMeAccessory {
         this.temperatureControlService
             .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
             .onGet(() => this.getCurrentHeatingCoolingState());
-        // Set up target heating/cooling state
-        this.temperatureControlService
-            .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-            .setProps({
-            // Only allow OFF and AUTO states
+        // Set up target heating/cooling state with strict limits
+        const targetStateChar = this.temperatureControlService
+            .getCharacteristic(this.Characteristic.TargetHeatingCoolingState);
+        // This is the key change - be very explicit about valid values
+        targetStateChar.setProps({
             validValues: [
                 this.Characteristic.TargetHeatingCoolingState.OFF,
                 this.Characteristic.TargetHeatingCoolingState.AUTO
             ]
-        })
+        });
+        // Add handlers
+        targetStateChar
             .onGet(() => this.getTargetHeatingCoolingState())
             .onSet((value) => {
+            // Ensure we only accept OFF or AUTO states
+            if (value !== this.Characteristic.TargetHeatingCoolingState.OFF &&
+                value !== this.Characteristic.TargetHeatingCoolingState.AUTO) {
+                this.platform.log.warn(`Received invalid target state: ${value}, converting to AUTO`);
+                value = this.Characteristic.TargetHeatingCoolingState.AUTO;
+            }
             this.handleTargetHeatingCoolingStateSet(value);
         });
         // Set initial display unit (Celsius)
@@ -216,32 +227,10 @@ export class SleepMeAccessory {
             ]
         })
             .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
-    }
-    /**
-     * Verify the current device state by forcing a refresh
-     * Used after critical operations like power changes
-     */
-    async verifyDeviceState() {
-        try {
-            this.platform.log.debug('Verifying device state consistency...');
-            // Force a fresh status update
-            const status = await this.apiClient.getDeviceStatus(this.deviceId, true);
-            if (status) {
-                // Update our internal state to match reality
-                const actualPowerState = status.powerState === PowerState.ON;
-                if (this.isPowered !== actualPowerState) {
-                    this.platform.log.info(`Power state mismatch detected. UI shows: ${this.isPowered ? 'ON' : 'OFF'}, ` +
-                        `Actual: ${actualPowerState ? 'ON' : 'OFF'}. Updating UI.`);
-                    // Update internal state
-                    this.isPowered = actualPowerState;
-                    // Update UI
-                    this.updateCurrentHeatingCoolingState();
-                }
-            }
-        }
-        catch (error) {
-            this.platform.log.error(`Error verifying device state: ${error}`);
-        }
+        // Force initial state to ensure we start with the right mode
+        setTimeout(() => {
+            this.updateCurrentHeatingCoolingState();
+        }, 1000);
     }
     /**
      * Get the current heating/cooling state based on device status
@@ -360,7 +349,7 @@ export class SleepMeAccessory {
         }
     }
     /**
-     * Verify power state consistency
+     * Verify power state consistency and enforce our simplified interface
      */
     async verifyPowerState() {
         const currentTargetState = this.getTargetHeatingCoolingState();
@@ -368,10 +357,13 @@ export class SleepMeAccessory {
             this.Characteristic.TargetHeatingCoolingState.AUTO :
             this.Characteristic.TargetHeatingCoolingState.OFF;
         if (currentTargetState !== expectedState) {
-            this.platform.log.debug('Verifying power state consistency...');
+            this.platform.log.info(`Power state mismatch detected. UI shows: ${currentTargetState}, ` +
+                `Expected: ${expectedState}. Updating UI.`);
             // Force UI to match our internal state
             this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, expectedState);
         }
+        // Also verify the current heating/cooling state is consistent
+        this.updateCurrentHeatingCoolingState();
     }
     /**
      * Execute an operation with epoch tracking for cancellation
@@ -803,6 +795,14 @@ export class SleepMeAccessory {
         catch (error) {
             this.platform.log.error(`Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+    /**
+     * Verify device state by refreshing its status.
+     */
+    verifyDeviceState() {
+        this.refreshDeviceStatus(true).catch(error => {
+            this.platform.log.error(`Failed to verify device state: ${error instanceof Error ? error.message : String(error)}`);
+        });
     }
     /**
      * Clean up resources when this accessory is removed
