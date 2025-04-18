@@ -51,11 +51,6 @@ export declare class SleepMeAccessory {
      */
     private setupTemperatureControlService;
     /**
-     * Verify the current device state by forcing a refresh
-     * Used after critical operations like power changes
-     */
-    private verifyDeviceState;
-    /**
      * Get the current heating/cooling state based on device status
      */
     private getCurrentHeatingCoolingState;
@@ -83,7 +78,7 @@ export declare class SleepMeAccessory {
      */
     private handleTargetHeatingCoolingStateSet;
     /**
-     * Verify power state consistency
+     * Verify power state consistency and enforce our simplified interface
      */
     private verifyPowerState;
     /**
@@ -130,6 +125,10 @@ export declare class SleepMeAccessory {
      * @param previousTemp Previous target temperature before UI update
      */
     private handleTargetTemperatureSetImpl;
+    /**
+     * Verify device state by refreshing its status.
+     */
+    private verifyDeviceState;
     /**
      * Clean up resources when this accessory is removed
      */
