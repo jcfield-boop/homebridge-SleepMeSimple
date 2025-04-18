@@ -1,3 +1,4 @@
+// Modified loadConfig function in ui-config-handlers.js
 window.loadConfig = async function() {
   try {
     console.log('Starting configuration loading process...');
@@ -27,12 +28,23 @@ window.loadConfig = async function() {
         // Populate form with loaded configuration
         populateFormWithConfig(config);
         
+        // Check if schedules are enabled
+        const schedulesEnabled = config.enableSchedules === true;
+        console.log('Schedules enabled:', schedulesEnabled);
+        
+        // Update UI to reflect current state
+        const schedulesContainer = document.getElementById('schedulesContainer');
+        if (schedulesContainer) {
+          schedulesContainer.classList.toggle('hidden', !schedulesEnabled);
+          schedulesContainer.style.display = schedulesEnabled ? 'block' : 'none';
+        }
+        
         // CRITICAL FIX: Initialize window.schedules BEFORE trying to render
         // and use deep copy to avoid reference issues
         window.schedules = [];
         
-        // Handle schedules if they exist
-        if (config.enableSchedules === true && Array.isArray(config.schedules)) {
+        // Only load and render schedules if they're enabled
+        if (schedulesEnabled && Array.isArray(config.schedules)) {
           console.log(`Loading ${config.schedules.length} schedules from config`);
           
           // Create a deep copy of schedules to avoid reference issues
@@ -47,7 +59,7 @@ window.loadConfig = async function() {
           
           // Ensure scheduleList element exists before rendering
           const scheduleList = document.getElementById('scheduleList');
-          if (scheduleList) {
+          if (scheduleList && schedulesEnabled) {
             console.log('Schedule list element found, rendering schedules');
             
             // Ensure render function exists
@@ -66,21 +78,23 @@ window.loadConfig = async function() {
               console.error('renderScheduleList function not available');
             }
           } else {
-            console.error('Schedule list element not found');
+            console.log('Schedule list element not found or schedules disabled');
           }
         } else {
           console.log('Schedules not enabled or no schedules in config');
         }
-         // Clear the loading message
-    if (typeof NotificationManager !== 'undefined') {
-      // Hide the status message after a short delay
-      setTimeout(() => {
-        const statusElement = document.getElementById('status');
-        if (statusElement) {
-          statusElement.classList.add('hidden');
+        
+        // Clear the loading message
+        if (typeof NotificationManager !== 'undefined') {
+          // Hide the status message after a short delay
+          setTimeout(() => {
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+              statusElement.classList.add('hidden');
+            }
+          }, 500);
         }
-      }, 500);
-    }
+        
         return config;
       } else {
         console.warn('Platform config not found, using default config');
@@ -307,53 +321,69 @@ window.saveConfig = async function(saveToFile = true) {
       logLevel,
       enableSchedules
     };
+   // Modified part of saveConfig function in ui-config-handlers.js
+// (Only showing the relevant section)
+
+// STEP 4: Add schedules if enabled
+if (enableSchedules && Array.isArray(window.schedules)) {
+  console.log(`Adding ${window.schedules.length} schedules to configuration`);
+  
+  // Process schedules to ensure proper format
+  config.schedules = window.schedules.map(schedule => {
+    // Create a clean schedule object with only the properties defined in the schema
+    const cleanSchedule = {
+      type: String(schedule.type || 'Everyday'),
+      time: String(schedule.time || '00:00'),
+      temperature: Number(schedule.temperature || 21)
+    };
     
-    // STEP 4: Add schedules if enabled
-    if (enableSchedules && Array.isArray(window.schedules)) {
-      console.log(`Adding ${window.schedules.length} schedules to configuration`);
-      
-      // Process schedules to ensure proper format
-      config.schedules = window.schedules.map(schedule => {
-        // Create a clean schedule object with only the properties defined in the schema
-        const cleanSchedule = {
-          type: String(schedule.type || 'Everyday'),
-          time: String(schedule.time || '00:00'),
-          temperature: Number(schedule.temperature || 21)
-        };
-        
-        // Add unit property if it exists
-        if (schedule.unit) {
-          cleanSchedule.unit = String(schedule.unit);
-        }
-        
-        // Only add day property for Specific Day schedules
-        if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-          cleanSchedule.day = Number(schedule.day);
-        }
-        
-        // Only add description if present
-        if (schedule.description) {
-          cleanSchedule.description = String(schedule.description);
-        }
-        
-        // Preserve template information
-        if (schedule.isFromTemplate) {
-          cleanSchedule.isFromTemplate = Boolean(schedule.isFromTemplate);
-        }
-        
-        if (schedule.templateSource) {
-          cleanSchedule.templateSource = String(schedule.templateSource);
-        }
-        
-        // Log processed schedule for debugging
-        console.log(`Processed schedule: ${cleanSchedule.type} at ${cleanSchedule.time}: ${cleanSchedule.temperature}°${cleanSchedule.unit || unit}`);
-        
-        return cleanSchedule;
-      });
-    } else {
-      console.log('No schedules to add or schedules disabled');
-      config.schedules = [];
+    // Add unit property if it exists
+    if (schedule.unit) {
+      cleanSchedule.unit = String(schedule.unit);
     }
+    
+    // Only add day property for Specific Day schedules
+    if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+      cleanSchedule.day = Number(schedule.day);
+    }
+    
+    // Only add description if present
+    if (schedule.description) {
+      cleanSchedule.description = String(schedule.description);
+    }
+    
+    // Preserve template information
+    if (schedule.isFromTemplate) {
+      cleanSchedule.isFromTemplate = Boolean(schedule.isFromTemplate);
+    }
+    
+    if (schedule.templateSource) {
+      cleanSchedule.templateSource = String(schedule.templateSource);
+    }
+    
+    // Log processed schedule for debugging
+    console.log(`Processed schedule: ${cleanSchedule.type} at ${cleanSchedule.time}: ${cleanSchedule.temperature}°${cleanSchedule.unit || unit}`);
+    
+    return cleanSchedule;
+  });
+} else {
+  // Always include schedules array in config (even when disabled)
+  // This preserves existing schedules in config when they're disabled
+  console.log('Keeping schedules in config even though schedules are disabled');
+  
+  // If schedules exist in window.schedules, preserve them
+  if (Array.isArray(window.schedules) && window.schedules.length > 0) {
+    config.schedules = window.schedules;
+  } 
+  // Otherwise, if no schedules in memory but they exist in current config, preserve them
+  else if (currentConfig && Array.isArray(currentConfig.schedules)) {
+    config.schedules = currentConfig.schedules;
+  }
+  // Lastly, ensure there's at least an empty array
+  else {
+    config.schedules = [];
+  }
+}
     
     // STEP 5: Get advanced settings
     const advancedSettings = getAdvancedSettings();
