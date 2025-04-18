@@ -11,6 +11,39 @@
  * SleepMe Simple UI Initialization
  * Handles tab navigation and collapsible sections
  */
+
+/**
+ * Set up auto-save for configuration fields
+ */
+function setupAutoSave() {
+  console.log('Setting up auto-save for configuration fields');
+  
+  const configFields = [
+    'unit',
+    'pollingInterval',
+    'logLevel'
+  ];
+  
+  configFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      console.log(`Adding change listener to ${fieldId} field`);
+      field.addEventListener('change', function() {
+        console.log(`Field ${fieldId} changed to: ${this.value}`);
+        
+        // Save configuration (in memory and to disk)
+        if (typeof window.saveConfig === 'function') {
+          window.saveConfig(true);
+        }
+      });
+    } else {
+      console.warn(`Field ${fieldId} not found for auto-save setup`);
+    }
+  });
+  
+  console.log('Auto-save listeners set up for configuration fields');
+}
+
 (function() {
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
