@@ -155,16 +155,20 @@ function populateFormWithConfig(config) {
       pollingIntervalInput.value = '90';
     }
     
-    // Set log level
-    if (logLevelSelect && config.logLevel) {
-      console.log(`Setting log level: ${config.logLevel}`);
-      logLevelSelect.value = config.logLevel;
-    } else if (!logLevelSelect) {
-      console.warn('Log level select element not found');
-    } else if (!config.logLevel) {
-      console.log('No log level in config, using default (normal)');
-      logLevelSelect.value = 'normal';
-    }
+   // Set log level with enhanced logging
+if (logLevelSelect && config.logLevel) {
+  console.log(`Setting log level from config: "${config.logLevel}"`);
+  logLevelSelect.value = config.logLevel;
+  
+  // Verify the value was set correctly
+  console.log(`After setting, logLevelSelect value is: "${logLevelSelect.value}"`);
+} else if (!logLevelSelect) {
+  console.warn('Log level select element not found');
+} else if (!config.logLevel) {
+  console.log('No log level in config, using default (normal)');
+  logLevelSelect.value = 'normal';
+  console.log(`After setting default, logLevelSelect value is: "${logLevelSelect.value}"`);
+}
     
     // Handle schedules configuration
     if (enableSchedulesCheckbox) {
