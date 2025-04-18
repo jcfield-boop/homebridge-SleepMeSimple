@@ -252,11 +252,18 @@ export class SleepMeAccessory {
  
  // Set up target heating/cooling state
  this.temperatureControlService
-   .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-   .onGet(() => this.getTargetHeatingCoolingState())
-   .onSet((value) => {
-     this.handleTargetHeatingCoolingStateSet(value as number);
-   });
+ .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+ .setProps({
+   // Only allow OFF and AUTO states
+   validValues: [
+     this.Characteristic.TargetHeatingCoolingState.OFF,
+     this.Characteristic.TargetHeatingCoolingState.AUTO
+   ]
+ })
+ .onGet(() => this.getTargetHeatingCoolingState())
+ .onSet((value) => {
+   this.handleTargetHeatingCoolingStateSet(value as number);
+ });
  
  // Set initial display unit (Celsius)
  this.temperatureControlService
@@ -381,7 +388,7 @@ private handleTargetTemperatureGet(): number {
 
 /**
  * Handle setting the target heating cooling state
- * @param value Target heating cooling state value
+ * @param value Target heating cooling state value (only OFF or AUTO)
  */
 private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
   this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
@@ -395,68 +402,55 @@ private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
   // Cancel any pending operations for this device
   this.apiClient.cancelAllDeviceRequests(this.deviceId);
   
-  switch (value) {
-    case this.Characteristic.TargetHeatingCoolingState.OFF:
-      // Turn off
-      if (this.isPowered) {
-        await this.executeOperation('power', currentEpoch, async () => {
-          const success = await this.apiClient.turnDeviceOff(this.deviceId);
-          
-          if (success) {
-            // Trust the API response - device is now off
-            this.isPowered = false;
-            this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
-            
-            // Update UI immediately for responsiveness
-            this.updateCurrentHeatingCoolingState();
-            
-            // Verify the state after a short delay
-            setTimeout(() => this.verifyDeviceState(), 5000);
-          } else {
-            throw new Error('Failed to turn off device');
-          }
-        });
-      }
-      break;
-      
-    case this.Characteristic.TargetHeatingCoolingState.AUTO:
-    case this.Characteristic.TargetHeatingCoolingState.HEAT:
-    case this.Characteristic.TargetHeatingCoolingState.COOL:
-      // Turn on with current temperature
-      if (!this.isPowered) {
-        const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+  // There are only two possible values: OFF or AUTO
+  if (value === this.Characteristic.TargetHeatingCoolingState.OFF) {
+    // Turn off
+    if (this.isPowered) {
+      await this.executeOperation('power', currentEpoch, async () => {
+        const success = await this.apiClient.turnDeviceOff(this.deviceId);
         
-        await this.executeOperation('power', currentEpoch, async () => {
-          const success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
+        if (success) {
+          // Trust the API response - device is now off
+          this.isPowered = false;
+          this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
           
-          if (success) {
-            // Trust the API response - device is now on
-            this.isPowered = true;
-            this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
-            
-            // Update UI immediately for responsiveness
-            this.updateCurrentHeatingCoolingState();
-          } else {
-            throw new Error('Failed to turn on device');
-          }
-        });
-      }
+          // Update UI immediately for responsiveness
+          this.updateCurrentHeatingCoolingState();
+          
+          // Verify the state after a short delay
+          setTimeout(() => this.verifyDeviceState(), 5000);
+        } else {
+          throw new Error('Failed to turn off device');
+        }
+      });
+    }
+  } else {
+    // Must be AUTO (turn on with current temperature)
+    if (!this.isPowered) {
+      const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
       
-      // For SleepMe devices, we treat all active modes as AUTO
-      setTimeout(() => {
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.TargetHeatingCoolingState,
-          this.Characteristic.TargetHeatingCoolingState.AUTO
-        );
-      }, 100);
-      break;
+      await this.executeOperation('power', currentEpoch, async () => {
+        const success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
+        
+        if (success) {
+          // Trust the API response - device is now on
+          this.isPowered = true;
+          this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
+          
+          // Update UI immediately for responsiveness
+          this.updateCurrentHeatingCoolingState();
+        } else {
+          throw new Error('Failed to turn on device');
+        }
+      });
+    }
   }
 }
+
 /**
-   * Verify power state consistency
-   */
+ * Verify power state consistency
+ */
 private async verifyPowerState(): Promise<void> {
-  // Changed comparison to correctly compare the power state with the heating/cooling state
   const currentTargetState = this.getTargetHeatingCoolingState();
   const expectedState = this.isPowered ? 
     this.Characteristic.TargetHeatingCoolingState.AUTO : 
@@ -468,9 +462,7 @@ private async verifyPowerState(): Promise<void> {
     // Force UI to match our internal state
     this.temperatureControlService.updateCharacteristic(
       this.Characteristic.TargetHeatingCoolingState,
-      this.isPowered ? 
-        this.Characteristic.TargetHeatingCoolingState.AUTO : 
-        this.Characteristic.TargetHeatingCoolingState.OFF
+      expectedState
     );
   }
 }
