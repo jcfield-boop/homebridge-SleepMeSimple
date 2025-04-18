@@ -79,12 +79,12 @@ export declare class SleepMeAccessory {
     private handleTargetTemperatureGet;
     /**
      * Handle setting the target heating cooling state
-     * @param value Target heating cooling state value
+     * @param value Target heating cooling state value (only OFF or AUTO)
      */
     private handleTargetHeatingCoolingStateSet;
     /**
-       * Verify power state consistency
-       */
+     * Verify power state consistency
+     */
     private verifyPowerState;
     /**
      * Execute an operation with epoch tracking for cancellation
