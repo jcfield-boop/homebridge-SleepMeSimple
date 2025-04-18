@@ -686,94 +686,199 @@ window.renderScheduleList = function() {
       }
     };
     
-    /**
-     * Show a preview of template schedules
-     * @param {string} templateKey - Key of the template to preview
-     */
-    window.showTemplatePreview = function(templateKey) {
-      if (!window.templates || !window.templates[templateKey]) {
-        NotificationManager.error(`Template "${templateKey}" not found`, 'Preview Error');
-        return;
-      }
-      
-      const template = window.templates[templateKey];
-      const unit = document.getElementById('unit');
-      const currentUnit = unit ? unit.value : 'C';
-      
-      // Determine target container
-      const isWeekday = templateKey === 'optimal' || templateKey === 'nightOwl' || templateKey === 'earlyBird';
-      const containerId = isWeekday ? 'weekdayTemplateDesc' : 'weekendTemplateDesc';
-      const container = document.getElementById(containerId);
-      
-      if (!container) {
-        NotificationManager.error('Preview container not found', 'Preview Error');
-        return;
-      }
-      
-      // Create or get preview container
-      let previewContainer = document.getElementById(`${templateKey}Preview`);
-      if (!previewContainer) {
-        previewContainer = document.createElement('div');
-        previewContainer.id = `${templateKey}Preview`;
-        previewContainer.className = 'template-preview';
-        
-        // Add header
-        const header = document.createElement('div');
-        header.className = 'template-preview-header';
-        
-        const title = document.createElement('h4');
-        title.textContent = `${template.name} Preview`;
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'secondary';
-        closeBtn.textContent = 'Close';
-        closeBtn.addEventListener('click', function() {
-          previewContainer.remove();
-        });
-        
-        header.appendChild(title);
-        header.appendChild(closeBtn);
-        previewContainer.appendChild(header);
-        
-        // Add to parent
-        container.appendChild(previewContainer);
-      } else {
-        // Clear existing items except header
-        Array.from(previewContainer.children).forEach(child => {
-          if (!child.classList.contains('template-preview-header')) {
-            child.remove();
-          }
-        });
-      }
-      
-      // Add schedules to preview
-      template.schedules.forEach(schedule => {
-        const previewItem = document.createElement('div');
-        previewItem.className = 'preview-item';
-        
-        // Format temperature
-        let temp = schedule.temperature;
-        if (currentUnit === 'F' && typeof convertCtoF === 'function') {
-          temp = Math.round(convertCtoF(temp) * 10) / 10;
-        }
-        
-        // Create time and temperature span
-        const timeTemp = document.createElement('span');
-        timeTemp.textContent = `${schedule.time}: ${temp}°${currentUnit}`;
-        
-        // Create description span
-        const description = document.createElement('span');
-        description.textContent = schedule.description || '';
-        
-        // Add to preview item
-        previewItem.appendChild(timeTemp);
-        previewItem.appendChild(description);
-        
-        // Add to preview container
-        previewContainer.appendChild(previewItem);
-      });
-    };
+/**
+ * Show a preview of template schedules
+ * @param {string} templateKey - Key of the template to preview
+ */
+function showTemplatePreview(templateKey) {
+  console.log('Showing template preview for:', templateKey);
+  
+  // Ensure templates are available
+  if (!window.templates) {
+    console.error('Templates not available');
+    NotificationManager.error('Template data not available', 'Preview Error');
+    return;
+  }
+  
+  const template = window.templates[templateKey];
+  if (!template) {
+    console.error(`Template "${templateKey}" not found`);
+    NotificationManager.error(`Template "${templateKey}" not found`, 'Preview Error');
+    return;
+  }
+  
+  // Get current temperature unit
+  const unitSelect = document.getElementById('unit');
+  const unit = unitSelect ? unitSelect.value : 'C';
+  
+  // Determine target container
+  const isWeekday = ['optimal', 'nightOwl', 'earlyBird'].includes(templateKey);
+  const containerId = isWeekday ? 'weekdayTemplateDesc' : 'weekendTemplateDesc';
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error('Preview container not found:', containerId);
+    NotificationManager.error('Preview container not found', 'Preview Error');
+    return;
+  }
+  
+  // Create or get preview container
+  let previewContainer = document.getElementById(`${templateKey}Preview`);
+  if (!previewContainer) {
+    previewContainer = document.createElement('div');
+    previewContainer.id = `${templateKey}Preview`;
+    previewContainer.className = 'template-preview';
     
+    // Add header
+    const header = document.createElement('div');
+    header.className = 'template-preview-header';
+    
+    const title = document.createElement('h4');
+    title.textContent = `${template.name} Preview`;
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'secondary';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', function() {
+      previewContainer.remove();
+    });
+    
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    previewContainer.appendChild(header);
+    
+    // Add to parent
+    container.appendChild(previewContainer);
+  } else {
+    // Clear existing items except header
+    const header = previewContainer.querySelector('.template-preview-header');
+    previewContainer.innerHTML = '';
+    if (header) {
+      previewContainer.appendChild(header);
+    }
+  }
+  
+  // Add schedules to preview
+  if (Array.isArray(template.schedules)) {
+    template.schedules.forEach(schedule => {
+      const previewItem = document.createElement('div');
+      previewItem.className = 'preview-item';
+      
+      // Format temperature with proper unit conversion
+      let temp = schedule.temperature;
+      if (unit === 'F' && typeof window.convertCtoF === 'function') {
+        temp = Math.round(window.convertCtoF(temp) * 10) / 10;
+      }
+      
+      // Create time and temperature span
+      const timeTemp = document.createElement('span');
+      timeTemp.textContent = `${schedule.time}: ${temp}°${unit}`;
+      
+      // Create description span
+      const description = document.createElement('span');
+      description.className = 'preview-description';
+      description.textContent = schedule.description || '';
+      
+      // Add to preview item
+      previewItem.appendChild(timeTemp);
+      previewItem.appendChild(description);
+      
+      // Add to preview container
+      previewContainer.appendChild(previewItem);
+    });
+  } else {
+    console.warn('No schedules found in template:', templateKey);
+    const noSchedulesMsg = document.createElement('p');
+    noSchedulesMsg.textContent = 'No schedules defined in this template.';
+    previewContainer.appendChild(noSchedulesMsg);
+  }
+  
+  console.log('Template preview rendered successfully');
+}
+    /**
+ * Create and attach template preview buttons
+ * @param {string} templateType - 'weekday' or 'weekend'
+ * @param {string} templateKey - Selected template key
+ */
+function updateTemplatePreviewButton(templateType, templateKey) {
+  if (!templateKey) return;
+
+  const descContainerId = `${templateType}TemplateDesc`;
+  const descContainer = document.getElementById(descContainerId);
+  if (!descContainer) {
+    console.warn(`Template description container #${descContainerId} not found`);
+    return;
+  }
+
+  // Remove any existing preview button
+  const existingBtn = document.getElementById(`${templateType}PreviewBtn`);
+  if (existingBtn) {
+    existingBtn.remove();
+  }
+
+  // Create new preview button
+  const previewBtn = document.createElement('button');
+  previewBtn.id = `${templateType}PreviewBtn`;
+  previewBtn.className = 'secondary';
+  previewBtn.textContent = 'Preview Schedules';
+  previewBtn.style.marginTop = '10px';
+  
+  // Add event handler directly with explicit context
+  previewBtn.addEventListener('click', function() {
+    console.log(`Preview button clicked for ${templateType} template: ${templateKey}`);
+    // Make sure window.showTemplatePreview is available
+    if (typeof window.showTemplatePreview === 'function') {
+      window.showTemplatePreview(templateKey);
+    } else {
+      console.error('showTemplatePreview function not available');
+    }
+  });
+  
+  // Add to container
+  descContainer.appendChild(previewBtn);
+  console.log(`Preview button added for ${templateType} template: ${templateKey}`);
+}
+/**
+ * Update template description based on selection
+ * @param {string} type - 'weekday' or 'weekend'
+ * @param {string} templateKey - Selected template key
+ */
+function updateTemplateDescription(type, templateKey) {
+  console.log(`Updating ${type} template description for: ${templateKey}`);
+  
+  // Make sure templates are available
+  if (!window.templates) {
+    console.error('Templates not available');
+    return;
+  }
+  
+  const descElement = document.getElementById(`${type}TemplateDesc`);
+  if (!descElement) {
+    console.warn(`Template description element #${type}TemplateDesc not found`);
+    return;
+  }
+  
+  // Clear existing content
+  descElement.innerHTML = '';
+  
+  // If no template selected, just leave it empty
+  if (!templateKey) {
+    return;
+  }
+  
+  const template = window.templates[templateKey];
+  if (!template) {
+    console.warn(`Template not found: ${templateKey}`);
+    return;
+  }
+  
+  // Set description text
+  const descText = document.createElement('p');
+  descText.textContent = template.description || '';
+  descElement.appendChild(descText);
+  
+  console.log(`Template description updated for ${type}: ${template.description}`);
+}
     /**
      * Load Warm Hug settings from config
      */
