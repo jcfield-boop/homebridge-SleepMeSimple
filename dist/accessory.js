@@ -78,7 +78,7 @@ export class SleepMeAccessory {
     failedUpdateAttempts = 0;
     updateInProgress = false;
     skipNextUpdate = false;
-    // Added missing properties
+    // Command tracking
     commandEpoch = 0;
     pendingOperation = null;
     // Constants from the platform
@@ -218,9 +218,9 @@ export class SleepMeAccessory {
             .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
     }
     /**
-    * Verify the current device state by forcing a refresh
-    * Used after critical operations like power changes
-    */
+     * Verify the current device state by forcing a refresh
+     * Used after critical operations like power changes
+     */
     async verifyDeviceState() {
         try {
             this.platform.log.debug('Verifying device state consistency...');
@@ -244,8 +244,8 @@ export class SleepMeAccessory {
         }
     }
     /**
-    * Get the current heating/cooling state based on device status
-    */
+     * Get the current heating/cooling state based on device status
+     */
     getCurrentHeatingCoolingState() {
         if (!this.isPowered) {
             return this.Characteristic.CurrentHeatingCoolingState.OFF;
@@ -271,17 +271,17 @@ export class SleepMeAccessory {
         }
     }
     /**
-    * Get the target heating/cooling state
-    */
+     * Get the target heating/cooling state
+     */
     getTargetHeatingCoolingState() {
         return this.isPowered ?
             this.Characteristic.TargetHeatingCoolingState.AUTO :
             this.Characteristic.TargetHeatingCoolingState.OFF;
     }
     /**
-       * Update the schedule manager with current temperature
-       * @param temperature Current temperature
-       */
+     * Update the schedule manager with current temperature
+     * @param temperature Current temperature
+     */
     updateScheduleManager(temperature) {
         // Skip if schedule manager not available or temperature is invalid
         if (!this.platform.scheduleManager || isNaN(temperature)) {
@@ -291,8 +291,8 @@ export class SleepMeAccessory {
         this.platform.scheduleManager.updateDeviceTemperature(this.deviceId, temperature);
     }
     /**
-      * Update the current heating/cooling state in HomeKit
-      */
+     * Update the current heating/cooling state in HomeKit
+     */
     updateCurrentHeatingCoolingState() {
         const state = this.getCurrentHeatingCoolingState();
         this.temperatureControlService.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, state);
@@ -453,9 +453,9 @@ export class SleepMeAccessory {
         });
     }
     /**
-       * Implementation for power state setting (called by debounced wrapper)
-       * @param turnOn Whether to turn the device on
-       */
+     * Implementation for power state setting (called by debounced wrapper)
+     * @param turnOn Whether to turn the device on
+     */
     async handlePowerStateSetImpl(turnOn) {
         this.platform.log.info(`Processing power state change: ${turnOn ? 'ON' : 'OFF'}`);
         // Skip if already in desired state
@@ -523,8 +523,8 @@ export class SleepMeAccessory {
         }
     }
     /**
-       * Set up the status polling mechanism with trust-based adaptive intervals
-       */
+     * Set up the status polling mechanism with trust-based adaptive intervals
+     */
     setupStatusPolling(initialDelay = 0) {
         // Clear any existing timer
         if (this.statusUpdateTimer) {
@@ -542,7 +542,7 @@ export class SleepMeAccessory {
                 });
             }, initialDelay);
         }
-        // Set up regular polling with adaptive interval (unchanged)
+        // Set up regular polling with adaptive interval
         this.statusUpdateTimer = setInterval(() => {
             // Skip update if another one is in progress to prevent queue buildup
             if (this.updateInProgress) {
@@ -596,10 +596,10 @@ export class SleepMeAccessory {
         }, pollingIntervalMs);
     }
     /**
-       * Detect device model based on attachments or other characteristics
-       * @param data Raw device data from API
-       * @returns Detected device model name
-       */
+     * Detect device model based on attachments or other characteristics
+     * @param data Raw device data from API
+     * @returns Detected device model name
+     */
     detectDeviceModel(data) {
         // Check attachments first (most reliable)
         const attachments = this.apiClient.extractNestedValue(data, 'attachments');
@@ -710,7 +710,7 @@ export class SleepMeAccessory {
                 // Update the current temperature in Thermostat service
                 this.temperatureControlService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature);
                 this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
-                // Inside refreshDeviceStatus method, after updating currentTemperature
+                // Update schedule manager with current temperature
                 if (!isNaN(this.currentTemperature)) {
                     this.updateScheduleManager(this.currentTemperature);
                 }

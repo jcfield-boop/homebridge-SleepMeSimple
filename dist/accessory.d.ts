@@ -51,26 +51,26 @@ export declare class SleepMeAccessory {
      */
     private setupTemperatureControlService;
     /**
-    * Verify the current device state by forcing a refresh
-    * Used after critical operations like power changes
-    */
+     * Verify the current device state by forcing a refresh
+     * Used after critical operations like power changes
+     */
     private verifyDeviceState;
     /**
-    * Get the current heating/cooling state based on device status
-    */
+     * Get the current heating/cooling state based on device status
+     */
     private getCurrentHeatingCoolingState;
     /**
-    * Get the target heating/cooling state
-    */
+     * Get the target heating/cooling state
+     */
     private getTargetHeatingCoolingState;
     /**
-       * Update the schedule manager with current temperature
-       * @param temperature Current temperature
-       */
+     * Update the schedule manager with current temperature
+     * @param temperature Current temperature
+     */
     private updateScheduleManager;
     /**
-      * Update the current heating/cooling state in HomeKit
-      */
+     * Update the current heating/cooling state in HomeKit
+     */
     private updateCurrentHeatingCoolingState;
     /**
      * Handle getting the target temperature
@@ -99,9 +99,9 @@ export declare class SleepMeAccessory {
      */
     private handleTargetTemperatureSet;
     /**
-       * Implementation for power state setting (called by debounced wrapper)
-       * @param turnOn Whether to turn the device on
-       */
+     * Implementation for power state setting (called by debounced wrapper)
+     * @param turnOn Whether to turn the device on
+     */
     private handlePowerStateSetImpl;
     /**
      * Add/update the water level service if supported
@@ -110,14 +110,14 @@ export declare class SleepMeAccessory {
      */
     private setupWaterLevelService;
     /**
-       * Set up the status polling mechanism with trust-based adaptive intervals
-       */
+     * Set up the status polling mechanism with trust-based adaptive intervals
+     */
     private setupStatusPolling;
     /**
-       * Detect device model based on attachments or other characteristics
-       * @param data Raw device data from API
-       * @returns Detected device model name
-       */
+     * Detect device model based on attachments or other characteristics
+     * @param data Raw device data from API
+     * @returns Detected device model name
+     */
     private detectDeviceModel;
     /**
      * Refresh the device status from the API with trust-based approach
