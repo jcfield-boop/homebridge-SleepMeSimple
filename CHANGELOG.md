@@ -1,5 +1,5 @@
 # Changelog
-## 6.8.0 (2025-04-20)
+## 6.8.1 (2025-04-20)
 
 ### Changed
 - **Simplified HomeKit Interface**: Reduced thermostat modes to only show "Off" and "Auto" options
