@@ -38,6 +38,37 @@
     initializeCollapsibleSections();
   }, 1000); // 1 second delay
     });
+/**
+ * Set up auto-save for configuration fields
+ */
+function setupAutoSave() {
+  console.log('Setting up auto-save for configuration fields');
+  
+  const configFields = [
+    'unit',
+    'pollingInterval',
+    'logLevel'
+  ];
+  
+  configFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      console.log(`Adding change listener to ${fieldId} field`);
+      field.addEventListener('change', function() {
+        console.log(`Field ${fieldId} changed to: ${this.value}`);
+        
+        // Save configuration (in memory and to disk)
+        if (typeof window.saveConfig === 'function') {
+          window.saveConfig(true);
+        }
+      });
+    } else {
+      console.warn(`Field ${fieldId} not found for auto-save setup`);
+    }
+  });
+  
+  console.log('Auto-save listeners set up for configuration fields');
+}    
 // In ui-main-script.js - improved initializeConditionalElements function
 function initializeConditionalElements() {
   console.log('Initializing conditional UI elements');
@@ -1961,7 +1992,29 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Uncaught error:', message, 'at', source, lineno, colno);
       return false;
   };
+    // Set up auto-save for config fields
+    setupAutoSave();
   
+    // Add debug save button
+    const configForm = document.getElementById('configForm');
+    if (configForm) {
+      const debugButton = document.createElement('button');
+      debugButton.type = 'button';
+      debugButton.id = 'debugSaveConfig';
+      debugButton.className = 'btn btn-sm btn-secondary';
+      debugButton.style.fontSize = '12px';
+      debugButton.style.marginTop = '10px';
+      debugButton.textContent = 'Debug: Save Config';
+      debugButton.addEventListener('click', () => {
+        console.log('Debug: Manually saving configuration');
+        if (typeof window.saveConfig === 'function') {
+          window.saveConfig(true);
+        }
+      });
+      
+      configForm.appendChild(debugButton);
+      console.log('Debug save button added');
+    }
   // Expose API for global usage (backward compatibility)
   window.showConfirmModal = SleepMeUI.showConfirmModal;
   window.logMessage = SleepMeUI.logMessage;
