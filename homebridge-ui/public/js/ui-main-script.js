@@ -2028,26 +2028,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up auto-save for config fields
     setupAutoSave();
   
-    // Add debug save button
-    const configForm = document.getElementById('configForm');
-    if (configForm) {
-      const debugButton = document.createElement('button');
-      debugButton.type = 'button';
-      debugButton.id = 'debugSaveConfig';
-      debugButton.className = 'btn btn-sm btn-secondary';
-      debugButton.style.fontSize = '12px';
-      debugButton.style.marginTop = '10px';
-      debugButton.textContent = 'Debug: Save Config';
-      debugButton.addEventListener('click', () => {
-        console.log('Debug: Manually saving configuration');
-        if (typeof window.saveConfig === 'function') {
-          window.saveConfig(true);
-        }
-      });
-      
-      configForm.appendChild(debugButton);
-      console.log('Debug save button added');
-    }
   // Expose API for global usage (backward compatibility)
   window.showConfirmModal = SleepMeUI.showConfirmModal;
   window.logMessage = SleepMeUI.logMessage;
