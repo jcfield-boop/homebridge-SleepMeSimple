@@ -22,7 +22,7 @@ import {
  * @param options Configuration options
  * @returns Debounced function
  */
-function createSmartDebounce<T extends (...args: any[]) => any>(
+function createSmartDebounce<T extends (..._args: any[]) => any>(
   callback: T,
   wait: number,
   options: { leading?: boolean; trailing?: boolean } = { leading: false, trailing: true }
@@ -192,126 +192,114 @@ export class SleepMeAccessory {
     this.accessory.category = this.platform.homebridgeApi.hap.Categories.THERMOSTAT;
   }
 
-  /**
-   * Set up the Thermostat service for temperature control
-   */
-  private setupTemperatureControlService(): void {
-    // Remove any existing temperature or switch services to avoid duplication
-    const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
-    if (existingTempService) {
-      this.platform.log.info('Removing existing temperature sensor service');
-      this.accessory.removeService(existingTempService);
-    }
-    
-    const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
-    if (existingSwitchService) {
-      this.platform.log.info('Removing existing switch service');
-      this.accessory.removeService(existingSwitchService);
-    }
-    
-    // Remove existing HeaterCooler service if present
-    const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
-    if (existingHeaterCoolerService) {
-      this.platform.log.info('Removing existing HeaterCooler service');
-      this.accessory.removeService(existingHeaterCoolerService);
-    }
-    
-    // Use Thermostat service for temperature control
-    this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
-      this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
-    
-    // Configure basic characteristics
-    this.temperatureControlService
-      .setCharacteristic(this.Characteristic.Name, this.displayName)
-      .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.Characteristic.CurrentHeatingCoolingState.OFF)
-      .setCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.OFF);
-    
-    // Set up current temperature characteristic
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.CurrentTemperature)
-      .setProps({
-        minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
-        maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
-        minStep: 0.1
-      })
-      .onGet(() => this.currentTemperature || 20);
-    
-    // Set up target temperature characteristic
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.TargetTemperature)
-      .setProps({
-        minValue: MIN_TEMPERATURE_C,
-        maxValue: MAX_TEMPERATURE_C,
-        minStep: 0.5
-      })
-      .onGet(this.handleTargetTemperatureGet.bind(this))
-      .onSet(this.handleTargetTemperatureSet.bind(this));
-    
-    // Set up current heating/cooling state
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-      .onGet(() => this.getCurrentHeatingCoolingState());
+/**
+ * Set up the Thermostat service for temperature control
+ */
+private setupTemperatureControlService(): void {
+  // First, remove any existing services to ensure a clean start
+  const existingThermostatService = this.accessory.getService(this.platform.Service.Thermostat);
+  if (existingThermostatService) {
+    this.platform.log.info('Removing existing thermostat service for clean setup');
+    this.accessory.removeService(existingThermostatService);
+  }
   
-    // Set up target heating/cooling state
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-      .setProps({
-        // Only allow OFF and AUTO states
-        validValues: [
-          this.Characteristic.TargetHeatingCoolingState.OFF,
-          this.Characteristic.TargetHeatingCoolingState.AUTO
-        ]
-      })
-      .onGet(() => this.getTargetHeatingCoolingState())
-      .onSet((value) => {
-        this.handleTargetHeatingCoolingStateSet(value as number);
-      });
+  const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+  if (existingTempService) {
+    this.platform.log.info('Removing existing temperature sensor service');
+    this.accessory.removeService(existingTempService);
+  }
+  
+  const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
+  if (existingSwitchService) {
+    this.platform.log.info('Removing existing switch service');
+    this.accessory.removeService(existingSwitchService);
+  }
+  
+  const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
+  if (existingHeaterCoolerService) {
+    this.platform.log.info('Removing existing HeaterCooler service');
+    this.accessory.removeService(existingHeaterCoolerService);
+  }
+  
+  // Create a new thermostat service
+  this.temperatureControlService = this.accessory.addService(
+    this.platform.Service.Thermostat, 
+    this.displayName
+  );
+  
+  // Configure basic characteristics
+  this.temperatureControlService
+    .setCharacteristic(this.Characteristic.Name, this.displayName)
+    .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.Characteristic.CurrentHeatingCoolingState.OFF)
+    .setCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.OFF);
+  
+  // Set up current temperature characteristic
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.CurrentTemperature)
+    .setProps({
+      minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
+      maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
+      minStep: 0.1
+    })
+    .onGet(() => this.currentTemperature || 20);
+  
+  // Set up target temperature characteristic
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.TargetTemperature)
+    .setProps({
+      minValue: MIN_TEMPERATURE_C,
+      maxValue: MAX_TEMPERATURE_C,
+      minStep: 0.5
+    })
+    .onGet(this.handleTargetTemperatureGet.bind(this))
+    .onSet(this.handleTargetTemperatureSet.bind(this));
     
-    // Set initial display unit (Celsius)
-    this.temperatureControlService
-      .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
-      .setProps({
-        validValues: [
-          this.Characteristic.TemperatureDisplayUnits.CELSIUS,
-          this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
-        ]
-      })
-      .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
-  }
-
-  /**
-   * Verify the current device state by forcing a refresh
-   * Used after critical operations like power changes
-   */
-  private async verifyDeviceState(): Promise<void> {
-    try {
-      this.platform.log.debug('Verifying device state consistency...');
-      
-      // Force a fresh status update
-      const status = await this.apiClient.getDeviceStatus(this.deviceId, true);
-      
-      if (status) {
-        // Update our internal state to match reality
-        const actualPowerState = status.powerState === PowerState.ON;
-        
-        if (this.isPowered !== actualPowerState) {
-          this.platform.log.info(
-            `Power state mismatch detected. UI shows: ${this.isPowered ? 'ON' : 'OFF'}, ` +
-            `Actual: ${actualPowerState ? 'ON' : 'OFF'}. Updating UI.`
-          );
-          
-          // Update internal state
-          this.isPowered = actualPowerState;
-          
-          // Update UI
-          this.updateCurrentHeatingCoolingState();
-        }
+  // Set up current heating/cooling state
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+    .onGet(() => this.getCurrentHeatingCoolingState());
+  
+  // Set up target heating/cooling state with strict limits
+  const targetStateChar = this.temperatureControlService
+    .getCharacteristic(this.Characteristic.TargetHeatingCoolingState);
+  
+  // This is the key change - be very explicit about valid values
+  targetStateChar.setProps({
+    validValues: [
+      this.Characteristic.TargetHeatingCoolingState.OFF,
+      this.Characteristic.TargetHeatingCoolingState.AUTO
+    ]
+  });
+  
+  // Add handlers
+  targetStateChar
+    .onGet(() => this.getTargetHeatingCoolingState())
+    .onSet((value) => {
+      // Ensure we only accept OFF or AUTO states
+      if (value !== this.Characteristic.TargetHeatingCoolingState.OFF && 
+          value !== this.Characteristic.TargetHeatingCoolingState.AUTO) {
+        this.platform.log.warn(`Received invalid target state: ${value}, converting to AUTO`);
+        value = this.Characteristic.TargetHeatingCoolingState.AUTO;
       }
-    } catch (error) {
-      this.platform.log.error(`Error verifying device state: ${error}`);
-    }
-  }
-
+      this.handleTargetHeatingCoolingStateSet(value as number);
+    });
+  
+  // Set initial display unit (Celsius)
+  this.temperatureControlService
+    .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
+    .setProps({
+      validValues: [
+        this.Characteristic.TemperatureDisplayUnits.CELSIUS,
+        this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
+      ]
+    })
+    .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
+    
+  // Force initial state to ensure we start with the right mode
+  setTimeout(() => {
+    this.updateCurrentHeatingCoolingState();
+  }, 1000);
+}
   /**
    * Get the current heating/cooling state based on device status
    */
@@ -450,26 +438,31 @@ export class SleepMeAccessory {
     }
   }
 
-  /**
-   * Verify power state consistency
-   */
-  private async verifyPowerState(): Promise<void> {
-    const currentTargetState = this.getTargetHeatingCoolingState();
-    const expectedState = this.isPowered ? 
-      this.Characteristic.TargetHeatingCoolingState.AUTO : 
-      this.Characteristic.TargetHeatingCoolingState.OFF;
-      
-    if (currentTargetState !== expectedState) {
-      this.platform.log.debug('Verifying power state consistency...');
-      
-      // Force UI to match our internal state
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.TargetHeatingCoolingState,
-        expectedState
-      );
-    }
+/**
+ * Verify power state consistency and enforce our simplified interface
+ */
+private async verifyPowerState(): Promise<void> {
+  const currentTargetState = this.getTargetHeatingCoolingState();
+  const expectedState = this.isPowered ? 
+    this.Characteristic.TargetHeatingCoolingState.AUTO : 
+    this.Characteristic.TargetHeatingCoolingState.OFF;
+    
+  if (currentTargetState !== expectedState) {
+    this.platform.log.info(
+      `Power state mismatch detected. UI shows: ${currentTargetState}, ` +
+      `Expected: ${expectedState}. Updating UI.`
+    );
+    
+    // Force UI to match our internal state
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.TargetHeatingCoolingState,
+      expectedState
+    );
   }
-
+  
+  // Also verify the current heating/cooling state is consistent
+  this.updateCurrentHeatingCoolingState();
+}
   /**
    * Execute an operation with epoch tracking for cancellation
    * @param operationType Type of operation
@@ -1012,6 +1005,15 @@ export class SleepMeAccessory {
         `Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  /**
+   * Verify device state by refreshing its status.
+   */
+  private verifyDeviceState(): void {
+    this.refreshDeviceStatus(true).catch(error => {
+      this.platform.log.error(`Failed to verify device state: ${error instanceof Error ? error.message : String(error)}`);
+    });
   }
 
   /**
