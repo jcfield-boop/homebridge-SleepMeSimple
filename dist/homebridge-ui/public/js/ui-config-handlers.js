@@ -109,6 +109,7 @@ window.loadConfig = async function() {
     return createMockConfig();
   }
 };
+
 /**
  * Helper function to populate form fields with configuration values
  * @param {Object} config - The platform configuration object
@@ -133,10 +134,11 @@ function populateFormWithConfig(config) {
       console.warn('API token input element not found');
     }
     
-    // Set unit
+    // Set unit with detailed logging
     if (unitSelect && config.unit) {
-      console.log(`Setting temperature unit: ${config.unit}`);
+      console.log(`Setting temperature unit: "${config.unit}"`);
       unitSelect.value = config.unit;
+      console.log(`After setting, unitSelect value = "${unitSelect.value}"`);
     } else if (!unitSelect) {
       console.warn('Unit select element not found');
     } else if (!config.unit) {
@@ -144,10 +146,11 @@ function populateFormWithConfig(config) {
       unitSelect.value = 'C';
     }
     
-    // Set polling interval
+    // Set polling interval with detailed logging
     if (pollingIntervalInput && config.pollingInterval) {
       console.log(`Setting polling interval: ${config.pollingInterval}`);
       pollingIntervalInput.value = config.pollingInterval;
+      console.log(`After setting, pollingIntervalInput value = "${pollingIntervalInput.value}"`);
     } else if (!pollingIntervalInput) {
       console.warn('Polling interval input element not found');
     } else if (!config.pollingInterval) {
@@ -155,20 +158,17 @@ function populateFormWithConfig(config) {
       pollingIntervalInput.value = '90';
     }
     
-   // Set log level with enhanced logging
-if (logLevelSelect && config.logLevel) {
-  console.log(`Setting log level from config: "${config.logLevel}"`);
-  logLevelSelect.value = config.logLevel;
-  
-  // Verify the value was set correctly
-  console.log(`After setting, logLevelSelect value is: "${logLevelSelect.value}"`);
-} else if (!logLevelSelect) {
-  console.warn('Log level select element not found');
-} else if (!config.logLevel) {
-  console.log('No log level in config, using default (normal)');
-  logLevelSelect.value = 'normal';
-  console.log(`After setting default, logLevelSelect value is: "${logLevelSelect.value}"`);
-}
+    // Set log level with detailed logging
+    if (logLevelSelect && config.logLevel) {
+      console.log(`Setting log level: "${config.logLevel}"`);
+      logLevelSelect.value = config.logLevel;
+      console.log(`After setting, logLevelSelect value = "${logLevelSelect.value}"`);
+    } else if (!logLevelSelect) {
+      console.warn('Log level select element not found');
+    } else if (!config.logLevel) {
+      console.log('No log level in config, using default (normal)');
+      logLevelSelect.value = 'normal';
+    }
     
     // Handle schedules configuration
     if (enableSchedulesCheckbox) {
@@ -179,6 +179,7 @@ if (logLevelSelect && config.logLevel) {
       // Show/hide schedules container based on checkbox state
       if (schedulesContainer) {
         schedulesContainer.classList.toggle('hidden', !enableSchedules);
+        schedulesContainer.style.display = enableSchedules ? 'block' : 'none';
       } else {
         console.warn('Schedules container element not found');
       }
@@ -302,6 +303,14 @@ window.saveConfig = async function(saveToFile = true) {
     const logLevel = document.getElementById('logLevel')?.value || 'normal';
     const enableSchedules = document.getElementById('enableSchedules')?.checked || false;
     
+    // Log the values being saved
+    console.log('Form values to save:');
+    console.log('- API Token: [hidden]');
+    console.log(`- Temperature Unit: ${unit}`);
+    console.log(`- Polling Interval: ${pollingInterval}`);
+    console.log(`- Log Level: ${logLevel}`);
+    console.log(`- Enable Schedules: ${enableSchedules}`);
+    
     // Validate polling interval
     if (isNaN(pollingInterval) || pollingInterval < 60 || pollingInterval > 300) {
       console.error('Invalid polling interval:', pollingInterval);
@@ -314,7 +323,12 @@ window.saveConfig = async function(saveToFile = true) {
       return;
     }
     
-    // STEP 3: Create updated configuration object
+    // STEP 3: Get current plugin config to find platform config
+    console.log('Getting current plugin config...');
+    const currentConfig = await homebridge.getPluginConfig();
+    console.log('Current plugin config retrieved');
+    
+    // STEP 4: Create updated configuration object
     console.log('Creating configuration object...');
     const config = {
       platform: 'SleepMeSimple',
@@ -325,87 +339,71 @@ window.saveConfig = async function(saveToFile = true) {
       logLevel,
       enableSchedules
     };
-   // Modified part of saveConfig function in ui-config-handlers.js
-// (Only showing the relevant section)
-
-// STEP 4: Add schedules if enabled
-if (enableSchedules && Array.isArray(window.schedules)) {
-  console.log(`Adding ${window.schedules.length} schedules to configuration`);
-  
-  // Process schedules to ensure proper format
-  config.schedules = window.schedules.map(schedule => {
-    // Create a clean schedule object with only the properties defined in the schema
-    const cleanSchedule = {
-      type: String(schedule.type || 'Everyday'),
-      time: String(schedule.time || '00:00'),
-      temperature: Number(schedule.temperature || 21)
-    };
-    
-    // Add unit property if it exists
-    if (schedule.unit) {
-      cleanSchedule.unit = String(schedule.unit);
+   
+    // STEP 5: Add schedules if enabled
+    if (enableSchedules && Array.isArray(window.schedules)) {
+      console.log(`Adding ${window.schedules.length} schedules to configuration`);
+      
+      // Process schedules to ensure proper format
+      config.schedules = window.schedules.map(schedule => {
+        // Create a clean schedule object with only the properties defined in the schema
+        const cleanSchedule = {
+          type: String(schedule.type || 'Everyday'),
+          time: String(schedule.time || '00:00'),
+          temperature: Number(schedule.temperature || 21)
+        };
+        
+        // Add unit property if it exists
+        if (schedule.unit) {
+          cleanSchedule.unit = String(schedule.unit);
+        }
+        
+        // Only add day property for Specific Day schedules
+        if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
+          cleanSchedule.day = Number(schedule.day);
+        }
+        
+        // Only add description if present
+        if (schedule.description) {
+          cleanSchedule.description = String(schedule.description);
+        }
+        
+        // Preserve template information
+        if (schedule.isFromTemplate) {
+          cleanSchedule.isFromTemplate = Boolean(schedule.isFromTemplate);
+        }
+        
+        if (schedule.templateSource) {
+          cleanSchedule.templateSource = String(schedule.templateSource);
+        }
+        
+        // Preserve warm hug flag if present
+        if (schedule.isWarmHug) {
+          cleanSchedule.isWarmHug = Boolean(schedule.isWarmHug);
+        }
+        
+        return cleanSchedule;
+      });
+    } else {
+      // Always include schedules array in config (even when disabled)
+      // This preserves existing schedules in config when they're disabled
+      console.log('Including empty schedules array in config');
+      config.schedules = [];
     }
     
-    // Only add day property for Specific Day schedules
-    if (schedule.type === 'Specific Day' && schedule.day !== undefined) {
-      cleanSchedule.day = Number(schedule.day);
-    }
-    
-    // Only add description if present
-    if (schedule.description) {
-      cleanSchedule.description = String(schedule.description);
-    }
-    
-    // Preserve template information
-    if (schedule.isFromTemplate) {
-      cleanSchedule.isFromTemplate = Boolean(schedule.isFromTemplate);
-    }
-    
-    if (schedule.templateSource) {
-      cleanSchedule.templateSource = String(schedule.templateSource);
-    }
-    
-    // Log processed schedule for debugging
-    console.log(`Processed schedule: ${cleanSchedule.type} at ${cleanSchedule.time}: ${cleanSchedule.temperature}°${cleanSchedule.unit || unit}`);
-    
-    return cleanSchedule;
-  });
-} else {
-  // Always include schedules array in config (even when disabled)
-  // This preserves existing schedules in config when they're disabled
-  console.log('Keeping schedules in config even though schedules are disabled');
-  
-  // If schedules exist in window.schedules, preserve them
-  if (Array.isArray(window.schedules) && window.schedules.length > 0) {
-    config.schedules = window.schedules;
-  } 
-  // Otherwise, if no schedules in memory but they exist in current config, preserve them
-  else if (currentConfig && Array.isArray(currentConfig.schedules)) {
-    config.schedules = currentConfig.schedules;
-  }
-  // Lastly, ensure there's at least an empty array
-  else {
-    config.schedules = [];
-  }
-}
-    
-    // STEP 5: Get advanced settings
+    // STEP 6: Get advanced settings
     const advancedSettings = getAdvancedSettings();
     if (advancedSettings) {
       config.advanced = advancedSettings;
     }
     
-    // STEP 6: Save configuration using client-side API
-    console.log('Saving configuration using client-side API...');
-    try {
-      // Get current plugin config array
-      const currentConfig = await homebridge.getPluginConfig();
-      console.log('Current plugin config:', currentConfig);
+    // STEP 7: Find existing config in the array or prepare to add new one
+    console.log('Preparing updated config array...');
+    let updatedConfigArray = [];
+    
+    if (Array.isArray(currentConfig)) {
+      updatedConfigArray = [...currentConfig]; // Create a new copy to avoid reference issues
       
-      // Create a completely new array to avoid reference issues
-      const updatedConfigArray = JSON.parse(JSON.stringify(currentConfig || []));
-      
-      // Find our platform config or prepare to add it
       const existingIndex = updatedConfigArray.findIndex(c => c && c.platform === 'SleepMeSimple');
       
       if (existingIndex >= 0) {
@@ -417,14 +415,22 @@ if (enableSchedules && Array.isArray(window.schedules)) {
         console.log('Adding new platform config');
         updatedConfigArray.push(config);
       }
-      
-      // Update config in memory with the completely new array
-      console.log('Calling updatePluginConfig with:', JSON.stringify(updatedConfigArray).substring(0, 100) + '...');
+    } else {
+      // If no valid config array, create a new one with just our config
+      console.log('Creating new config array');
+      updatedConfigArray = [config];
+    }
+    
+    // STEP 8: Save configuration using client-side API
+    console.log('Updating plugin config in memory...');
+    try {
+      // Update config in memory
       await homebridge.updatePluginConfig(updatedConfigArray);
+      console.log('Configuration updated in memory successfully');
       
       // If requested, also save to file (only when user explicitly clicks Save button)
       if (saveToFile) {
-        console.log('Calling savePluginConfig to write to disk');
+        console.log('Saving config to disk...');
         await homebridge.savePluginConfig();
         console.log('Configuration saved to disk successfully');
       }
@@ -442,7 +448,13 @@ if (enableSchedules && Array.isArray(window.schedules)) {
       try {
         const verifyConfig = await homebridge.getPluginConfig();
         const saved = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
-        console.log('Verification: Config saved correctly =', !!saved);
+        console.log('Verification - Config saved correctly:', !!saved);
+        if (saved) {
+          console.log('Saved config values:');
+          console.log('- logLevel:', saved.logLevel);
+          console.log('- unit:', saved.unit);
+          console.log('- pollingInterval:', saved.pollingInterval);
+        }
       } catch (verifyError) {
         console.warn('Unable to verify saved config:', verifyError);
       }
