@@ -1,4 +1,21 @@
 # Changelog
+## 6.9.0 (2025-04-25)
+
+### Changed
+- **Simplified HomeKit Interface**: Restricted thermostat modes to only show "Off" and "Auto" options
+  - Modified thermostat service to restrict `TargetHeatingCoolingState` to only OFF and AUTO values
+  - Simplified thermostat handling to better match SleepMe device's actual behavior
+  - Improved power state verification to ensure consistent UI representation
+  - Enhanced HomeKit integration by removing unnecessary heating/cooling states
+  - Streamlined user experience with clearer controls that match device functionality
+
+### Technical
+- **HomeKit Integration**: Better alignment with SleepMe device behavior
+  - Restricted valid thermostat mode values to only those actually used
+  - Enhanced state synchronization between internal tracking and HomeKit UI
+  - Improved power state verification with explicit characteristic updates
+  - Simplified control logic by removing unnecessary heating/cooling state management
+  - Added better logging for thermostat state changes
 ## 6.8.1 (2025-04-20)
 
 ### Changed
