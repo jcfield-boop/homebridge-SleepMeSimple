@@ -10,7 +10,13 @@
     /**
      * Add or update a schedule
      */
-    window.handleScheduleAction = function() {
+    // Modified handleScheduleAction function
+window.handleScheduleAction = function() {
+  // First check if schedules are enabled
+  if (!areSchedulesEnabled()) {
+    console.log('Schedules are disabled, ignoring schedule action');
+    return;
+  }
       // Get form elements
       const scheduleType = document.getElementById('scheduleType');
       const scheduleDay = document.getElementById('scheduleDay');
@@ -366,6 +372,12 @@ function getSleepPhaseOrder(time) {
  * Uses sleep cycle ordering instead of strict chronological ordering
  */
 window.renderScheduleList = function() {
+  // Check if schedules are enabled first
+  if (!areSchedulesEnabled()) {
+    console.log('Schedules are disabled, skipping render');
+    return;
+  }
+  
   const scheduleList = document.getElementById('scheduleList');
   const unit = document.getElementById('unit');
   

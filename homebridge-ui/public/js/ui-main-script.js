@@ -38,45 +38,69 @@
     initializeCollapsibleSections();
   }, 1000); // 1 second delay
     });
-    function initializeConditionalElements() {
-      console.log('Initializing conditional UI elements');
+// In ui-main-script.js - improved initializeConditionalElements function
+function initializeConditionalElements() {
+  console.log('Initializing conditional UI elements');
+  
+  // Initialize day select visibility based on current schedule type
+  const scheduleTypeSelect = document.getElementById('scheduleType');
+  const daySelectContainer = document.getElementById('daySelectContainer');
+  
+  if (scheduleTypeSelect && daySelectContainer) {
+    // Ensure it's hidden by default with both class and style
+    daySelectContainer.classList.add('hidden');
+    daySelectContainer.style.display = 'none';
+    
+    // Add event listener to handle changes
+    scheduleTypeSelect.addEventListener('change', function() {
+      const isSpecificDay = this.value === 'Specific Day';
+      daySelectContainer.classList.toggle('hidden', !isSpecificDay);
+      daySelectContainer.style.display = isSpecificDay ? 'block' : 'none';
+    });
+    
+    // Trigger initial state
+    const isSpecificDay = scheduleTypeSelect.value === 'Specific Day';
+    daySelectContainer.classList.toggle('hidden', !isSpecificDay);
+    daySelectContainer.style.display = isSpecificDay ? 'block' : 'none';
+  }
+  
+  // Enable/disable schedules container based on checkbox
+  const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+  const schedulesContainer = document.getElementById('schedulesContainer');
+  
+  if (enableSchedulesCheckbox && schedulesContainer) {
+    // Initialize based on current checkbox state
+    const schedulesEnabled = enableSchedulesCheckbox.checked;
+    
+    // Set initial visibility using both class and style for maximum compatibility
+    schedulesContainer.classList.toggle('hidden', !schedulesEnabled);
+    schedulesContainer.style.display = schedulesEnabled ? 'block' : 'none';
+    
+    // Add event listener to handle changes
+    enableSchedulesCheckbox.addEventListener('change', function() {
+      const enabled = this.checked;
+      console.log('Schedule enabled state changed:', enabled);
       
-      // Initialize day select visibility based on current schedule type
-      const scheduleTypeSelect = document.getElementById('scheduleType');
-      const daySelectContainer = document.getElementById('daySelectContainer');
-      
-      if (scheduleTypeSelect && daySelectContainer) {
-        // Ensure it's hidden by default with both class and style
-        daySelectContainer.classList.add('hidden');
-        daySelectContainer.style.display = 'none';
-        
-        // Add event listener to handle changes
-        scheduleTypeSelect.addEventListener('change', function() {
-          const isSpecificDay = this.value === 'Specific Day';
-          daySelectContainer.classList.toggle('hidden', !isSpecificDay);
-          daySelectContainer.style.display = isSpecificDay ? 'block' : 'none';
-        });
-        
-        // Trigger initial state
-        const isSpecificDay = scheduleTypeSelect.value === 'Specific Day';
-        daySelectContainer.classList.toggle('hidden', !isSpecificDay);
-        daySelectContainer.style.display = isSpecificDay ? 'block' : 'none';
-      }
-      
-      // Initialize warm hug info visibility based on checkbox
-      const warmHugCheckbox = document.getElementById('warmHugEnabled');
-      const warmHugInfo = document.getElementById('warmHugInfo');
-      
-      if (warmHugCheckbox && warmHugInfo) {
-        // Ensure it's hidden by default
-        warmHugInfo.classList.add('hidden');
-        
-        // Add event listener
-        warmHugCheckbox.addEventListener('change', function() {
-          warmHugInfo.classList.toggle('hidden', !this.checked);
-        });
-      }
-    }
+      // Toggle visibility with both methods
+      schedulesContainer.classList.toggle('hidden', !enabled);
+      schedulesContainer.style.display = enabled ? 'block' : 'none';
+    });
+  }
+  
+  // Initialize warm hug info visibility based on checkbox
+  const warmHugCheckbox = document.getElementById('warmHugEnabled');
+  const warmHugInfo = document.getElementById('warmHugInfo');
+  
+  if (warmHugCheckbox && warmHugInfo) {
+    // Ensure it's hidden by default
+    warmHugInfo.classList.add('hidden');
+    
+    // Add event listener
+    warmHugCheckbox.addEventListener('change', function() {
+      warmHugInfo.classList.toggle('hidden', !this.checked);
+    });
+  }
+}
     /**
      * Initialize tab navigation
      */
@@ -359,28 +383,39 @@ if (warmHugCheckbox && warmHugInfo) {
       }
     }
     
-    /**
-     * Initialize Homebridge connection
-     */
-    function initializeHomebridge() {
-      if (typeof homebridge === 'undefined') {
-        console.error('Homebridge object not available');
-        return;
-      }
-      
-      // Check if API is already available
-      if (typeof homebridge.getPluginConfig === 'function') {
-        console.log('Homebridge API already available, loading config immediately');
-        setTimeout(loadConfig, 500);
-      } else {
-        // Wait for ready event
-        homebridge.addEventListener('ready', function() {
-          console.log('Homebridge ready event received, loading config');
-          setTimeout(loadConfig, 500);
-        });
-      }
-    }
-    
+ /**
+ * Initialize Homebridge connection and configuration
+ */
+function initializeHomebridge() {
+  if (typeof homebridge === 'undefined') {
+    console.error('Homebridge object not available');
+    return;
+  }
+  
+  // Set initial state of schedules section based on checkbox
+  const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+  const schedulesContainer = document.getElementById('schedulesContainer');
+  
+  if (enableSchedulesCheckbox && schedulesContainer) {
+    // Set initial visibility
+    const schedulesEnabled = enableSchedulesCheckbox.checked;
+    schedulesContainer.classList.toggle('hidden', !schedulesEnabled);
+    schedulesContainer.style.display = schedulesEnabled ? 'block' : 'none';
+    console.log('Initial schedules enabled state:', schedulesEnabled);
+  }
+  
+  // Check if API is already available
+  if (typeof homebridge.getPluginConfig === 'function') {
+    console.log('Homebridge API already available, loading config immediately');
+    setTimeout(loadConfig, 500);
+  } else {
+    // Wait for ready event
+    homebridge.addEventListener('ready', function() {
+      console.log('Homebridge ready event received, loading config');
+      setTimeout(loadConfig, 500);
+    });
+  }
+}
     /**
      * Load configuration from Homebridge
      */
@@ -1862,6 +1897,18 @@ return {
   }
 };
 })();
+/**
+ * Check if schedules are currently enabled
+ * @returns {boolean} True if schedules are enabled
+ */
+function areSchedulesEnabled() {
+  const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+  return enableSchedulesCheckbox ? enableSchedulesCheckbox.checked : false;
+}
+
+// Then expose it to the global scope for use in other modules
+window.areSchedulesEnabled = areSchedulesEnabled;
+
 
 // Main initialization - runs when document is ready
 document.addEventListener('DOMContentLoaded', () => {

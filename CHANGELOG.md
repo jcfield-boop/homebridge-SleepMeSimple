@@ -1,4 +1,30 @@
 # Changelog
+
+## 6.7.0 (2025-04-20)
+
+### Fixed
+- **Schedule Visibility Logic**: Properly handle enabling/disabling schedules section
+  - Fixed issue where schedules section would still appear when disabled
+  - Added proper state management to preserve schedules in config when disabled
+  - Enhanced initialization code to respect schedule enable status from config
+  - Improved UI state handling with both CSS class and display property control
+  - Added defensive validation before any schedule operations
+
+### Improved
+- **Configuration Management**: Better handling of schedule configuration
+  - Preserved existing schedules in config.json even when schedules are disabled
+  - Added proper state verification throughout the configuration process
+  - Enhanced logging to track schedule enable/disable status
+  - Fixed schedule container visibility handling with multiple redundant methods
+  - Improved error reporting for schedule operations
+
+### Technical
+- **State Management**: Enhanced conditional UI element handling
+  - Implemented areSchedulesEnabled helper for centralized state checking
+  - Added multiple validation points to prevent schedule operations when disabled
+  - Improved initialization sequence for conditional elements
+  - Enhanced DOM manipulation with both class and style property updates
+  - Fixed edge cases in configuration loading and saving
 ## 6.6.1 (2025-04-14)
 
 ### Fixed
