@@ -159,17 +159,17 @@ function populateFormWithConfig(config) {
     }
     
     // Set log level with detailed logging
-    if (logLevelSelect && config.logLevel) {
-      console.log(`Setting log level: "${config.logLevel}"`);
-      logLevelSelect.value = config.logLevel;
-      console.log(`After setting, logLevelSelect value = "${logLevelSelect.value}"`);
-    } else if (!logLevelSelect) {
-      console.warn('Log level select element not found');
-    } else if (!config.logLevel) {
-      console.log('No log level in config, using default (normal)');
-      logLevelSelect.value = 'normal';
-    }
-    
+if (logLevelSelect && config.logLevel) {
+  console.log(`Setting log level: "${config.logLevel}"`);
+  logLevelSelect.value = config.logLevel;
+  console.log(`After setting, logLevelSelect value = "${logLevelSelect.value}"`);
+} else if (!logLevelSelect) {
+  console.warn('Log level select element not found');
+} else if (!config.logLevel) {
+  console.log('No log level in config, using default (normal)');
+  logLevelSelect.value = 'normal';
+  console.log(`After setting default, logLevelSelect value = "${logLevelSelect.value}"`);
+}
     // Handle schedules configuration
     if (enableSchedulesCheckbox) {
       const enableSchedules = config.enableSchedules === true;
@@ -296,12 +296,22 @@ window.saveConfig = async function(saveToFile = true) {
       }
       return;
     }
-    
-    // Get other form values with defaults
-    const unit = document.getElementById('unit')?.value || 'C';
-    const pollingInterval = parseInt(document.getElementById('pollingInterval')?.value || '90', 10);
-    const logLevel = document.getElementById('logLevel')?.value || 'normal';
-    const enableSchedules = document.getElementById('enableSchedules')?.checked || false;
+    // Get other form values with defaults and log them
+const unitSelect = document.getElementById('unit');
+const unit = unitSelect?.value || 'C';
+console.log(`Reading unit value from form: "${unit}"`);
+
+const pollingIntervalInput = document.getElementById('pollingInterval');
+const pollingInterval = parseInt(pollingIntervalInput?.value || '90', 10);
+console.log(`Reading polling interval from form: ${pollingInterval}`);
+
+const logLevelSelect = document.getElementById('logLevel');
+const logLevel = logLevelSelect?.value || 'normal';
+console.log(`Reading log level from form: "${logLevel}"`);
+
+const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+const enableSchedules = enableSchedulesCheckbox?.checked || false;
+console.log(`Reading enable schedules from form: ${enableSchedules}`);
     
     // Log the values being saved
     console.log('Form values to save:');
