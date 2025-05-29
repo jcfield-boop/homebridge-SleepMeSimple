@@ -46,9 +46,9 @@ export const MIN_REQUEST_INTERVAL = 6000;
 
 /**
  * Maximum API requests per minute (to respect rate limits)
- * More conservative limit to avoid rate limiting
+ * Very conservative limit due to potential shared API usage
  */
-export const MAX_REQUESTS_PER_MINUTE = 10;
+export const MAX_REQUESTS_PER_MINUTE = 3;
 
 /**
  * Default cache validity period in milliseconds

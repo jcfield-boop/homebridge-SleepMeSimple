@@ -679,6 +679,15 @@ private async processQueue(): Promise<void> {
         continue;
       }
       
+      // Enforce minimum interval between requests
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      if (this.lastRequestTime > 0 && timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+        this.logger.debug(`Enforcing minimum request interval: waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue; // Re-check timing after wait
+      }
+      
       // Check if we've hit the rate limit
       if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
         const resetTime = this.minuteStartTime + 60000;
