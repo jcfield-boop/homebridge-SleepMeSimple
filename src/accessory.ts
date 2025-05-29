@@ -270,38 +270,6 @@ export class SleepMeAccessory {
    .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
 }
 
-/**
-* Verify the current device state by forcing a refresh
-* Used after critical operations like power changes
-*/
-private async verifyDeviceState(): Promise<void> {
- try {
-   this.platform.log.debug('Verifying device state consistency...');
-   
-   // Force a fresh status update
-   const status = await this.apiClient.getDeviceStatus(this.deviceId, true);
-   
-   if (status) {
-     // Update our internal state to match reality
-     const actualPowerState = status.powerState === PowerState.ON;
-     
-     if (this.isPowered !== actualPowerState) {
-       this.platform.log.info(
-         `Power state mismatch detected. UI shows: ${this.isPowered ? 'ON' : 'OFF'}, ` +
-         `Actual: ${actualPowerState ? 'ON' : 'OFF'}. Updating UI.`
-       );
-       
-       // Update internal state
-       this.isPowered = actualPowerState;
-       
-       // Update UI
-       this.updateCurrentHeatingCoolingState();
-     }
-   }
- } catch (error) {
-   this.platform.log.error(`Error verifying device state: ${error}`);
- }
-}
 
 /**
 * Get the current heating/cooling state based on device status
@@ -409,9 +377,6 @@ private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
             
             // Update UI immediately for responsiveness
             this.updateCurrentHeatingCoolingState();
-            
-            // Verify the state after a short delay
-            setTimeout(() => this.verifyDeviceState(), 5000);
           } else {
             throw new Error('Failed to turn off device');
           }

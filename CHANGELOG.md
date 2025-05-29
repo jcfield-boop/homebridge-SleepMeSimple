@@ -1,4 +1,12 @@
 # Changelog
+## 5.5.9 (2025-05-29)
+
+### Fixed
+- **Rate Limiting**: Removed verification API calls after device state changes
+  - Eliminated unnecessary GET requests triggered 5 seconds after PATCH operations
+  - Reduced API call volume to prevent rate limit errors for single-device installations
+  - Trust PATCH response success instead of additional verification calls
+
 ## 5.5.6 (2025-03-31)
 
 ### Improved
