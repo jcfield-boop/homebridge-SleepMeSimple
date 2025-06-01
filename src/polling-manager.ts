@@ -86,6 +86,7 @@ export class PollingManager {
   /**
    * Poll all registered devices in a single batch
    * This is the core optimization - 1 API call per device instead of 2+
+   * Enhanced with adaptive polling for active vs inactive devices
    */
   private async pollAllDevices(): Promise<void> {
     if (this.devices.size === 0) return;
@@ -96,16 +97,29 @@ export class PollingManager {
     const startTime = Date.now();
     let successCount = 0;
     let errorCount = 0;
+    let activeDeviceCount = 0;
+    let freshCallCount = 0;
     
     // Process devices sequentially to respect rate limits
     for (const [deviceId, device] of this.devices) {
       try {
-        // Use cached data when appropriate - this is the key optimization
-        const status = await this.api.getDeviceStatus(deviceId, false);
+        // Check if we should force fresh data for potentially active devices
+        // Every 3rd cycle, force fresh data for better temperature tracking
+        const shouldForceFresh = (this.currentPollCycle % 3 === 0);
+        
+        const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
         
         if (status) {
           device.onStatusUpdate(status);
           successCount++;
+          
+          // Track active devices for logging
+          const isActive = status.powerState === 'on' && 
+                          (status.thermalStatus === 'active' || 
+                           status.thermalStatus === 'heating' || 
+                           status.thermalStatus === 'cooling');
+          if (isActive) activeDeviceCount++;
+          if (shouldForceFresh) freshCallCount++;
         } else {
           throw new Error('No status returned');
         }
@@ -125,7 +139,8 @@ export class PollingManager {
     
     const duration = Date.now() - startTime;
     this.logger.info(
-      `Poll cycle ${this.currentPollCycle} completed: ${successCount} success, ${errorCount} errors (${duration}ms)`
+      `Poll cycle ${this.currentPollCycle} completed: ${successCount} success, ${errorCount} errors ` +
+      `(${duration}ms) [${activeDeviceCount} active, ${freshCallCount} fresh calls]`
     );
   }
 

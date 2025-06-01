@@ -42,9 +42,9 @@ export const MIN_REQUEST_INTERVAL = 6000;
 export const MAX_REQUESTS_PER_MINUTE = 3;
 /**
  * Default cache validity period in milliseconds
- * Increased for trusted cache entries
+ * Base period for cache entries - will be adjusted based on device state
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 600000;
+export const DEFAULT_CACHE_VALIDITY_MS = 120000; // 2 minutes base validity
 /**
  * Maximum number of retries for API requests
  * Higher priority requests will be retried more times

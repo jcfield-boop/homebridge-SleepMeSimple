@@ -152,13 +152,26 @@ export class SleepMeApi {
                 // High confidence cache (from PATCH responses) can be used longer
                 if (cachedStatus) {
                     let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
-                    // Adjust validity period based on confidence and source
-                    // More aggressive caching for routine polling efficiency
+                    // Adjust validity period based on confidence, source, and device state
+                    // More aggressive caching for routine polling efficiency, but shorter for active devices
                     if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
-                        // Extend validity for high confidence updates, especially if they came from a PATCH
-                        validityPeriod = cachedStatus.source === 'patch' ?
-                            DEFAULT_CACHE_VALIDITY_MS * 4 : // Even longer validity for PATCH responses
-                            DEFAULT_CACHE_VALIDITY_MS * 3; // Extended validity for high confidence GET
+                        // Check if device is actively heating/cooling (needs more frequent updates)
+                        const isDeviceActive = cachedStatus.status.powerState === PowerState.ON &&
+                            (cachedStatus.status.thermalStatus === ThermalStatus.ACTIVE ||
+                                cachedStatus.status.thermalStatus === ThermalStatus.HEATING ||
+                                cachedStatus.status.thermalStatus === ThermalStatus.COOLING);
+                        if (isDeviceActive) {
+                            // Active devices need fresher data for temperature tracking
+                            validityPeriod = cachedStatus.source === 'patch' ?
+                                DEFAULT_CACHE_VALIDITY_MS * 2 : // Shorter validity for active PATCH responses
+                                DEFAULT_CACHE_VALIDITY_MS * 1.5; // Shorter validity for active GET
+                        }
+                        else {
+                            // Inactive devices can use longer cache periods
+                            validityPeriod = cachedStatus.source === 'patch' ?
+                                DEFAULT_CACHE_VALIDITY_MS * 4 : // Longer validity for inactive PATCH responses
+                                DEFAULT_CACHE_VALIDITY_MS * 3; // Extended validity for inactive GET
+                        }
                     }
                     else if (cachedStatus.isOptimistic) {
                         validityPeriod = DEFAULT_CACHE_VALIDITY_MS; // Normal validity for optimistic updates
@@ -170,7 +183,12 @@ export class SleepMeApi {
                             : '';
                         const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
                         const verifiedFlag = cachedStatus.verified ? ' (verified)' : '';
-                        this.logger.verbose(`Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo}${verifiedFlag})`);
+                        const isDeviceActive = cachedStatus.status.powerState === PowerState.ON &&
+                            (cachedStatus.status.thermalStatus === ThermalStatus.ACTIVE ||
+                                cachedStatus.status.thermalStatus === ThermalStatus.HEATING ||
+                                cachedStatus.status.thermalStatus === ThermalStatus.COOLING);
+                        const activityFlag = isDeviceActive ? ' (active)' : ' (inactive)';
+                        this.logger.verbose(`Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo}${verifiedFlag}${activityFlag})`);
                         return cachedStatus.status;
                     }
                 }

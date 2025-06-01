@@ -41,6 +41,7 @@ export declare class PollingManager {
     /**
      * Poll all registered devices in a single batch
      * This is the core optimization - 1 API call per device instead of 2+
+     * Enhanced with adaptive polling for active vs inactive devices
      */
     private pollAllDevices;
     /**
