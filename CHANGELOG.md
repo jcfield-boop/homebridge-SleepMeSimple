@@ -1,5 +1,14 @@
 # Changelog
-## 5.5.9 (2025-05-29)
+## 6.9.7 (2025-05-29)
+
+### Fixed
+- **Rate Limiting**: Added missing minimum request interval enforcement
+  - Enforces 6-second minimum gap between individual API requests
+  - Reduces max requests per minute from 10 to 3 for conservative rate limiting
+  - Prevents rapid-fire requests that trigger SleepMe's 429 rate limit errors
+  - Fixes critical bug where MIN_REQUEST_INTERVAL was defined but never enforced
+
+## 6.9.6 (2025-05-29)
 
 ### Fixed
 - **Rate Limiting**: Removed verification API calls after device state changes

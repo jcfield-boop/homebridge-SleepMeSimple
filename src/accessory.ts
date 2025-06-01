@@ -7,7 +7,8 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
 import { SleepMeApi } from './api/sleepme-api.js';
-import { ThermalStatus, PowerState } from './api/types.js';
+import { ThermalStatus, PowerState, DeviceStatus } from './api/types.js';
+import { PollableDevice } from './polling-manager.js';
 import { 
   MIN_TEMPERATURE_C, 
   MAX_TEMPERATURE_C, 
@@ -71,8 +72,9 @@ function createSmartDebounce<T extends (...args: any[]) => any>(
 /**
  * SleepMe Accessory
  * Provides a simplified interface for SleepMe devices
+ * Now uses centralized polling to reduce API calls
  */
-export class SleepMeAccessory {
+export class SleepMeAccessory implements PollableDevice {
   // HomeKit services
   private temperatureControlService!: Service;
   private waterLevelService?: Service;
@@ -91,17 +93,15 @@ export class SleepMeAccessory {
   private powerStateSetterDebounced: (turnOn: boolean) => void;
   
   // Device properties
-  private readonly deviceId: string;
+  public readonly deviceId: string;
   private readonly displayName: string;
   private deviceModel = 'SleepMe Device';
   
-  // Update control
-  private statusUpdateTimer?: NodeJS.Timeout;
+  // Update control - removed individual polling timers
   private lastStatusUpdate = 0;
   private lastUserActionTime = 0;
   private failedUpdateAttempts = 0;
   private updateInProgress = false;
-  private skipNextUpdate = false;
 
   // Added missing properties
   private commandEpoch = 0;
@@ -157,17 +157,14 @@ export class SleepMeAccessory {
       COMMAND_DEBOUNCE_DELAY_MS,
       { leading: false, trailing: true }
     );
-    // Initialize the device state by fetching current status
-    // Wait a moment before first status fetch to avoid immediate API call
-    setTimeout(() => {
-      this.refreshDeviceStatus(true)
-        .catch(error => this.platform.log.error(
-          `Error initializing device status: ${error instanceof Error ? error.message : String(error)}`
-        ));
-    }, 15000); // 15 second delay for initial status check
     
-    // Set up polling interval
-    this.setupStatusPolling(60000);
+    // Register with centralized polling manager instead of individual polling
+    if (this.platform.pollingManager) {
+      this.platform.pollingManager.registerDevice(this);
+      this.platform.log.info(`Registered ${this.displayName} with centralized polling`);
+    } else {
+      this.platform.log.warn(`No polling manager available for ${this.displayName}`);
+    }
     
     this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
   }
@@ -628,100 +625,6 @@ private setupWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
   }
 }
 /**
-   * Set up the status polling mechanism with trust-based adaptive intervals
-   */
-private setupStatusPolling(initialDelay = 0): void {
-  // Clear any existing timer
-  if (this.statusUpdateTimer) {
-    clearInterval(this.statusUpdateTimer);
-  }
-  
-  // Convert polling interval from seconds to milliseconds
-  const pollingIntervalMs = this.platform.pollingInterval * 1000;
-  
-  this.platform.log.debug(
-    `Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`
-  );
-  
-  // Add an initial one-time polling after the delay
-  if (initialDelay > 0) {
-    this.platform.log.info(
-      `Scheduling initial status check for device ${this.deviceId} in ${initialDelay/1000} seconds`
-    );
-    
-    setTimeout(() => {
-      this.refreshDeviceStatus(true).catch(e => {
-        this.platform.log.error(`Error in initial status check: ${e}`);
-      });
-    }, initialDelay);
-  }
-  
-  // Set up regular polling with adaptive interval (unchanged)
-  this.statusUpdateTimer = setInterval(() => {
-    // Skip update if another one is in progress to prevent queue buildup
-    if (this.updateInProgress) {
-      this.platform.log.debug('Skipping update, another one already in progress');
-      return;
-    }
-
-    // Skip update if there's a pending operation
-    if (this.pendingOperation) {
-      this.platform.log.debug('Skipping update, pending operation in progress');
-      return;
-    }
-
-    // Skip update if manually marked to skip (after user interaction)
-    if (this.skipNextUpdate) {
-      this.platform.log.debug('Skipping scheduled update due to recent user interaction');
-      this.skipNextUpdate = false;
-      return;
-    }
-
-    // Significantly longer quiet period for trust-based approach
-    // Since we trust API responses, we can go longer between polls
-    const quietPeriod = USER_ACTION_QUIET_PERIOD_MS * 1.5;
-    const timeSinceUserAction = Date.now() - this.lastUserActionTime;
-    if (timeSinceUserAction < quietPeriod) {
-      this.platform.log.debug(
-        `Skipping update, within quiet period after user action (${Math.round(timeSinceUserAction/1000)}s of ${Math.round(quietPeriod/1000)}s)`
-      );
-      return;
-    }
-
-    // Dynamic polling frequency based on device state
-    let shouldPoll = true;
-    
-    if (!this.isPowered) {
-      // Device is off - poll much less frequently
-      // Only poll every 3x the interval when device is off
-      if (this.lastStatusUpdate && Date.now() - this.lastStatusUpdate < pollingIntervalMs * 3) {
-        shouldPoll = false;
-        this.platform.log.debug('Device is inactive, using extended polling interval');
-      }
-    }
-    
-    // If we've had several failed attempts, back off exponentially
-    if (this.failedUpdateAttempts > 1) {
-      const backoffFactor = Math.min(8, Math.pow(2, this.failedUpdateAttempts - 1));
-      const extendedInterval = pollingIntervalMs * backoffFactor;
-      
-      if (this.lastStatusUpdate && Date.now() - this.lastStatusUpdate < extendedInterval) {
-        shouldPoll = false;
-        this.platform.log.debug(`Backing off polling due to ${this.failedUpdateAttempts} failed attempts`);
-      }
-    }
-
-    if (shouldPoll) {
-      this.refreshDeviceStatus().catch(error => {
-        this.failedUpdateAttempts++;
-        this.platform.log.error(
-          `Error updating device status (attempt ${this.failedUpdateAttempts}): ${error instanceof Error ? error.message : String(error)}`
-        );
-      });
-    }
-  }, pollingIntervalMs);
-}
-/**
    * Detect device model based on attachments or other characteristics
    * @param data Raw device data from API
    * @returns Detected device model name
@@ -775,150 +678,6 @@ private detectDeviceModel(data: Record<string, unknown>): string {
   return 'SleepMe Device';
 }
 
-/**
- * Refresh the device status from the API with trust-based approach
- * @param isInitialSetup Whether this is the initial setup refresh
- */
-private async refreshDeviceStatus(isInitialSetup = false): Promise<void> {
-  // Skip polling updates if we recently made a user-initiated change
-  if (!isInitialSetup) {
-    const timeSinceUserAction = Date.now() - this.lastUserActionTime;
-    if (timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS) {
-      this.platform.log.debug(
-        `Skipping scheduled status update, recent user interaction ${Math.round(timeSinceUserAction/1000)}s ago`
-      );
-      this.skipNextUpdate = true; // Skip next update too
-      return;
-    }
-  }
-  
-  // Prevent concurrent updates
-  if (this.updateInProgress) {
-    this.platform.log.debug('Update already in progress, skipping');
-    return;
-  }
-  
-  this.updateInProgress = true;
-  
-  try {
-    // Force fresh data on initial setup, otherwise use cache when appropriate
-    const forceFresh = isInitialSetup;
-    
-    this.platform.log.verbose(
-      `Refreshing status for device ${this.deviceId} (${forceFresh ? 'fresh' : 'cached if available'})`
-    );
-    
-    // Get the device status from the API
-    const status = await this.apiClient.getDeviceStatus(this.deviceId, forceFresh);
-    
-    if (!status) {
-      throw new Error(`Failed to get status for device ${this.deviceId}`);
-    }
-    
-    // Update the last successful update timestamp
-    this.lastStatusUpdate = Date.now();
-    // Reset failed attempts counter on success
-    this.failedUpdateAttempts = 0;
-    // Log detailed status in verbose mode
-    this.platform.log.verbose(
-      `Device status received: current=${status.currentTemperature}°C, ` +
-      `target=${status.targetTemperature}°C, ` +
-      `thermal=${status.thermalStatus}, ` +
-      `power=${status.powerState}` +
-      (status.waterLevel !== undefined ? `, water=${status.waterLevel}%` : '')
-    );
-    
-    // Update model if we can detect it from raw response
-    if (status.rawResponse) {
-      const detectedModel = this.detectDeviceModel(status.rawResponse);
-      if (detectedModel !== this.deviceModel) {
-        this.deviceModel = detectedModel;
-        // Update the model in HomeKit
-        this.informationService.updateCharacteristic(
-          this.Characteristic.Model,
-          this.deviceModel
-        );
-        this.platform.log.info(`Detected device model: ${this.deviceModel}`);
-      }
-    }
-    
-    // Update firmware version if available
-    if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
-      this.firmwareVersion = status.firmwareVersion;
-      
-      // Update HomeKit characteristic
-      this.informationService.updateCharacteristic(
-        this.Characteristic.FirmwareRevision,
-        this.firmwareVersion
-      );
-      
-      this.platform.log.info(`Updated firmware version to ${this.firmwareVersion}`);
-    }
-    
-    // Update current temperature
-    if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
-      this.currentTemperature = status.currentTemperature;
-      
-      // Update the current temperature in Thermostat service
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.CurrentTemperature,
-        this.currentTemperature
-      );
-      
-      this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
-      
-      // Inside refreshDeviceStatus method, after updating currentTemperature
-      if (!isNaN(this.currentTemperature)) {
-        this.updateScheduleManager(this.currentTemperature);
-      }
-    }
-    
-    // Update target temperature
-    if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
-      this.targetTemperature = status.targetTemperature;
-      
-      // Update target temperature in Thermostat service
-      this.temperatureControlService.updateCharacteristic(
-        this.Characteristic.TargetTemperature,
-        this.targetTemperature
-      );
-      
-      this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C`);
-    }
-    
-    // Update power state based on thermal status and power state
-    const newPowerState = status.powerState === PowerState.ON || 
-                       (status.thermalStatus !== ThermalStatus.STANDBY && 
-                        status.thermalStatus !== ThermalStatus.OFF);
-                        
-    if (this.isPowered !== newPowerState) {
-      this.isPowered = newPowerState;
-      this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
-    }
-    
-    // Update the current heating/cooling state
-    this.updateCurrentHeatingCoolingState();
-    // Update water level if available
-    if (status.waterLevel !== undefined) {
-      if (status.waterLevel !== this.waterLevel || status.isWaterLow !== this.isWaterLow) {
-        this.waterLevel = status.waterLevel;
-        this.isWaterLow = !!status.isWaterLow;
-        
-        // Update or create the water level service
-        this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
-      }
-    }
-  } catch (error) {
-    this.platform.log.error(
-      `Failed to refresh device status: ${error instanceof Error ? error.message : String(error)}`
-    );
-    // Increment failed attempts counter
-    this.failedUpdateAttempts++;
-  } finally {
-    // Always clear the in-progress flag when done
-    this.updateInProgress = false;
-  }
-}
 
 /**
  * Implementation of target temperature setting that makes the API call
@@ -935,8 +694,7 @@ private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: numb
     return;
   }
   
-  // Mark that we shouldn't poll right after this user action
-  this.skipNextUpdate = true;
+  // Mark user action time for centralized polling
   this.lastUserActionTime = Date.now();
   
   try {
@@ -964,13 +722,7 @@ private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: numb
     // Update the current heating/cooling state based on temperature difference
     this.updateCurrentHeatingCoolingState();
     
-    // Refresh the status after a delay to get any other changes
-    // but use a longer delay to avoid rate limiting
-    setTimeout(() => {
-      this.refreshDeviceStatus(true).catch(e => {
-        this.platform.log.debug(`Error refreshing status after temperature change: ${e}`);
-      });
-    }, 10000); // 10 seconds
+    // Status will be updated by centralized polling manager
   } catch (error) {
     this.platform.log.error(
       `Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`
@@ -979,12 +731,131 @@ private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: numb
 }
 
 /**
+ * Implementation of PollableDevice interface
+ * Called by centralized polling manager when status is updated
+ */
+public onStatusUpdate(status: DeviceStatus): void {
+  this.updateDeviceState(status);
+}
+
+/**
+ * Implementation of PollableDevice interface  
+ * Called by centralized polling manager when an error occurs
+ */
+public onError(error: Error): void {
+  this.platform.log.error(`Polling error for ${this.displayName}: ${error.message}`);
+  this.failedUpdateAttempts++;
+}
+
+/**
+ * Update device state from polling manager
+ * Called by centralized polling manager to update device state
+ */
+private updateDeviceState(status: DeviceStatus): void {
+  // Update the last successful update timestamp
+  this.lastStatusUpdate = Date.now();
+  // Reset failed attempts counter on success
+  this.failedUpdateAttempts = 0;
+  
+  // Log detailed status in verbose mode
+  this.platform.log.verbose(
+    `Device status received: current=${status.currentTemperature}°C, ` +
+    `target=${status.targetTemperature}°C, ` +
+    `thermal=${status.thermalStatus}, ` +
+    `power=${status.powerState}` +
+    (status.waterLevel !== undefined ? `, water=${status.waterLevel}%` : '')
+  );
+  
+  // Update model if we can detect it from raw response
+  if (status.rawResponse) {
+    const detectedModel = this.detectDeviceModel(status.rawResponse);
+    if (detectedModel !== this.deviceModel) {
+      this.deviceModel = detectedModel;
+      // Update the model in HomeKit
+      this.informationService.updateCharacteristic(
+        this.Characteristic.Model,
+        this.deviceModel
+      );
+      this.platform.log.info(`Detected device model: ${this.deviceModel}`);
+    }
+  }
+  
+  // Update firmware version if available
+  if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
+    this.firmwareVersion = status.firmwareVersion;
+    
+    // Update HomeKit characteristic
+    this.informationService.updateCharacteristic(
+      this.Characteristic.FirmwareRevision,
+      this.firmwareVersion
+    );
+    
+    this.platform.log.info(`Updated firmware version to ${this.firmwareVersion}`);
+  }
+  
+  // Update current temperature
+  if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
+    this.currentTemperature = status.currentTemperature;
+    
+    // Update the current temperature in Thermostat service
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.CurrentTemperature,
+      this.currentTemperature
+    );
+    
+    this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
+    
+    // Update schedule manager with current temperature
+    if (!isNaN(this.currentTemperature)) {
+      this.updateScheduleManager(this.currentTemperature);
+    }
+  }
+  
+  // Update target temperature
+  if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
+    this.targetTemperature = status.targetTemperature;
+    
+    // Update target temperature in Thermostat service
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.TargetTemperature,
+      this.targetTemperature
+    );
+    
+    this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C`);
+  }
+  
+  // Update power state based on thermal status and power state
+  const newPowerState = status.powerState === PowerState.ON || 
+                     (status.thermalStatus !== ThermalStatus.STANDBY && 
+                      status.thermalStatus !== ThermalStatus.OFF);
+                      
+  if (this.isPowered !== newPowerState) {
+    this.isPowered = newPowerState;
+    this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
+  }
+  
+  // Update the current heating/cooling state
+  this.updateCurrentHeatingCoolingState();
+  
+  // Update water level if available
+  if (status.waterLevel !== undefined) {
+    if (status.waterLevel !== this.waterLevel || status.isWaterLow !== this.isWaterLow) {
+      this.waterLevel = status.waterLevel;
+      this.isWaterLow = !!status.isWaterLow;
+      
+      // Update or create the water level service
+      this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
+    }
+  }
+}
+
+/**
  * Clean up resources when this accessory is removed
  */
 public cleanup(): void {
-  if (this.statusUpdateTimer) {
-    clearInterval(this.statusUpdateTimer);
-    this.statusUpdateTimer = undefined;
+  // Unregister from centralized polling
+  if (this.platform.pollingManager) {
+    this.platform.pollingManager.unregisterDevice(this.deviceId);
   }
   
   this.platform.log.info(`Cleaned up accessory: ${this.displayName}`);

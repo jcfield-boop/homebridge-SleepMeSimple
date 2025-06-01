@@ -1,34 +1,98 @@
 import { ThermalStatus, PowerState } from './api/types.js';
-import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C } from './settings.js';
-// Remove unused TEMPERATURE_STEP import
+import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, COMMAND_DEBOUNCE_DELAY_MS } from './settings.js';
+/**
+ * Create an enhanced debounced function with leading/trailing options
+ * @param callback Function to debounce
+ * @param wait Wait time in milliseconds
+ * @param options Configuration options
+ * @returns Debounced function
+ */
+function createSmartDebounce(callback, wait, options = { leading: false, trailing: true }) {
+    let timeout = null;
+    let lastArgs = null;
+    let isInvoking = false;
+    return (...args) => {
+        lastArgs = args;
+        // Function to execute the callback
+        const executeCallback = () => {
+            if (lastArgs) {
+                isInvoking = true;
+                try {
+                    callback(...lastArgs);
+                }
+                finally {
+                    isInvoking = false;
+                }
+            }
+        };
+        // Clear existing timeout
+        if (timeout) {
+            clearTimeout(timeout);
+            timeout = null;
+        }
+        // Execute leading edge call if enabled and not currently invoking
+        else if (options.leading && !isInvoking) {
+            executeCallback();
+        }
+        // Set up trailing edge call if enabled
+        if (options.trailing !== false) {
+            timeout = setTimeout(() => {
+                timeout = null;
+                if (!isInvoking) {
+                    executeCallback();
+                }
+            }, wait);
+        }
+    };
+}
 /**
  * SleepMe Accessory
- * Provides a simplified interface for SleepMe devices using separate HomeKit services
+ * Provides a simplified interface for SleepMe devices
+ * Now uses centralized polling to reduce API calls
  */
 export class SleepMeAccessory {
+    platform;
+    accessory;
+    apiClient;
+    // HomeKit services
+    temperatureControlService;
+    waterLevelService;
+    informationService;
+    // Device state
+    currentTemperature = NaN;
+    targetTemperature = NaN;
+    isPowered = false;
+    firmwareVersion = 'Unknown';
+    waterLevel = 100; // Default full water level
+    isWaterLow = false;
+    // Debounced functions for command handling
+    tempSetterDebounced;
+    powerStateSetterDebounced;
+    // Device properties
+    deviceId;
+    displayName;
+    deviceModel = 'SleepMe Device';
+    // Update control - removed individual polling timers
+    lastStatusUpdate = 0;
+    lastUserActionTime = 0;
+    failedUpdateAttempts = 0;
+    updateInProgress = false;
+    // Added missing properties
+    commandEpoch = 0;
+    pendingOperation = null;
+    // Constants from the platform
+    Characteristic;
     /**
      * Constructor for the SleepMe accessory
      */
-    constructor(
-    // Mark parameters as used with protected/private to prevent ESLint warnings
-    platform, accessory, apiClient) {
-        var _a;
+    constructor(platform, accessory, apiClient) {
         this.platform = platform;
         this.accessory = accessory;
         this.apiClient = apiClient;
-        // Device state
-        this.currentTemperature = NaN;
-        this.targetTemperature = NaN;
-        this.isPowered = false;
-        this.firmwareVersion = 'Unknown';
-        this.waterLevel = 100; // Default full water level
-        this.isWaterLow = false;
-        this.deviceModel = 'SleepMe Device';
-        this.lastTemperatureSetTime = 0;
         // Store references to Characteristic for convenience
         this.Characteristic = this.platform.Characteristic;
         // Get device ID from accessory context
-        this.deviceId = ((_a = this.accessory.context.device) === null || _a === void 0 ? void 0 : _a.id) || '';
+        this.deviceId = this.accessory.context.device?.id || '';
         this.displayName = this.accessory.displayName;
         if (!this.deviceId) {
             this.platform.log.error(`Accessory missing device ID: ${this.displayName}`);
@@ -37,15 +101,26 @@ export class SleepMeAccessory {
         this.platform.log.info(`Creating accessory for device ${this.deviceId} (${this.displayName})`);
         // Initialize accessory information service
         this.setupInformationService();
-        // Create our simplified services
-        this.setupTemperatureSensorService();
-        this.setupPowerSwitchService();
+        // Create Thermostat service (main control)
         this.setupTemperatureControlService();
-        // Initialize the device state by fetching current status
-        this.refreshDeviceStatus(true)
-            .catch(error => this.platform.log.error(`Error initializing device status: ${error instanceof Error ? error.message : String(error)}`));
-        // Set up polling interval
-        this.setupStatusPolling();
+        // Create debounced temperature setter with smart options
+        // Use leading edge for immediate feedback, but also trailing edge for final value
+        this.tempSetterDebounced = createSmartDebounce((newTemp, previousTemp) => {
+            this.handleTargetTemperatureSetImpl(newTemp, previousTemp);
+        }, COMMAND_DEBOUNCE_DELAY_MS, { leading: false, trailing: true });
+        // Create debounced power state setter
+        // No leading edge to avoid too many power toggles 
+        this.powerStateSetterDebounced = createSmartDebounce((turnOn) => {
+            this.handlePowerStateSetImpl(turnOn);
+        }, COMMAND_DEBOUNCE_DELAY_MS, { leading: false, trailing: true });
+        // Register with centralized polling manager instead of individual polling
+        if (this.platform.pollingManager) {
+            this.platform.pollingManager.registerDevice(this);
+            this.platform.log.info(`Registered ${this.displayName} with centralized polling`);
+        }
+        else {
+            this.platform.log.warn(`No polling manager available for ${this.displayName}`);
+        }
         this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
     }
     /**
@@ -61,69 +136,342 @@ export class SleepMeAccessory {
             .setCharacteristic(this.Characteristic.Model, this.deviceModel)
             .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
             .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+        // Set the category to THERMOSTAT which is appropriate for temperature control
+        this.accessory.category = 9 /* this.platform.homebridgeApi.hap.Categories.THERMOSTAT */;
     }
     /**
-     * Set up the temperature sensor service
-     */
-    setupTemperatureSensorService() {
-        // Create the temperature sensor service
-        this.temperatureSensorService = this.accessory.getService(this.platform.Service.TemperatureSensor) ||
-            this.accessory.addService(this.platform.Service.TemperatureSensor, `${this.displayName} Temperature`);
-        // Set service properties
-        this.temperatureSensorService
-            .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature`)
-            .getCharacteristic(this.Characteristic.CurrentTemperature)
-            .setProps({
-            minValue: MIN_TEMPERATURE_C - 10,
-            maxValue: MAX_TEMPERATURE_C + 10,
-            minStep: 0.1
-        })
-            .onGet(this.handleCurrentTemperatureGet.bind(this));
-    }
-    /**
-     * Set up the power switch service
-     */
-    setupPowerSwitchService() {
-        // Create the switch service
-        this.switchService = this.accessory.getService(this.platform.Service.Switch) ||
-            this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Power`);
-        // Set service properties
-        this.switchService
-            .setCharacteristic(this.Characteristic.Name, `${this.displayName} Power`)
-            .getCharacteristic(this.Characteristic.On)
-            .onGet(this.handlePowerStateGet.bind(this))
-            .onSet(this.handlePowerStateSet.bind(this));
-    }
-    /**
-     * Set up the temperature control service (using Lightbulb)
+     * Set up the Thermostat service for temperature control
      */
     setupTemperatureControlService() {
-        // Use a Lightbulb service to create a slider for temperature
-        this.temperatureControlService = this.accessory.getService(this.platform.Service.Lightbulb) ||
-            this.accessory.addService(this.platform.Service.Lightbulb, `${this.displayName} Temperature Control`);
-        // Configure brightness characteristic as temperature control
+        // Remove any existing temperature or switch services to avoid duplication
+        const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+        if (existingTempService) {
+            this.platform.log.info('Removing existing temperature sensor service');
+            this.accessory.removeService(existingTempService);
+        }
+        const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
+        if (existingSwitchService) {
+            this.platform.log.info('Removing existing switch service');
+            this.accessory.removeService(existingSwitchService);
+        }
+        // Remove existing HeaterCooler service if present
+        const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
+        if (existingHeaterCoolerService) {
+            this.platform.log.info('Removing existing HeaterCooler service');
+            this.accessory.removeService(existingHeaterCoolerService);
+        }
+        // Use Thermostat service for temperature control
+        this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
+            this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
+        // Configure basic characteristics
         this.temperatureControlService
-            .setCharacteristic(this.Characteristic.Name, `${this.displayName} Temperature Control`)
-            .getCharacteristic(this.Characteristic.Brightness)
+            .setCharacteristic(this.Characteristic.Name, this.displayName)
+            .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.Characteristic.CurrentHeatingCoolingState.OFF)
+            .setCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.OFF);
+        // Set up current temperature characteristic
+        this.temperatureControlService
+            .getCharacteristic(this.Characteristic.CurrentTemperature)
             .setProps({
-            minValue: 0,
-            maxValue: 100,
-            minStep: 1
+            minValue: MIN_TEMPERATURE_C - 5,
+            maxValue: MAX_TEMPERATURE_C + 5,
+            minStep: 0.1
         })
-            .onGet(this.handleTemperatureControlGet.bind(this))
-            .onSet(this.handleTemperatureControlSet.bind(this));
-        // Configure On characteristic to match power switch
+            .onGet(() => this.currentTemperature || 20);
+        // Set up target temperature characteristic
         this.temperatureControlService
-            .getCharacteristic(this.Characteristic.On)
-            .onGet(() => this.isPowered)
+            .getCharacteristic(this.Characteristic.TargetTemperature)
+            .setProps({
+            minValue: MIN_TEMPERATURE_C,
+            maxValue: MAX_TEMPERATURE_C,
+            minStep: 0.5
+        })
+            .onGet(this.handleTargetTemperatureGet.bind(this))
+            .onSet(this.handleTargetTemperatureSet.bind(this));
+        // Set up current heating/cooling state
+        this.temperatureControlService
+            .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+            .onGet(() => this.getCurrentHeatingCoolingState());
+        // Set up target heating/cooling state
+        this.temperatureControlService
+            .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+            .onGet(() => this.getTargetHeatingCoolingState())
             .onSet((value) => {
-            this.handlePowerStateSet(value);
+            this.handleTargetHeatingCoolingStateSet(value);
+        });
+        // Set initial display unit (Celsius)
+        this.temperatureControlService
+            .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
+            .setProps({
+            validValues: [
+                this.Characteristic.TemperatureDisplayUnits.CELSIUS,
+                this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
+            ]
+        })
+            .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
+    }
+    /**
+    * Get the current heating/cooling state based on device status
+    */
+    getCurrentHeatingCoolingState() {
+        if (!this.isPowered) {
+            return this.Characteristic.CurrentHeatingCoolingState.OFF;
+        }
+        // If we don't have valid temperature readings
+        if (isNaN(this.currentTemperature) || isNaN(this.targetTemperature)) {
+            return this.Characteristic.CurrentHeatingCoolingState.HEAT; // Default to HEAT
+        }
+        // Determine if we're heating or cooling based on current vs target temperature
+        // Use a larger threshold (1.0°C) to reduce state flapping
+        if (this.currentTemperature < this.targetTemperature - 1.0) {
+            // Heating up
+            return this.Characteristic.CurrentHeatingCoolingState.HEAT;
+        }
+        else if (this.currentTemperature > this.targetTemperature + 1.0) {
+            // Cooling down
+            return this.Characteristic.CurrentHeatingCoolingState.COOL;
+        }
+        else {
+            // At target temperature (within threshold)
+            // Use HEAT as state when at target temperature and powered on
+            return this.Characteristic.CurrentHeatingCoolingState.HEAT;
+        }
+    }
+    /**
+    * Get the target heating/cooling state
+    */
+    getTargetHeatingCoolingState() {
+        return this.isPowered ?
+            this.Characteristic.TargetHeatingCoolingState.AUTO :
+            this.Characteristic.TargetHeatingCoolingState.OFF;
+    }
+    /**
+       * Update the schedule manager with current temperature
+       * @param temperature Current temperature
+       */
+    updateScheduleManager(temperature) {
+        // Skip if schedule manager not available or temperature is invalid
+        if (!this.platform.scheduleManager || isNaN(temperature)) {
+            return;
+        }
+        // Update the schedule manager with the current temperature
+        this.platform.scheduleManager.updateDeviceTemperature(this.deviceId, temperature);
+    }
+    /**
+      * Update the current heating/cooling state in HomeKit
+      */
+    updateCurrentHeatingCoolingState() {
+        const state = this.getCurrentHeatingCoolingState();
+        this.temperatureControlService.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, state);
+        // Update target state too
+        this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.getTargetHeatingCoolingState());
+    }
+    /**
+     * Handle getting the target temperature
+     * @returns Current target temperature
+     */
+    handleTargetTemperatureGet() {
+        return this.targetTemperature || 21; // Default to 21°C if not set
+    }
+    /**
+     * Handle setting the target heating cooling state
+     * @param value Target heating cooling state value
+     */
+    async handleTargetHeatingCoolingStateSet(value) {
+        this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
+        // Mark user action time
+        this.lastUserActionTime = Date.now();
+        // Increment command epoch to invalidate previous commands
+        const currentEpoch = ++this.commandEpoch;
+        // Cancel any pending operations for this device
+        this.apiClient.cancelAllDeviceRequests(this.deviceId);
+        switch (value) {
+            case this.Characteristic.TargetHeatingCoolingState.OFF:
+                // Turn off
+                if (this.isPowered) {
+                    await this.executeOperation('power', currentEpoch, async () => {
+                        const success = await this.apiClient.turnDeviceOff(this.deviceId);
+                        if (success) {
+                            // Trust the API response - device is now off
+                            this.isPowered = false;
+                            this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
+                            // Update UI immediately for responsiveness
+                            this.updateCurrentHeatingCoolingState();
+                        }
+                        else {
+                            throw new Error('Failed to turn off device');
+                        }
+                    });
+                }
+                break;
+            case this.Characteristic.TargetHeatingCoolingState.AUTO:
+            case this.Characteristic.TargetHeatingCoolingState.HEAT:
+            case this.Characteristic.TargetHeatingCoolingState.COOL:
+                // Turn on with current temperature
+                if (!this.isPowered) {
+                    const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+                    await this.executeOperation('power', currentEpoch, async () => {
+                        const success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
+                        if (success) {
+                            // Trust the API response - device is now on
+                            this.isPowered = true;
+                            this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
+                            // Update UI immediately for responsiveness
+                            this.updateCurrentHeatingCoolingState();
+                        }
+                        else {
+                            throw new Error('Failed to turn on device');
+                        }
+                    });
+                }
+                // For SleepMe devices, we treat all active modes as AUTO
+                setTimeout(() => {
+                    this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.AUTO);
+                }, 100);
+                break;
+        }
+    }
+    /**
+       * Verify power state consistency
+       */
+    async verifyPowerState() {
+        // Changed comparison to correctly compare the power state with the heating/cooling state
+        const currentTargetState = this.getTargetHeatingCoolingState();
+        const expectedState = this.isPowered ?
+            this.Characteristic.TargetHeatingCoolingState.AUTO :
+            this.Characteristic.TargetHeatingCoolingState.OFF;
+        if (currentTargetState !== expectedState) {
+            this.platform.log.debug('Verifying power state consistency...');
+            // Force UI to match our internal state
+            this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.isPowered ?
+                this.Characteristic.TargetHeatingCoolingState.AUTO :
+                this.Characteristic.TargetHeatingCoolingState.OFF);
+        }
+    }
+    /**
+     * Execute an operation with epoch tracking for cancellation
+     * @param operationType Type of operation
+     * @param epoch Command epoch to track cancellation
+     * @param operation Async operation to execute
+     */
+    async executeOperation(operationType, epoch, operation) {
+        // Set pending operation
+        this.pendingOperation = operationType;
+        try {
+            // Only execute if the epoch hasn't changed (no newer commands queued)
+            if (epoch === this.commandEpoch) {
+                await operation();
+            }
+            else {
+                this.platform.log.debug(`Skipping stale ${operationType} operation (epoch ${epoch}, current ${this.commandEpoch})`);
+            }
+        }
+        catch (error) {
+            this.platform.log.error(`Error in ${operationType} operation: ${error instanceof Error ? error.message : String(error)}`);
+            throw error; // Re-throw for caller handling
+        }
+        finally {
+            // Clear pending operation
+            this.pendingOperation = null;
+        }
+    }
+    /**
+     * Handle target temperature setting with trust-based approach
+     * @param value New target temperature value
+     */
+    async handleTargetTemperatureSet(value) {
+        const newTemp = value;
+        // Skip if no real change
+        if (!isNaN(this.targetTemperature) && Math.abs(this.targetTemperature - newTemp) < 0.5) {
+            return;
+        }
+        // Store previous temperature before updating UI
+        const previousTemp = this.targetTemperature;
+        // Mark user action time
+        this.lastUserActionTime = Date.now();
+        // Update UI immediately for responsiveness
+        this.targetTemperature = newTemp;
+        // Log the change
+        this.platform.log.info(`Target temperature change request: ${previousTemp}°C → ${newTemp}°C`);
+        // Increment command epoch to invalidate previous commands
+        const currentEpoch = ++this.commandEpoch;
+        // Execute the temperature change operation
+        await this.executeOperation('temperature', currentEpoch, async () => {
+            // If device is off and we're changing temperature, turn it on
+            if (!this.isPowered) {
+                const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
+                if (success) {
+                    this.isPowered = true;
+                    this.platform.log.info(`Device turned ON with new temperature ${newTemp}°C`);
+                    // Update heating/cooling state after power change
+                    this.updateCurrentHeatingCoolingState();
+                }
+                else {
+                    throw new Error(`Failed to turn on device with temperature ${newTemp}°C`);
+                }
+            }
+            else {
+                // Device is already on, just change temperature
+                const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
+                if (success) {
+                    this.platform.log.info(`Temperature set to ${newTemp}°C`);
+                }
+                else {
+                    throw new Error(`Failed to set temperature to ${newTemp}°C`);
+                    // Revert UI to previous temperature on error
+                    this.targetTemperature = previousTemp;
+                    this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetTemperature, previousTemp);
+                }
+            }
+            // Update the current heating/cooling state based on temperature difference
+            this.updateCurrentHeatingCoolingState();
         });
     }
     /**
+       * Implementation for power state setting (called by debounced wrapper)
+       * @param turnOn Whether to turn the device on
+       */
+    async handlePowerStateSetImpl(turnOn) {
+        this.platform.log.info(`Processing power state change: ${turnOn ? 'ON' : 'OFF'}`);
+        // Skip if already in desired state
+        if (this.isPowered === turnOn) {
+            this.platform.log.debug(`Device already ${turnOn ? 'ON' : 'OFF'}, skipping update`);
+            return;
+        }
+        try {
+            if (turnOn) {
+                // Turn on device
+                const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
+                const success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
+                if (success) {
+                    this.isPowered = true;
+                    this.platform.log.info(`Device turned ON successfully with temperature ${temperature}°C`);
+                }
+                else {
+                    throw new Error('Failed to turn on device');
+                }
+            }
+            else {
+                // Turn off device
+                const success = await this.apiClient.turnDeviceOff(this.deviceId);
+                if (success) {
+                    this.isPowered = false;
+                    this.platform.log.info(`Device turned OFF successfully`);
+                }
+                else {
+                    throw new Error('Failed to turn off device');
+                }
+            }
+            // Update the current heating/cooling state
+            this.updateCurrentHeatingCoolingState();
+        }
+        catch (error) {
+            this.platform.log.error(`Failed to set power state: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    /**
      * Add/update the water level service if supported
-     * @param waterLevel - Current water level percentage
-     * @param isWaterLow - Whether water level is considered low
+     * @param waterLevel Current water level percentage
+     * @param isWaterLow Whether water level is considered low
      */
     setupWaterLevelService(waterLevel, isWaterLow) {
         // Only create if water level data is available
@@ -149,28 +497,10 @@ export class SleepMeAccessory {
         }
     }
     /**
-     * Set up the status polling mechanism
-     */
-    setupStatusPolling() {
-        // Clear any existing timer
-        if (this.statusUpdateTimer) {
-            clearInterval(this.statusUpdateTimer);
-        }
-        // Convert polling interval from seconds to milliseconds
-        const intervalMs = this.platform.pollingInterval * 1000;
-        this.platform.log.debug(`Setting up status polling every ${this.platform.pollingInterval} seconds for device ${this.deviceId}`);
-        // Set up regular polling
-        this.statusUpdateTimer = setInterval(() => {
-            this.refreshDeviceStatus().catch(error => {
-                this.platform.log.error(`Error updating device status: ${error instanceof Error ? error.message : String(error)}`);
-            });
-        }, intervalMs);
-    }
-    /**
-     * Detect device model based on attachments or other characteristics
-     * @param data - Raw device data from API
-     * @returns Detected device model name
-     */
+       * Detect device model based on attachments or other characteristics
+       * @param data Raw device data from API
+       * @returns Detected device model name
+       */
     detectDeviceModel(data) {
         // Check attachments first (most reliable)
         const attachments = this.apiClient.extractNestedValue(data, 'attachments');
@@ -206,213 +536,35 @@ export class SleepMeAccessory {
         const firmware = this.apiClient.extractNestedValue(data, 'about.firmware_version') ||
             this.apiClient.extractNestedValue(data, 'firmware_version');
         if (firmware) {
-            if (firmware.toString().startsWith('5.')) {
+            const firmwareStr = String(firmware);
+            if (firmwareStr.startsWith('5.')) {
                 return 'Dock Pro';
             }
-            else if (firmware.toString().startsWith('4.')) {
+            else if (firmwareStr.startsWith('4.')) {
                 return 'OOLER Sleep System';
             }
-            else if (firmware.toString().startsWith('3.')) {
+            else if (firmwareStr.startsWith('3.')) {
                 return 'ChiliPad';
             }
         }
         return 'SleepMe Device';
     }
     /**
-     * Refresh the device status from the API
-     * @param isInitialSetup - Whether this is the initial setup refresh
+     * Implementation of target temperature setting that makes the API call
+     * @param newTemp New target temperature
+     * @param previousTemp Previous target temperature before UI update
      */
-    async refreshDeviceStatus(isInitialSetup = false) {
-        // Skip polling updates if we recently made a user-initiated change
-        if (!isInitialSetup) {
-            const timeSinceLastTemp = Date.now() - this.lastTemperatureSetTime;
-            if (timeSinceLastTemp < 30000) { // 30 seconds
-                this.platform.log.debug(`Skipping scheduled status update, recent user interaction ${Math.round(timeSinceLastTemp / 1000)}s ago`);
-                return;
-            }
+    async handleTargetTemperatureSetImpl(newTemp, previousTemp) {
+        this.platform.log.info(`Processing temperature change: ${previousTemp}°C → ${newTemp}°C`);
+        // Skip truly redundant updates (using previous temp for comparison)
+        // Allow very small changes (>= 0.5°C) which is the minimum HomeKit step
+        if (Math.abs(newTemp - previousTemp) < 0.5) {
+            this.platform.log.debug(`Skipping minor temperature adjustment (${Math.abs(newTemp - previousTemp).toFixed(1)}°C difference)`);
+            return;
         }
+        // Mark user action time for centralized polling
+        this.lastUserActionTime = Date.now();
         try {
-            // Force fresh data on initial setup, otherwise use cache when appropriate
-            const forceFresh = isInitialSetup;
-            this.platform.log.verbose(`Refreshing status for device ${this.deviceId} (${forceFresh ? 'fresh' : 'cached if available'})`);
-            // Get the device status from the API
-            const status = await this.apiClient.getDeviceStatus(this.deviceId, forceFresh);
-            if (!status) {
-                throw new Error(`Failed to get status for device ${this.deviceId}`);
-            }
-            // Log detailed status in verbose mode
-            this.platform.log.verbose(`Device status received: current=${status.currentTemperature}°C, ` +
-                `target=${status.targetTemperature}°C, ` +
-                `thermal=${status.thermalStatus}, ` +
-                `power=${status.powerState}` +
-                (status.waterLevel !== undefined ? `, water=${status.waterLevel}%` : ''));
-            // Update model if we can detect it from raw response
-            if (status.rawResponse) {
-                const detectedModel = this.detectDeviceModel(status.rawResponse);
-                if (detectedModel !== this.deviceModel) {
-                    this.deviceModel = detectedModel;
-                    // Update the model in HomeKit
-                    this.informationService.updateCharacteristic(this.Characteristic.Model, this.deviceModel);
-                    this.platform.log.info(`Detected device model: ${this.deviceModel}`);
-                }
-            }
-            // Update firmware version if available
-            if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
-                this.firmwareVersion = status.firmwareVersion;
-                // Update HomeKit characteristic
-                this.informationService.updateCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
-                this.platform.log.info(`Updated firmware version to ${this.firmwareVersion}`);
-            }
-            // Update current temperature
-            if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
-                this.currentTemperature = status.currentTemperature;
-                // Update temperature sensor
-                this.temperatureSensorService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature);
-                this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
-            }
-            // Update target temperature
-            if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
-                this.targetTemperature = status.targetTemperature;
-                // Also update the temperature control UI
-                const tempPercentage = this.temperatureToPercentage(this.targetTemperature);
-                this.temperatureControlService.updateCharacteristic(this.Characteristic.Brightness, tempPercentage);
-                this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C (${tempPercentage}%)`);
-            }
-            // Update power state
-            const newPowerState = status.powerState === PowerState.ON ||
-                status.thermalStatus !== ThermalStatus.STANDBY &&
-                    status.thermalStatus !== ThermalStatus.OFF;
-            if (this.isPowered !== newPowerState) {
-                this.isPowered = newPowerState;
-                // Update both services that show power state
-                this.switchService.updateCharacteristic(this.Characteristic.On, this.isPowered);
-                this.temperatureControlService.updateCharacteristic(this.Characteristic.On, this.isPowered);
-                this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
-            }
-            // Update water level if available
-            if (status.waterLevel !== undefined) {
-                if (status.waterLevel !== this.waterLevel || status.isWaterLow !== this.isWaterLow) {
-                    this.waterLevel = status.waterLevel;
-                    this.isWaterLow = !!status.isWaterLow;
-                    // Update or create the water level service
-                    this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
-                }
-            }
-        }
-        catch (error) {
-            this.platform.log.error(`Failed to refresh device status: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-    /**
-     * Convert temperature to percentage (for the brightness control)
-     * @param temperature - Temperature in Celsius
-     * @returns Percentage value for slider (0-100)
-     */
-    temperatureToPercentage(temperature) {
-        // Convert temperature to percentage (scaled between MIN_TEMP and MAX_TEMP)
-        const temp = isNaN(temperature) ? MIN_TEMPERATURE_C : temperature;
-        const percentage = Math.round(((temp - MIN_TEMPERATURE_C) / (MAX_TEMPERATURE_C - MIN_TEMPERATURE_C)) * 100);
-        return Math.max(0, Math.min(100, percentage));
-    }
-    /**
-     * Convert percentage to temperature
-     * @param percentage - Percentage value from slider (0-100)
-     * @returns Temperature in Celsius
-     */
-    percentageToTemperature(percentage) {
-        // Convert percentage to temperature
-        const tempRange = MAX_TEMPERATURE_C - MIN_TEMPERATURE_C;
-        const temp = MIN_TEMPERATURE_C + ((percentage / 100) * tempRange);
-        // Round to nearest 0.5°C
-        return Math.round(temp * 2) / 2;
-    }
-    /**
-     * Handler for CurrentTemperature GET
-     * @returns Current temperature value
-     */
-    async handleCurrentTemperatureGet() {
-        // Return default temperature if value is not yet initialized
-        const temp = isNaN(this.currentTemperature) ? 20 : this.currentTemperature;
-        this.platform.log.debug(`GET CurrentTemperature: ${temp}`);
-        return temp;
-    }
-    /**
-     * Handler for power state GET
-     * @returns Current power state (boolean)
-     */
-    async handlePowerStateGet() {
-        this.platform.log.debug(`GET Power State: ${this.isPowered ? 'ON' : 'OFF'}`);
-        return this.isPowered;
-    }
-    /**
-     * Handler for power state SET
-     * @param value - New power state value
-     */
-    async handlePowerStateSet(value) {
-        const turnOn = Boolean(value);
-        this.platform.log.info(`SET Power State: ${turnOn ? 'ON' : 'OFF'}`);
-        try {
-            let success = false;
-            if (turnOn) {
-                // Turn on the device with current target temperature
-                const temperature = isNaN(this.targetTemperature) ? 21 : this.targetTemperature;
-                success = await this.apiClient.turnDeviceOn(this.deviceId, temperature);
-                if (success) {
-                    this.isPowered = true;
-                    this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
-                }
-            }
-            else {
-                // Turn off the device
-                success = await this.apiClient.turnDeviceOff(this.deviceId);
-                if (success) {
-                    this.isPowered = false;
-                    this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
-                }
-            }
-            if (!success) {
-                throw new Error(`Failed to ${turnOn ? 'turn on' : 'turn off'} device`);
-            }
-            // Update the UI state immediately for responsiveness
-            this.switchService.updateCharacteristic(this.Characteristic.On, this.isPowered);
-            this.temperatureControlService.updateCharacteristic(this.Characteristic.On, this.isPowered);
-            // Refresh the status to get any other changes
-            setTimeout(() => {
-                this.refreshDeviceStatus(true).catch(e => {
-                    this.platform.log.debug(`Error refreshing status after power change: ${e}`);
-                });
-            }, 1000);
-        }
-        catch (error) {
-            this.platform.log.error(`Failed to set power state: ${error instanceof Error ? error.message : String(error)}`);
-            // Revert the switch if there was an error
-            this.switchService.updateCharacteristic(this.Characteristic.On, !turnOn);
-            this.temperatureControlService.updateCharacteristic(this.Characteristic.On, !turnOn);
-        }
-    }
-    /**
-     * Handler for temperature control GET
-     * @returns Current temperature as percentage for slider
-     */
-    async handleTemperatureControlGet() {
-        const percentage = this.temperatureToPercentage(this.targetTemperature);
-        this.platform.log.debug(`GET Temperature Control: ${this.targetTemperature}°C (${percentage}%)`);
-        return percentage;
-    }
-    /**
-     * Handler for temperature control SET
-     * @param value - New temperature percentage from slider
-     */
-    async handleTemperatureControlSet(value) {
-        const percentage = value;
-        // Convert percentage to temperature
-        const newTemp = this.percentageToTemperature(percentage);
-        this.platform.log.info(`SET Temperature Control: ${percentage}% (${newTemp}°C)`);
-        try {
-            // Remember the last time we changed the temperature
-            this.lastTemperatureSetTime = Date.now();
-            // Update internal state
-            this.targetTemperature = newTemp;
             // Only send the command if the device is powered on
             if (this.isPowered) {
                 const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
@@ -428,33 +580,112 @@ export class SleepMeAccessory {
                 const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
                 if (success) {
                     this.isPowered = true;
-                    // Update the power switches
-                    this.switchService.updateCharacteristic(this.Characteristic.On, true);
-                    this.temperatureControlService.updateCharacteristic(this.Characteristic.On, true);
                     this.platform.log.info(`Device turned ON and temperature set to ${newTemp}°C`);
                 }
                 else {
                     throw new Error(`Failed to turn on device and set temperature to ${newTemp}°C`);
                 }
             }
-            // Refresh the status after a short delay
-            setTimeout(() => {
-                this.refreshDeviceStatus(true).catch(e => {
-                    this.platform.log.debug(`Error refreshing status after temperature change: ${e}`);
-                });
-            }, 1000);
+            // Update the current heating/cooling state based on temperature difference
+            this.updateCurrentHeatingCoolingState();
+            // Status will be updated by centralized polling manager
         }
         catch (error) {
             this.platform.log.error(`Failed to set temperature: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
     /**
+     * Implementation of PollableDevice interface
+     * Called by centralized polling manager when status is updated
+     */
+    onStatusUpdate(status) {
+        this.updateDeviceState(status);
+    }
+    /**
+     * Implementation of PollableDevice interface
+     * Called by centralized polling manager when an error occurs
+     */
+    onError(error) {
+        this.platform.log.error(`Polling error for ${this.displayName}: ${error.message}`);
+        this.failedUpdateAttempts++;
+    }
+    /**
+     * Update device state from polling manager
+     * Called by centralized polling manager to update device state
+     */
+    updateDeviceState(status) {
+        // Update the last successful update timestamp
+        this.lastStatusUpdate = Date.now();
+        // Reset failed attempts counter on success
+        this.failedUpdateAttempts = 0;
+        // Log detailed status in verbose mode
+        this.platform.log.verbose(`Device status received: current=${status.currentTemperature}°C, ` +
+            `target=${status.targetTemperature}°C, ` +
+            `thermal=${status.thermalStatus}, ` +
+            `power=${status.powerState}` +
+            (status.waterLevel !== undefined ? `, water=${status.waterLevel}%` : ''));
+        // Update model if we can detect it from raw response
+        if (status.rawResponse) {
+            const detectedModel = this.detectDeviceModel(status.rawResponse);
+            if (detectedModel !== this.deviceModel) {
+                this.deviceModel = detectedModel;
+                // Update the model in HomeKit
+                this.informationService.updateCharacteristic(this.Characteristic.Model, this.deviceModel);
+                this.platform.log.info(`Detected device model: ${this.deviceModel}`);
+            }
+        }
+        // Update firmware version if available
+        if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
+            this.firmwareVersion = status.firmwareVersion;
+            // Update HomeKit characteristic
+            this.informationService.updateCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+            this.platform.log.info(`Updated firmware version to ${this.firmwareVersion}`);
+        }
+        // Update current temperature
+        if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
+            this.currentTemperature = status.currentTemperature;
+            // Update the current temperature in Thermostat service
+            this.temperatureControlService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature);
+            this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
+            // Update schedule manager with current temperature
+            if (!isNaN(this.currentTemperature)) {
+                this.updateScheduleManager(this.currentTemperature);
+            }
+        }
+        // Update target temperature
+        if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
+            this.targetTemperature = status.targetTemperature;
+            // Update target temperature in Thermostat service
+            this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetTemperature, this.targetTemperature);
+            this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C`);
+        }
+        // Update power state based on thermal status and power state
+        const newPowerState = status.powerState === PowerState.ON ||
+            (status.thermalStatus !== ThermalStatus.STANDBY &&
+                status.thermalStatus !== ThermalStatus.OFF);
+        if (this.isPowered !== newPowerState) {
+            this.isPowered = newPowerState;
+            this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
+        }
+        // Update the current heating/cooling state
+        this.updateCurrentHeatingCoolingState();
+        // Update water level if available
+        if (status.waterLevel !== undefined) {
+            if (status.waterLevel !== this.waterLevel || status.isWaterLow !== this.isWaterLow) {
+                this.waterLevel = status.waterLevel;
+                this.isWaterLow = !!status.isWaterLow;
+                // Update or create the water level service
+                this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
+            }
+        }
+    }
+    /**
      * Clean up resources when this accessory is removed
      */
     cleanup() {
-        if (this.statusUpdateTimer) {
-            clearInterval(this.statusUpdateTimer);
-            this.statusUpdateTimer = undefined;
+        // Unregister from centralized polling
+        if (this.platform.pollingManager) {
+            this.platform.pollingManager.unregisterDevice(this.deviceId);
         }
         this.platform.log.info(`Cleaned up accessory: ${this.displayName}`);
     }

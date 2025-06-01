@@ -2,23 +2,44 @@
  * SleepMe API client implementation with robust error handling and rate limiting
  */
 import axios from 'axios';
-import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS } from '../settings.js';
+import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
-/**
- * Priority levels for API requests
- * Used to determine order of execution when requests are queued
- */
-var RequestPriority;
-(function (RequestPriority) {
-    RequestPriority["HIGH"] = "high";
-    RequestPriority["NORMAL"] = "normal";
-    RequestPriority["LOW"] = "low"; // Background or non-essential operations
-})(RequestPriority || (RequestPriority = {}));
 /**
  * SleepMe API Client
  * Handles API communication with rate limiting and robust error handling
  */
 export class SleepMeApi {
+    apiToken;
+    logger;
+    // Request queue - separate queues by priority for better management
+    criticalQueue = [];
+    highPriorityQueue = [];
+    normalPriorityQueue = [];
+    lowPriorityQueue = [];
+    // Rate limiting state
+    requestsThisMinute = 0;
+    minuteStartTime = Date.now();
+    lastRequestTime = 0;
+    processingQueue = false;
+    rateLimitBackoffUntil = 0;
+    consecutiveErrors = 0;
+    rateExceededLogged = false; // Flag to prevent redundant log messages
+    // Request ID counter
+    requestIdCounter = 0;
+    // Device status cache
+    deviceStatusCache = new Map();
+    // API statistics for monitoring
+    stats = {
+        totalRequests: 0,
+        successfulRequests: 0,
+        failedRequests: 0,
+        lastRequest: null,
+        lastError: null,
+        averageResponseTime: 0
+    };
+    // Initial startup delay 
+    startupComplete;
+    startupFinished = false;
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token
@@ -27,29 +48,6 @@ export class SleepMeApi {
     constructor(apiToken, logger) {
         this.apiToken = apiToken;
         this.logger = logger;
-        // Request queue
-        this.requestQueue = [];
-        // Rate limiting state
-        this.requestsThisMinute = 0;
-        this.minuteStartTime = Date.now();
-        this.lastRequestTime = 0;
-        this.processingQueue = false;
-        this.rateLimitBackoffUntil = 0;
-        this.consecutiveErrors = 0;
-        // Request ID counter
-        this.requestIdCounter = 0;
-        // Device status cache
-        this.deviceStatusCache = new Map();
-        // API statistics for monitoring
-        this.stats = {
-            totalRequests: 0,
-            successfulRequests: 0,
-            failedRequests: 0,
-            lastRequest: null,
-            lastError: null,
-            averageResponseTime: 0
-        };
-        this.startupFinished = false;
         // Validate API token
         if (!apiToken || apiToken.trim() === '') {
             this.logger.error('Invalid API token provided');
@@ -135,11 +133,11 @@ export class SleepMeApi {
         }
     }
     /**
-     * Get status for a specific device with intelligent caching
-     * @param deviceId Device identifier
-     * @param forceFresh Whether to force a fresh status update
-     * @returns Device status or null if error
-     */
+    * Get status for a specific device with trust-based caching
+    * @param deviceId Device identifier
+    * @param forceFresh Whether to force a fresh status update
+    * @returns Device status or null if error
+    */
     async getDeviceStatus(deviceId, forceFresh = false) {
         if (!deviceId) {
             this.logger.error('Missing device ID in getDeviceStatus');
@@ -150,21 +148,47 @@ export class SleepMeApi {
             if (!forceFresh) {
                 const cachedStatus = this.deviceStatusCache.get(deviceId);
                 const now = Date.now();
-                // Use cache if valid - even if optimistic but for a shorter time
-                if (cachedStatus &&
-                    (now - cachedStatus.timestamp < (cachedStatus.isOptimistic ?
-                        DEFAULT_CACHE_VALIDITY_MS / 2 : DEFAULT_CACHE_VALIDITY_MS))) {
-                    const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
-                    const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
-                    this.logger.verbose(`Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag})`);
-                    return cachedStatus.status;
+                // Use cache with dynamic validity based on confidence and source
+                // High confidence cache (from PATCH responses) can be used longer
+                if (cachedStatus) {
+                    let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
+                    // Adjust validity period based on confidence and source
+                    // More aggressive caching for routine polling efficiency
+                    if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
+                        // Extend validity for high confidence updates, especially if they came from a PATCH
+                        validityPeriod = cachedStatus.source === 'patch' ?
+                            DEFAULT_CACHE_VALIDITY_MS * 4 : // Even longer validity for PATCH responses
+                            DEFAULT_CACHE_VALIDITY_MS * 3; // Extended validity for high confidence GET
+                    }
+                    else if (cachedStatus.isOptimistic) {
+                        validityPeriod = DEFAULT_CACHE_VALIDITY_MS; // Normal validity for optimistic updates
+                    }
+                    if (now - cachedStatus.timestamp < validityPeriod) {
+                        const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
+                        const confidenceInfo = cachedStatus.confidence
+                            ? ` (${cachedStatus.confidence} confidence)`
+                            : '';
+                        const optimisticFlag = cachedStatus.isOptimistic ? ' (optimistic)' : '';
+                        const verifiedFlag = cachedStatus.verified ? ' (verified)' : '';
+                        this.logger.verbose(`Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo}${verifiedFlag})`);
+                        return cachedStatus.status;
+                    }
                 }
             }
+            // At this point, we need fresh data
             this.logger.debug(`Fetching status for device ${deviceId}...`);
+            // MORE CONSERVATIVE APPROACH:
+            // Only use HIGH priority when explicitly requested by user actions
+            // For system-initiated refreshes (including initial polls), use NORMAL or LOW
+            const isSystemInitiated = !forceFresh || (this.startupFinished === false);
+            const priority = isSystemInitiated ?
+                RequestPriority.NORMAL :
+                RequestPriority.HIGH;
+            this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
             const response = await this.makeRequest({
                 method: 'GET',
                 url: `/devices/${deviceId}`,
-                priority: forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL,
+                priority: priority,
                 deviceId,
                 operationType: 'getDeviceStatus'
             });
@@ -173,60 +197,15 @@ export class SleepMeApi {
                 return null;
             }
             // Parse the device status from the response
-            const status = {
-                // Extract current temperature (various possible locations in API)
-                currentTemperature: this.extractTemperature(response, [
-                    'status.water_temperature_c',
-                    'water_temperature_c',
-                    'control.current_temperature_c',
-                    'current_temperature_c'
-                ], 21),
-                // Extract target temperature
-                targetTemperature: this.extractTemperature(response, [
-                    'control.set_temperature_c',
-                    'set_temperature_c'
-                ], 21),
-                // Extract thermal status
-                thermalStatus: this.extractThermalStatus(response),
-                // Extract power state
-                powerState: this.extractPowerState(response),
-                // Include raw response for debugging
-                rawResponse: response
-            };
-            // Extract firmware version
-            const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') ||
-                this.extractNestedValue(response, 'firmware_version');
-            if (firmwareVersion) {
-                status.firmwareVersion = String(firmwareVersion);
-            }
-            // Extract connection status if available
-            const connected = this.extractNestedValue(response, 'status.is_connected') ||
-                this.extractNestedValue(response, 'is_connected');
-            if (connected !== undefined) {
-                status.connected = Boolean(connected);
-            }
-            // Extract water level information if available
-            const waterLevel = this.extractNestedValue(response, 'status.water_level') ||
-                this.extractNestedValue(response, 'water_level');
-            if (waterLevel !== undefined) {
-                status.waterLevel = Number(waterLevel);
-            }
-            const isWaterLow = this.extractNestedValue(response, 'status.is_water_low') ||
-                this.extractNestedValue(response, 'is_water_low');
-            if (isWaterLow !== undefined) {
-                status.isWaterLow = Boolean(isWaterLow);
-            }
-            // Log the status information
-            this.logger.verbose(`Device status: Temp=${status.currentTemperature}°C, ` +
-                `Target=${status.targetTemperature}°C, ` +
-                `Status=${status.thermalStatus}, ` +
-                `Power=${status.powerState}` +
-                (status.waterLevel !== undefined ? `, Water=${status.waterLevel}%` : ''));
-            // Update cache with fresh data
+            const status = this.parseDeviceStatus(response);
+            // Update cache with fresh data and mark it as verified
             this.deviceStatusCache.set(deviceId, {
                 status,
                 timestamp: Date.now(),
-                isOptimistic: false
+                isOptimistic: false,
+                confidence: 'high',
+                source: 'get',
+                verified: true // This is from a GET so it's verified by definition
             });
             return status;
         }
@@ -236,28 +215,12 @@ export class SleepMeApi {
         }
     }
     /**
-     * Extract a nested property value from an object
-     * @param obj Object to extract from
-     * @param path Dot-notation path to property
-     * @returns Extracted value or undefined if not found
-     */
-    extractNestedValue(obj, path) {
-        const parts = path.split('.');
-        let value = obj;
-        for (const part of parts) {
-            if (value === null || value === undefined || typeof value !== 'object') {
-                return undefined;
-            }
-            value = value[part];
-        }
-        return value;
-    }
-    /**
-     * Turn device on
-     * @param deviceId Device identifier
-     * @param temperature Optional target temperature in Celsius
-     * @returns Whether operation was successful
-     */
+   * Turn device on and set temperature in a single operation
+   * With trust-based approach (no verification GET)
+   * @param deviceId Device identifier
+   * @param temperature Target temperature in Celsius
+   * @returns Whether operation was successful
+   */
     async turnDeviceOn(deviceId, temperature) {
         try {
             // Default temperature if none provided
@@ -274,26 +237,23 @@ export class SleepMeApi {
             this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
             const success = await this.updateDeviceSettings(deviceId, payload);
             if (success) {
-                // Update cache optimistically
-                this.updateCacheOptimistically(deviceId, {
+                // Update cache with complete device state based on our command
+                // This is critical for the trust-based approach
+                this.updateCacheWithTrustedState(deviceId, {
                     powerState: PowerState.ON,
                     targetTemperature: targetTemp,
-                    thermalStatus: ThermalStatus.ACTIVE
+                    thermalStatus: ThermalStatus.ACTIVE,
+                    // We don't know current temperature yet, but we'll assume it's moving toward target
+                    // This gives better UX without requiring a GET
+                    currentTemperature: this.getLastKnownTemperature(deviceId, targetTemp)
                 });
                 this.logger.verbose(`Device ${deviceId} turned ON successfully`);
+                return true;
             }
             else {
                 this.logger.error(`Failed to turn device ${deviceId} ON`);
                 return false;
             }
-            // Verify the state change
-            const newStatus = await this.getDeviceStatus(deviceId, true);
-            if (newStatus &&
-                (newStatus.thermalStatus === ThermalStatus.ACTIVE ||
-                    newStatus.powerState === PowerState.ON)) {
-                return true;
-            }
-            return success;
         }
         catch (error) {
             this.handleApiError(`turnDeviceOn(${deviceId})`, error);
@@ -301,14 +261,14 @@ export class SleepMeApi {
         }
     }
     /**
-     * Turn device off
-     * @param deviceId Device identifier
-     * @returns Whether operation was successful
-     */
+   * Turn device off
+   * @param deviceId Device identifier
+   * @returns Whether operation was successful
+   */
     async turnDeviceOff(deviceId) {
         try {
             this.logger.info(`Turning device ${deviceId} OFF`);
-            // Cancel any pending requests for this device to prevent race conditions
+            // Cancel any pending requests for this device
             this.cancelAllDeviceRequests(deviceId);
             // Create payload with standby status
             const payload = {
@@ -317,25 +277,19 @@ export class SleepMeApi {
             this.logger.verbose(`Turn OFF payload: ${JSON.stringify(payload)}`);
             const success = await this.updateDeviceSettings(deviceId, payload);
             if (success) {
-                // Update cache optimistically
-                this.updateCacheOptimistically(deviceId, {
+                // Update cache with correct power state
+                // This MUST set both thermalStatus AND powerState
+                this.updateCacheWithTrustedState(deviceId, {
                     powerState: PowerState.OFF,
                     thermalStatus: ThermalStatus.STANDBY
                 });
                 this.logger.verbose(`Device ${deviceId} turned OFF successfully`);
+                return true;
             }
             else {
                 this.logger.error(`Failed to turn device ${deviceId} OFF`);
                 return false;
             }
-            // Verify the state change
-            const newStatus = await this.getDeviceStatus(deviceId, true);
-            if (newStatus &&
-                (newStatus.thermalStatus === ThermalStatus.STANDBY ||
-                    newStatus.powerState === PowerState.OFF)) {
-                return true;
-            }
-            return success;
         }
         catch (error) {
             this.handleApiError(`turnDeviceOff(${deviceId})`, error);
@@ -343,11 +297,12 @@ export class SleepMeApi {
         }
     }
     /**
-     * Set device temperature
-     * @param deviceId Device identifier
-     * @param temperature Target temperature in Celsius
-     * @returns Whether operation was successful
-     */
+   * Set device temperature
+   * With trust-based approach (no verification GET)
+   * @param deviceId Device identifier
+   * @param temperature Target temperature in Celsius
+   * @returns Whether operation was successful
+   */
     async setTemperature(deviceId, temperature) {
         try {
             this.logger.info(`Setting device ${deviceId} temperature to ${temperature}°C`);
@@ -360,16 +315,20 @@ export class SleepMeApi {
             this.logger.verbose(`Set temperature payload: ${JSON.stringify(payload)}`);
             const success = await this.updateDeviceSettings(deviceId, payload);
             if (success) {
-                // Update cache optimistically
-                this.updateCacheOptimistically(deviceId, {
-                    targetTemperature: temperature
+                // Update cache with trusted state - key to trust-based approach
+                this.updateCacheWithTrustedState(deviceId, {
+                    targetTemperature: temperature,
+                    // Setting temperature implies the device is ON
+                    powerState: PowerState.ON,
+                    thermalStatus: ThermalStatus.ACTIVE
                 });
                 this.logger.verbose(`Device ${deviceId} temperature set successfully to ${temperature}°C`);
+                return true;
             }
             else {
                 this.logger.error(`Failed to set device ${deviceId} temperature to ${temperature}°C`);
+                return false;
             }
-            return success;
         }
         catch (error) {
             this.handleApiError(`setTemperature(${deviceId})`, error);
@@ -402,26 +361,20 @@ export class SleepMeApi {
             this.logger.debug(`Updating device ${deviceId} settings: ${JSON.stringify(settings)}`);
             // Cancel any pending device status requests for this device
             this.cancelPendingRequests(deviceId, 'getDeviceStatus');
-            const response = await this.makeRequest({
+            // Make the request with CRITICAL priority for user-initiated actions
+            await this.makeRequest({
                 method: 'PATCH',
                 url: `/devices/${deviceId}`,
                 data: settings,
-                priority: RequestPriority.HIGH,
+                priority: RequestPriority.CRITICAL,
                 deviceId,
                 operationType: 'updateDeviceSettings'
             });
-            // If successful response
-            if (response) {
-                this.logger.info(`Successfully updated device ${deviceId} settings`);
-                // Log full response in verbose mode
-                if (this.logger.isVerbose()) {
-                    this.logger.verbose(`Update response: ${JSON.stringify(response)}`);
-                }
-                // Reset consecutive errors on success
-                this.consecutiveErrors = 0;
-                return true;
-            }
-            return false;
+            // If we reach here, no exception was thrown, so the request succeeded
+            this.logger.info(`Successfully updated device ${deviceId} settings`);
+            // Reset consecutive errors on success
+            this.consecutiveErrors = 0;
+            return true;
         }
         catch (error) {
             this.handleApiError(`updateDeviceSettings(${deviceId})`, error);
@@ -429,92 +382,213 @@ export class SleepMeApi {
         }
     }
     /**
-     * Update the device status cache optimistically based on settings changes
-     * @param deviceId Device identifier
-     * @param updates Status updates to apply
-     */
-    updateCacheOptimistically(deviceId, updates) {
+   * Update cache with a trusted device state based on our commands
+   * Enhanced with better consistency handling
+   * @param deviceId Device identifier
+   * @param updates Status updates to apply
+   */
+    updateCacheWithTrustedState(deviceId, updates) {
         // Get current cached status
         const cachedEntry = this.deviceStatusCache.get(deviceId);
+        let updatedStatus;
         if (cachedEntry) {
             // Merge updates with current status
-            const updatedStatus = {
+            updatedStatus = {
                 ...cachedEntry.status,
                 ...updates
             };
-            // Store updated status as optimistic
-            this.deviceStatusCache.set(deviceId, {
-                status: updatedStatus,
-                timestamp: Date.now(),
-                isOptimistic: true
-            });
-            this.logger.verbose(`Optimistically updated cache for device ${deviceId}: ` +
-                `Power=${updatedStatus.powerState}, ` +
-                `Target=${updatedStatus.targetTemperature}°C, ` +
-                `Status=${updatedStatus.thermalStatus}`);
+            // Critical fix: Power state must be explicitly set based on thermal status
+            // This ensures consistency between power state and thermal status
+            if (updates.thermalStatus !== undefined) {
+                if (updates.thermalStatus === ThermalStatus.STANDBY ||
+                    updates.thermalStatus === ThermalStatus.OFF) {
+                    // Always set power to OFF when thermal status is STANDBY or OFF
+                    updatedStatus.powerState = PowerState.OFF;
+                }
+                else if (updates.thermalStatus === ThermalStatus.ACTIVE ||
+                    updates.thermalStatus === ThermalStatus.COOLING ||
+                    updates.thermalStatus === ThermalStatus.HEATING) {
+                    // Always set power to ON for active states
+                    updatedStatus.powerState = PowerState.ON;
+                }
+            }
+            // Explicitly log the before and after power states for debugging
+            this.logger.verbose(`Cache update: Previous power=${cachedEntry.status.powerState}, ` +
+                `New power=${updatedStatus.powerState}, ` +
+                `Update requested=${updates.powerState || 'none'}`);
         }
+        else {
+            // Create a new status with reasonable defaults
+            updatedStatus = {
+                currentTemperature: 21,
+                targetTemperature: 21,
+                thermalStatus: ThermalStatus.UNKNOWN,
+                powerState: PowerState.UNKNOWN,
+                ...updates
+            };
+            // Same consistency check for new status
+            if (updates.thermalStatus === ThermalStatus.STANDBY ||
+                updates.thermalStatus === ThermalStatus.OFF) {
+                updatedStatus.powerState = PowerState.OFF;
+            }
+            else if (updates.thermalStatus === ThermalStatus.ACTIVE ||
+                updates.thermalStatus === ThermalStatus.COOLING ||
+                updates.thermalStatus === ThermalStatus.HEATING) {
+                updatedStatus.powerState = PowerState.ON;
+            }
+        }
+        // Store updated status as trusted (not optimistic)
+        this.deviceStatusCache.set(deviceId, {
+            status: updatedStatus,
+            timestamp: Date.now(),
+            isOptimistic: false,
+            confidence: 'high',
+            source: 'patch',
+            verified: false // Not verified yet, but trusted until proven otherwise
+        });
+        this.logger.verbose(`Updated cache with trusted state for device ${deviceId}: ` +
+            `Power=${updatedStatus.powerState}, ` +
+            `Target=${updatedStatus.targetTemperature}°C, ` +
+            `Status=${updatedStatus.thermalStatus}`);
     }
     /**
-     * Process the request queue
-     * This is the core method for rate-limiting and prioritizing requests
+     * Get the last known temperature or a reasonable approximation
+     * This helps provide a smoother UX during temperature transitions
+     * @param deviceId Device identifier
+     * @param targetTemp Target temperature to use if no cached temperature
+     * @returns Best guess at current temperature
      */
+    getLastKnownTemperature(deviceId, targetTemp) {
+        const cachedEntry = this.deviceStatusCache.get(deviceId);
+        if (cachedEntry && !isNaN(cachedEntry.status.currentTemperature)) {
+            // We have a cached temperature, use it
+            return cachedEntry.status.currentTemperature;
+        }
+        // No cached temperature, approximate based on target
+        return targetTemp;
+    }
+    /**
+   * Parse a device status from raw API response
+   * Extracted to a separate method for reuse
+   * @param response API response data
+   * @returns Parsed device status
+   */
+    parseDeviceStatus(response) {
+        const status = {
+            currentTemperature: this.extractTemperature(response, [
+                'status.water_temperature_c',
+                'water_temperature_c',
+                'control.current_temperature_c',
+                'current_temperature_c'
+            ], 21),
+            targetTemperature: this.extractTemperature(response, [
+                'control.set_temperature_c',
+                'set_temperature_c'
+            ], 21),
+            thermalStatus: this.extractThermalStatus(response),
+            powerState: this.extractPowerState(response),
+            rawResponse: response
+        };
+        // Extract firmware version and other details
+        const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') ||
+            this.extractNestedValue(response, 'firmware_version');
+        if (firmwareVersion) {
+            status.firmwareVersion = String(firmwareVersion);
+        }
+        // Extract connection status if available
+        const connected = this.extractNestedValue(response, 'status.is_connected') ||
+            this.extractNestedValue(response, 'is_connected');
+        if (connected !== undefined) {
+            status.connected = Boolean(connected);
+        }
+        // Extract water level information if available
+        const waterLevel = this.extractNestedValue(response, 'status.water_level') ||
+            this.extractNestedValue(response, 'water_level');
+        if (waterLevel !== undefined) {
+            status.waterLevel = Number(waterLevel);
+        }
+        const isWaterLow = this.extractNestedValue(response, 'status.is_water_low') ||
+            this.extractNestedValue(response, 'is_water_low');
+        if (isWaterLow !== undefined) {
+            status.isWaterLow = Boolean(isWaterLow);
+        }
+        // Log the status information
+        this.logger.verbose(`Device status: Temp=${status.currentTemperature}°C, ` +
+            `Target=${status.targetTemperature}°C, ` +
+            `Status=${status.thermalStatus}, ` +
+            `Power=${status.powerState}` +
+            (status.waterLevel !== undefined ? `, Water=${status.waterLevel}%` : ''));
+        return status;
+    }
+    /**
+   * Process the request queue with improved priority handling
+   * and adaptive rate limiting
+   */
     async processQueue() {
-        var _a;
         // If already processing, exit
         if (this.processingQueue) {
             return;
         }
         this.processingQueue = true;
         try {
-            while (this.requestQueue.length > 0) {
+            // Keep processing as long as there are requests
+            while (this.hasQueuedRequests()) {
                 // Check if we need to reset rate limit counter
                 this.checkRateLimit();
                 // Check if we're in backoff mode
-                if (this.rateLimitBackoffUntil > Date.now()) {
-                    const backoffTimeRemaining = Math.ceil((this.rateLimitBackoffUntil - Date.now()) / 1000);
-                    this.logger.info(`In rate limit backoff mode for ${backoffTimeRemaining}s`);
-                    break;
+                const now = Date.now();
+                if (this.rateLimitBackoffUntil > now) {
+                    // Only log this once, not repeatedly
+                    if (!this.rateExceededLogged) {
+                        const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+                        this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
+                        this.rateExceededLogged = true;
+                    }
+                    // Use a single timer rather than polling
+                    await new Promise(resolve => setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000));
+                    continue;
+                }
+                // Enforce minimum interval between requests
+                const timeSinceLastRequest = now - this.lastRequestTime;
+                if (this.lastRequestTime > 0 && timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+                    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+                    this.logger.debug(`Enforcing minimum request interval: waiting ${waitTime}ms`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    continue; // Re-check timing after wait
                 }
                 // Check if we've hit the rate limit
                 if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
                     const resetTime = this.minuteStartTime + 60000;
-                    const waitTime = resetTime - Date.now();
-                    this.logger.info(`Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-                        `waiting ${Math.ceil(waitTime / 1000)}s before continuing`);
-                    // Wait for rate limit reset
-                    setTimeout(() => this.processQueue(), waitTime + 1000);
-                    return;
-                }
-                // Check if we need to wait between requests
-                const timeSinceLastRequest = Date.now() - this.lastRequestTime;
-                if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-                    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-                    // Only log this at verbose level to reduce noise
-                    if (this.logger.isVerbose()) {
-                        this.logger.verbose(`Waiting ${waitTime}ms between requests to prevent rate limiting`);
+                    const waitTime = resetTime - now;
+                    // Only log this once, not repeatedly
+                    if (!this.rateExceededLogged) {
+                        this.logger.info(`Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
+                            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`);
+                        this.rateExceededLogged = true;
                     }
-                    // Wait for minimum interval
-                    setTimeout(() => this.processQueue(), waitTime);
-                    return;
+                    // Wait for rate limit reset with a single timer
+                    await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
+                    continue;
                 }
-                // Get the next request with priority
+                // Get the next request from prioritized queues
                 const request = this.getNextRequest();
                 if (!request) {
-                    break;
+                    break; // No requests to process
                 }
                 // Mark the request as executing
                 request.executing = true;
+                request.lastAttempt = now;
                 try {
                     // Update rate limiting counters
                     this.requestsThisMinute++;
-                    this.lastRequestTime = Date.now();
+                    this.lastRequestTime = now;
                     // Add auth token to request
                     request.config.headers = {
                         ...(request.config.headers || {}),
                         Authorization: `Bearer ${this.apiToken}`
                     };
-                    this.logger.verbose(`Executing request ${request.id}: ${request.method} ${request.url}`);
-                    const startTime = Date.now();
+                    this.logger.verbose(`Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`);
+                    const startTime = now;
                     // Execute the request
                     this.stats.totalRequests++;
                     const response = await axios(request.config);
@@ -534,126 +608,277 @@ export class SleepMeApi {
                     this.stats.failedRequests++;
                     this.stats.lastError = axiosError;
                     // Handle rate limiting (HTTP 429)
-                    if (((_a = axiosError.response) === null || _a === void 0 ? void 0 : _a.status) === 429) {
-                        // Implement backoff
-                        this.consecutiveErrors++;
-                        const backoffTime = Math.min(30000, 1000 * Math.pow(2, this.consecutiveErrors));
-                        this.rateLimitBackoffUntil = Date.now() + backoffTime;
-                        this.logger.warn(`Rate limit exceeded (429). Backing off for ${backoffTime / 1000}s`);
+                    // In the error handling part of processQueue method
+                    if (axiosError.response?.status === 429) {
+                        // For rate limit errors, wait until the next minute boundary
+                        const now = Date.now();
+                        const currentMinute = Math.floor(now / 60000) * 60000;
+                        const nextMinute = currentMinute + 60000;
+                        // Add a small buffer (2 seconds) to ensure we're safely in the next minute
+                        const waitTime = (nextMinute - now) + 2000;
+                        this.rateLimitBackoffUntil = now + waitTime;
+                        this.logger.warn(`Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
                         // Requeue the request
-                        this.requestQueue.unshift({
-                            ...request,
-                            executing: false,
-                            retryCount: request.retryCount + 1
-                        });
+                        this.requeueRequest(request);
                     }
                     else {
-                        // For other errors, just reject
+                        // For other errors, check retry logic by priority
                         this.consecutiveErrors++;
-                        request.reject(error);
+                        // Critical and high priority get more retries
+                        const maxRetries = request.priority === RequestPriority.CRITICAL
+                            ? MAX_RETRIES + 2
+                            : request.priority === RequestPriority.HIGH
+                                ? MAX_RETRIES
+                                : MAX_RETRIES - 1;
+                        if (request.retryCount < maxRetries) {
+                            this.logger.warn(`Request failed (${axiosError.message}), retry ${request.retryCount + 1}/${maxRetries}`);
+                            this.requeueRequest(request);
+                        }
+                        else {
+                            // Max retries exceeded
+                            this.logger.error(`Request failed after ${request.retryCount} retries: ${axiosError.message}`);
+                            request.reject(error);
+                        }
                     }
                 }
                 finally {
-                    // Remove request from queue
-                    this.removeRequest(request.id);
+                    // Remove request from appropriate queue
+                    this.removeRequest(request);
                 }
             }
         }
         finally {
             this.processingQueue = false;
-            // If there are still requests in the queue, continue processing
-            if (this.requestQueue.length > 0) {
-                // Small delay to prevent CPU spinning
-                setTimeout(() => this.processQueue(), 100);
+            // If there are still requests in any queue, continue processing after a short delay
+            if (this.hasQueuedRequests()) {
+                setTimeout(() => this.processQueue(), 1000);
             }
         }
     }
     /**
-     * Check and reset rate limit counter if needed
+   * Determine if there are any queued requests
+   */
+    hasQueuedRequests() {
+        return this.criticalQueue.length > 0 ||
+            this.highPriorityQueue.length > 0 ||
+            this.normalPriorityQueue.length > 0 ||
+            this.lowPriorityQueue.length > 0;
+    }
+    /**
+     * Check and reset rate limit counter using discrete minute windows
      */
     checkRateLimit() {
         const now = Date.now();
-        // Reset rate limit counter if a minute has passed
-        if (now - this.minuteStartTime >= 60000) {
+        // Get current discrete minute (aligned to clock minutes)
+        const currentMinute = Math.floor(now / 60000) * 60000;
+        // If we've moved to a new discrete minute, reset counter
+        if (currentMinute > this.minuteStartTime) {
             this.requestsThisMinute = 0;
-            this.minuteStartTime = now;
-            // If we've passed the backoff period, clear the rate limit flag
-            if (now > this.rateLimitBackoffUntil) {
-                this.rateLimitBackoffUntil = 0;
-            }
-            this.logger.debug('Resetting rate limit counter (1 minute has passed)');
+            this.minuteStartTime = currentMinute;
+            this.rateExceededLogged = false;
+            this.logger.debug(`Resetting rate limit counter (new discrete minute: ${new Date(currentMinute).toISOString()})`);
         }
     }
     /**
-     * Get the next request from the queue, prioritizing by type and timestamp
-     * @returns Next request to process or undefined if queue is empty
+     * Get the next request from the appropriate priority queue
+     * With improved OFF command prioritization
+     * @returns Next request to process or undefined if all queues empty
      */
     getNextRequest() {
-        // Skip requests that are already being executed
-        const pendingRequests = this.requestQueue.filter(r => !r.executing);
-        if (pendingRequests.length === 0) {
+        // First identify and prioritize OFF commands (they're the most important for UX)
+        const findOffCommands = (queue) => {
+            const pendingRequests = queue.filter(r => !r.executing);
+            if (pendingRequests.length === 0)
+                return undefined;
+            // Look for standby commands (OFF commands)
+            const offCommands = pendingRequests.filter(r => r.data &&
+                typeof r.data === 'object' &&
+                'thermal_control_status' in r.data &&
+                r.data.thermal_control_status === 'standby');
+            if (offCommands.length > 0) {
+                // Sort by timestamp and return the oldest
+                return offCommands.sort((a, b) => a.timestamp - b.timestamp)[0];
+            }
             return undefined;
+        };
+        // Check each queue for OFF commands first
+        let nextRequest = findOffCommands(this.criticalQueue);
+        if (nextRequest)
+            return nextRequest;
+        nextRequest = findOffCommands(this.highPriorityQueue);
+        if (nextRequest)
+            return nextRequest;
+        // Then process remaining commands in priority order
+        if (this.criticalQueue.length > 0) {
+            const pendingRequests = this.criticalQueue.filter(r => !r.executing);
+            if (pendingRequests.length > 0) {
+                return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+            }
         }
-        // Prioritize requests by priority level
-        const highPriorityRequests = pendingRequests.filter(r => r.priority === RequestPriority.HIGH);
-        const normalPriorityRequests = pendingRequests.filter(r => r.priority === RequestPriority.NORMAL);
-        const lowPriorityRequests = pendingRequests.filter(r => r.priority === RequestPriority.LOW);
-        // First, try high priority requests
-        if (highPriorityRequests.length > 0) {
-            // Sort by timestamp (oldest first)
-            return highPriorityRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+        // Then, try high priority requests
+        if (this.highPriorityQueue.length > 0) {
+            const pendingRequests = this.highPriorityQueue.filter(r => !r.executing);
+            if (pendingRequests.length > 0) {
+                return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+            }
         }
-        // Then, try normal priority requests
-        if (normalPriorityRequests.length > 0) {
-            return normalPriorityRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+        // Next, try normal priority requests
+        if (this.normalPriorityQueue.length > 0) {
+            const pendingRequests = this.normalPriorityQueue.filter(r => !r.executing);
+            if (pendingRequests.length > 0) {
+                return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+            }
         }
         // Finally, try low priority requests
-        if (lowPriorityRequests.length > 0) {
-            return lowPriorityRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+        if (this.lowPriorityQueue.length > 0) {
+            const pendingRequests = this.lowPriorityQueue.filter(r => !r.executing);
+            if (pendingRequests.length > 0) {
+                return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
+            }
         }
         return undefined;
     }
     /**
-     * Remove a request from the queue
-     * @param id Request ID
+     * Remove a request from its queue
+     * @param request Request to remove
      */
-    removeRequest(id) {
-        const index = this.requestQueue.findIndex(r => r.id === id);
+    removeRequest(request) {
+        let queue;
+        // Select the appropriate queue based on priority
+        switch (request.priority) {
+            case RequestPriority.CRITICAL:
+                queue = this.criticalQueue;
+                break;
+            case RequestPriority.HIGH:
+                queue = this.highPriorityQueue;
+                break;
+            case RequestPriority.NORMAL:
+                queue = this.normalPriorityQueue;
+                break;
+            case RequestPriority.LOW:
+                queue = this.lowPriorityQueue;
+                break;
+            default:
+                queue = this.normalPriorityQueue;
+        }
+        const index = queue.findIndex(r => r.id === request.id);
         if (index !== -1) {
-            this.requestQueue.splice(index, 1);
+            queue.splice(index, 1);
         }
     }
     /**
-     * Cancel pending requests of a specific type for a device
-     * @param deviceId Device ID
-     * @param operationType Optional type of operation to cancel (if not specified, cancels all)
+     * Requeue a request after a failure, with appropriate priority handling
+     * @param request Request to requeue
      */
-    cancelPendingRequests(deviceId, operationType) {
-        // Find requests to cancel
-        const requestsToCancel = this.requestQueue.filter(r => !r.executing && r.deviceId === deviceId &&
-            (!operationType || r.operationType === operationType));
-        // Cancel each request
-        for (const request of requestsToCancel) {
-            this.logger.verbose(`Canceling pending ${request.operationType} request for device ${deviceId}`);
-            this.removeRequest(request.id);
-            request.resolve(null); // Resolve with null rather than rejecting
+    requeueRequest(request) {
+        // Create new request with incremented retry count
+        const newRequest = {
+            ...request,
+            executing: false,
+            retryCount: request.retryCount + 1,
+            timestamp: Date.now() // Update timestamp for proper sorting
+        };
+        // Add to the appropriate queue based on priority
+        switch (request.priority) {
+            case RequestPriority.CRITICAL:
+                // Critical requests go to the front of the critical queue
+                this.criticalQueue.unshift(newRequest);
+                break;
+            case RequestPriority.HIGH:
+                // High priority goes to the high priority queue
+                this.highPriorityQueue.push(newRequest);
+                break;
+            case RequestPriority.NORMAL:
+                // Normal priority goes to normal queue
+                this.normalPriorityQueue.push(newRequest);
+                break;
+            case RequestPriority.LOW:
+                // Low priority goes to low priority queue
+                this.lowPriorityQueue.push(newRequest);
+                break;
+            default:
+                // Default to normal priority
+                this.normalPriorityQueue.push(newRequest);
         }
     }
     /**
-     * Make a request to the SleepMe API
+   * Cancel pending requests of a specific type for a device
+   * Enhanced with deduplication to prevent concurrent polling conflicts
+   * @param deviceId Device ID
+   * @param operationType Optional type of operation to cancel (if not specified, cancels all)
+   */
+    cancelPendingRequests(deviceId, operationType) {
+        // Function to find and cancel requests in a queue
+        const processQueue = (queue) => {
+            const requestsToCancel = queue.filter(r => !r.executing && r.deviceId === deviceId &&
+                (!operationType || r.operationType === operationType));
+            for (const request of requestsToCancel) {
+                this.logger.verbose(`Canceling pending ${request.operationType} request for device ${deviceId}`);
+                const index = queue.findIndex(r => r.id === request.id);
+                if (index !== -1) {
+                    queue.splice(index, 1);
+                }
+                request.resolve(null); // Resolve with null rather than rejecting
+            }
+        };
+        // Process all priority queues
+        processQueue(this.criticalQueue);
+        processQueue(this.highPriorityQueue);
+        processQueue(this.normalPriorityQueue);
+        processQueue(this.lowPriorityQueue);
+    }
+    /**
+     * Check for duplicate requests and deduplicate them
+     * Prevents multiple concurrent requests for the same device/operation
+     * @param newRequest New request to check
+     * @returns true if request should be queued, false if duplicate found
+     */
+    shouldQueueRequest(newRequest) {
+        const allQueues = [
+            this.criticalQueue,
+            this.highPriorityQueue,
+            this.normalPriorityQueue,
+            this.lowPriorityQueue
+        ];
+        for (const queue of allQueues) {
+            const duplicate = queue.find(r => !r.executing &&
+                r.deviceId === newRequest.deviceId &&
+                r.operationType === newRequest.operationType &&
+                r.method === newRequest.method);
+            if (duplicate) {
+                this.logger.debug(`Skipping duplicate ${newRequest.operationType} request for device ${newRequest.deviceId}`);
+                return false;
+            }
+        }
+        return true;
+    }
+    /**
+     * Make a request to the SleepMe API with improved priority handling
      * @param options Request options
      * @returns Promise resolving to response data
      */
     async makeRequest(options) {
         // Set default priority
         const priority = options.priority || RequestPriority.NORMAL;
-        // Add detailed logging for the request
-        if (this.logger.isVerbose()) {
+        // Skip redundant status updates if queue is getting large
+        // More aggressive skipping to prevent queue buildup
+        if ((this.criticalQueue.length + this.highPriorityQueue.length > 2) &&
+            options.operationType === 'getDeviceStatus' &&
+            (priority === RequestPriority.NORMAL || priority === RequestPriority.LOW)) {
+            this.logger.debug(`Skipping routine status update due to queue backlog (${this.criticalQueue.length + this.highPriorityQueue.length} queued)`);
+            return Promise.resolve(null);
+        }
+        // Log request at different levels based on operation type to reduce noise
+        if (options.operationType === 'getDeviceStatus') {
             this.logger.verbose(`API Request ${options.method} ${options.url} [${priority}]` +
                 (options.data ? ` with payload: ${JSON.stringify(options.data)}` : ''));
         }
-        // Wait for startup delay to complete for non-high priority requests
-        if (priority !== RequestPriority.HIGH && !this.startupFinished) {
+        else {
+            this.logger.info(`API Request ${options.method} ${options.url} [${priority}]` +
+                (options.data ? ` with payload: ${JSON.stringify(options.data)}` : ''));
+        }
+        // Wait for startup delay to complete for non-critical requests
+        if (priority !== RequestPriority.CRITICAL && !this.startupFinished) {
             await this.startupComplete;
         }
         // Return a new promise
@@ -663,14 +888,18 @@ export class SleepMeApi {
             // Create request config
             const config = {
                 method: options.method,
-                url: API_BASE_URL + options.url
+                url: API_BASE_URL + options.url,
+                validateStatus: (status) => {
+                    // Consider 2xx status codes as successful
+                    return status >= 200 && status < 300;
+                }
             };
             // Add data if provided
             if (options.data) {
                 config.data = options.data;
             }
-            // Add to queue
-            this.requestQueue.push({
+            // Create new request
+            const request = {
                 id: requestId,
                 config,
                 priority,
@@ -681,8 +910,32 @@ export class SleepMeApi {
                 method: options.method,
                 url: options.url,
                 deviceId: options.deviceId,
-                operationType: options.operationType
-            });
+                operationType: options.operationType,
+                data: options.data // Store data for filtering in getNextRequest
+            };
+            // Check for duplicates before queueing
+            if (!this.shouldQueueRequest(request)) {
+                // Duplicate found, resolve with null to avoid hanging promises
+                resolve(null);
+                return;
+            }
+            // Add to the appropriate queue based on priority
+            switch (priority) {
+                case RequestPriority.CRITICAL:
+                    this.criticalQueue.push(request);
+                    break;
+                case RequestPriority.HIGH:
+                    this.highPriorityQueue.push(request);
+                    break;
+                case RequestPriority.NORMAL:
+                    this.normalPriorityQueue.push(request);
+                    break;
+                case RequestPriority.LOW:
+                    this.lowPriorityQueue.push(request);
+                    break;
+                default:
+                    this.normalPriorityQueue.push(request);
+            }
             // Start processing the queue if not already running
             if (!this.processingQueue) {
                 this.processQueue();
@@ -690,12 +943,11 @@ export class SleepMeApi {
         });
     }
     /**
-     * Handle API errors with better logging
-     * @param context Context where the error occurred
-     * @param error The error that occurred
-     */
+   * Handle API errors with better logging
+   * @param context Context where the error occurred
+   * @param error The error that occurred
+   */
     handleApiError(context, error) {
-        var _a, _b;
         // Cast to Axios error if possible
         const axiosError = error;
         // Details for the log
@@ -704,8 +956,8 @@ export class SleepMeApi {
         let responseData = null;
         // Get error details
         if (axios.isAxiosError(axiosError)) {
-            responseStatus = ((_a = axiosError.response) === null || _a === void 0 ? void 0 : _a.status) || 0;
-            responseData = (_b = axiosError.response) === null || _b === void 0 ? void 0 : _b.data;
+            responseStatus = axiosError.response?.status || 0;
+            responseData = axiosError.response?.data;
             errorMessage = axiosError.message;
             this.logger.error(`API error in ${context}: ${errorMessage} (Status: ${responseStatus})`);
             if (responseData && this.logger.isVerbose()) {
@@ -731,6 +983,23 @@ export class SleepMeApi {
             this.stats.averageResponseTime =
                 (this.stats.averageResponseTime * 0.9) + (newResponseTime * 0.1);
         }
+    }
+    /**
+     * Extract a nested property value from an object
+     * @param obj Object to extract from
+     * @param path Dot-notation path to property
+     * @returns Extracted value or undefined if not found
+     */
+    extractNestedValue(obj, path) {
+        const parts = path.split('.');
+        let value = obj;
+        for (const part of parts) {
+            if (value === null || value === undefined || typeof value !== 'object') {
+                return undefined;
+            }
+            value = value[part];
+        }
+        return value;
     }
     /**
      * Extract a temperature value from nested properties

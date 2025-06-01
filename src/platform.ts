@@ -16,6 +16,7 @@ import { SleepMeAccessory } from './accessory.js';
 import { Logger as CustomLogger } from './api/types.js';
 import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
 import { ScheduleManager, TemperatureSchedule } from './schedule.js';
+import { PollingManager } from './polling-manager.js';
 
 /**
  * SleepMe Simple Platform
@@ -56,6 +57,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
 
   // Schedule manager for handling temperature schedules
   private _scheduleManager?: ScheduleManager;
+  
+  // Centralized polling manager to optimize API usage
+  private _pollingManager?: PollingManager;
   
   /**
    * Constructor for the SleepMe platform.
@@ -123,6 +127,10 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         this.log.info('Schedule Manager initialized');
         this.log.info(`Warm Hug config: ${warmHugConfig.increment}°C/min for ${warmHugConfig.duration} minutes`);
       }
+      
+      // Initialize centralized polling manager
+      this._pollingManager = new PollingManager(this.api, this.log, this.pollingInterval * 1000);
+      this.log.info('Centralized Polling Manager initialized');
     }
     
     // Register for Homebridge events
@@ -179,13 +187,24 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         }, 30000); // 30 second delay before starting discovery
         
         // Set up periodic discovery to catch new or changed devices
-        // Check once per day is sufficient
+        // Reduce frequency and make conditional on actual need
         this.discoveryTimer = setInterval(() => {
-          // Only start discovery if not already in progress
-          if (!this.discoveryInProgress) {
+          // Only start discovery if not already in progress AND we have few devices
+          // Skip discovery if we already have devices and centralized polling is working
+          if (!this.discoveryInProgress && this.accessories.length < 3) {
+            this.log.debug('Running periodic device discovery (limited device count)');
             this.discoverDevices();
+          } else if (!this.discoveryInProgress && this.accessories.length >= 3) {
+            // Only occasionally check for new devices when we already have many
+            const shouldCheck = Math.random() < 0.1; // 10% chance
+            if (shouldCheck) {
+              this.log.debug('Randomly checking for new devices (many devices already present)');
+              this.discoverDevices();
+            } else {
+              this.log.debug('Skipping periodic discovery - many devices already managed');
+            }
           }
-        }, 24 * 60 * 60 * 1000); // Check once per day
+        }, 12 * 60 * 60 * 1000); // Check every 12 hours instead of 24
       }
     });
     
@@ -203,6 +222,11 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         this._scheduleManager.cleanup();
       }
       
+      // Clean up polling manager
+      if (this._pollingManager) {
+        this._pollingManager.cleanup();
+      }
+      
       // Clean up accessory resources
       this.accessoryInstances.forEach(accessory => {
         accessory.cleanup();
@@ -216,6 +240,14 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
    */
   public get scheduleManager(): ScheduleManager | undefined {
     return this._scheduleManager;
+  }
+
+  /**
+   * Get the polling manager
+   * @returns Polling manager instance if available
+   */
+  public get pollingManager(): PollingManager | undefined {
+    return this._pollingManager;
   }
 
   /**

@@ -221,13 +221,14 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
         let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
         
         // Adjust validity period based on confidence and source
+        // More aggressive caching for routine polling efficiency
         if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
           // Extend validity for high confidence updates, especially if they came from a PATCH
           validityPeriod = cachedStatus.source === 'patch' ? 
-                          DEFAULT_CACHE_VALIDITY_MS * 3 : // Much longer validity for PATCH responses
-                          DEFAULT_CACHE_VALIDITY_MS * 2;  // Standard extension for high confidence
+                          DEFAULT_CACHE_VALIDITY_MS * 4 : // Even longer validity for PATCH responses
+                          DEFAULT_CACHE_VALIDITY_MS * 3;  // Extended validity for high confidence GET
         } else if (cachedStatus.isOptimistic) {
-          validityPeriod = DEFAULT_CACHE_VALIDITY_MS / 2; // Shorter validity for optimistic updates
+          validityPeriod = DEFAULT_CACHE_VALIDITY_MS; // Normal validity for optimistic updates
         }
         
         if (now - cachedStatus.timestamp < validityPeriod) {
@@ -982,6 +983,7 @@ private requeueRequest(request: QueuedRequest): void {
 }
   /**
  * Cancel pending requests of a specific type for a device
+ * Enhanced with deduplication to prevent concurrent polling conflicts
  * @param deviceId Device ID
  * @param operationType Optional type of operation to cancel (if not specified, cancels all)
  */
@@ -1015,6 +1017,39 @@ private cancelPendingRequests(deviceId: string, operationType?: string): void {
 }
 
 /**
+ * Check for duplicate requests and deduplicate them
+ * Prevents multiple concurrent requests for the same device/operation
+ * @param newRequest New request to check
+ * @returns true if request should be queued, false if duplicate found
+ */
+private shouldQueueRequest(newRequest: QueuedRequest): boolean {
+  const allQueues = [
+    this.criticalQueue,
+    this.highPriorityQueue, 
+    this.normalPriorityQueue,
+    this.lowPriorityQueue
+  ];
+  
+  for (const queue of allQueues) {
+    const duplicate = queue.find(r => 
+      !r.executing && 
+      r.deviceId === newRequest.deviceId && 
+      r.operationType === newRequest.operationType &&
+      r.method === newRequest.method
+    );
+    
+    if (duplicate) {
+      this.logger.debug(
+        `Skipping duplicate ${newRequest.operationType} request for device ${newRequest.deviceId}`
+      );
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
  * Make a request to the SleepMe API with improved priority handling
  * @param options Request options
  * @returns Promise resolving to response data
@@ -1031,11 +1066,11 @@ private async makeRequest<T>(options: {
   const priority = options.priority || RequestPriority.NORMAL;
   
   // Skip redundant status updates if queue is getting large
-  if (this.criticalQueue.length + this.highPriorityQueue.length > 3 && 
+  // More aggressive skipping to prevent queue buildup
+  if ((this.criticalQueue.length + this.highPriorityQueue.length > 2) && 
       options.operationType === 'getDeviceStatus' && 
-      priority !== RequestPriority.CRITICAL && 
-      priority !== RequestPriority.HIGH) {
-    this.logger.debug(`Skipping non-critical status update due to queue backlog`);
+      (priority === RequestPriority.NORMAL || priority === RequestPriority.LOW)) {
+    this.logger.debug(`Skipping routine status update due to queue backlog (${this.criticalQueue.length + this.highPriorityQueue.length} queued)`);
     return Promise.resolve(null as unknown as T);
   }
   
@@ -1092,6 +1127,13 @@ private async makeRequest<T>(options: {
       operationType: options.operationType,
       data: options.data as Record<string, unknown>  // Store data for filtering in getNextRequest
     };
+    
+    // Check for duplicates before queueing
+    if (!this.shouldQueueRequest(request)) {
+      // Duplicate found, resolve with null to avoid hanging promises
+      resolve(null as unknown as T);
+      return;
+    }
     
     // Add to the appropriate queue based on priority
     switch (priority) {
