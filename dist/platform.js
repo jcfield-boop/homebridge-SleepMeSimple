@@ -88,8 +88,7 @@ export class SleepMeSimplePlatform {
                 // Create the schedule manager but don't set schedules yet
                 // We'll do that after device discovery
                 this._scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
-                this.log.info('Schedule Manager initialized');
-                this.log.info(`Warm Hug config: ${warmHugConfig.increment}°C/min for ${warmHugConfig.duration} minutes`);
+                // ScheduleManager constructor handles logging
             }
             // Initialize centralized polling manager
             this._pollingManager = new PollingManager(this.api, this.log, this.pollingInterval * 1000);
