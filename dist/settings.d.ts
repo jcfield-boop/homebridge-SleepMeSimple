@@ -15,9 +15,9 @@ export declare const PLUGIN_NAME = "homebridge-sleepme-simple";
 export declare const API_BASE_URL = "https://api.developer.sleep.me/v1";
 /**
  * Default polling interval in seconds
- * Increased to better balance API usage with responsiveness
+ * Increased to avoid rate limiting issues
  */
-export declare const DEFAULT_POLLING_INTERVAL = 120;
+export declare const DEFAULT_POLLING_INTERVAL = 180;
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -34,12 +34,12 @@ export declare const TEMPERATURE_STEP = 1;
  * Minimum time between API requests in milliseconds
  * Provides a safer buffer to prevent rate limiting
  */
-export declare const MIN_REQUEST_INTERVAL = 6000;
+export declare const MIN_REQUEST_INTERVAL = 10000;
 /**
  * Maximum API requests per minute (to respect rate limits)
  * Very conservative limit due to potential shared API usage
  */
-export declare const MAX_REQUESTS_PER_MINUTE = 3;
+export declare const MAX_REQUESTS_PER_MINUTE = 2;
 /**
  * Default cache validity period in milliseconds
  * Base period for cache entries - will be adjusted based on device state

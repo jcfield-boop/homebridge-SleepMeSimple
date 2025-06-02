@@ -271,11 +271,11 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     
   // MORE CONSERVATIVE APPROACH:
 // Only use HIGH priority when explicitly requested by user actions
-// For system-initiated refreshes (including initial polls), use NORMAL or LOW
-const isSystemInitiated = !forceFresh || (this.startupFinished === false);
-const priority = isSystemInitiated ? 
-               RequestPriority.NORMAL : 
-               RequestPriority.HIGH;
+// For system-initiated refreshes (including polling), use LOW priority
+const isUserInitiated = forceFresh && this.startupFinished;
+const priority = isUserInitiated ? 
+               RequestPriority.HIGH : 
+               RequestPriority.LOW;  // Use LOW priority for all routine polling
 
 this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
 
@@ -1083,12 +1083,20 @@ private async makeRequest<T>(options: {
   // Set default priority
   const priority = options.priority || RequestPriority.NORMAL;
   
-  // Skip redundant status updates if queue is getting large
-  // More aggressive skipping to prevent queue buildup
-  if ((this.criticalQueue.length + this.highPriorityQueue.length > 2) && 
+  // Skip redundant status updates if queue is getting large or recent rate limits
+  // More aggressive skipping to prevent queue buildup and rate limit issues
+  const totalQueuedRequests = this.criticalQueue.length + this.highPriorityQueue.length + this.normalPriorityQueue.length;
+  
+  if ((totalQueuedRequests > 1) && 
       options.operationType === 'getDeviceStatus' && 
       (priority === RequestPriority.NORMAL || priority === RequestPriority.LOW)) {
-    this.logger.debug(`Skipping routine status update due to queue backlog (${this.criticalQueue.length + this.highPriorityQueue.length} queued)`);
+    this.logger.debug(`Skipping routine status update due to queue backlog (${totalQueuedRequests} queued)`);
+    return Promise.resolve(null as unknown as T);
+  }
+  
+  // Additional check: skip LOW priority requests if we recently had rate limiting
+  if (priority === RequestPriority.LOW && Date.now() < this.rateLimitBackoffUntil) {
+    this.logger.debug('Skipping LOW priority request due to recent rate limiting');
     return Promise.resolve(null as unknown as T);
   }
   

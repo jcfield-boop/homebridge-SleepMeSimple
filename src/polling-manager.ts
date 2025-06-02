@@ -104,8 +104,8 @@ export class PollingManager {
     for (const [deviceId, device] of this.devices) {
       try {
         // Check if we should force fresh data for potentially active devices
-        // Every 3rd cycle, force fresh data for better temperature tracking
-        const shouldForceFresh = (this.currentPollCycle % 3 === 0);
+        // Every 5th cycle, force fresh data for better temperature tracking (reduced frequency)
+        const shouldForceFresh = (this.currentPollCycle % 5 === 0);
         
         const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
         
