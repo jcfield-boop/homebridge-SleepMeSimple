@@ -749,7 +749,6 @@ function populateTemplateCodePreview() {
           configForm: null,               // Main configuration form
           enableSchedulesCheckbox: null,  // Enable schedules checkbox
           schedulesContainer: null,       // Schedules container
-          testConnectionBtn: null,        // Test connection button
           applyTemplatesBtn: null,        // Apply templates button
           confirmModal: null,             // Confirmation modal
           confirmTitle: null,             // Confirmation modal title
@@ -858,7 +857,6 @@ function initializeDOMReferences() {
         elements.configForm = safeGetElement('configForm');
         elements.enableSchedulesCheckbox = safeGetElement('enableSchedules');
         elements.schedulesContainer = safeGetElement('schedulesContainer');
-        elements.testConnectionBtn = safeGetElement('testConnection');
         elements.applyTemplatesBtn = safeGetElement('applyTemplates');
         elements.confirmModal = safeGetElement('confirmModal');
         elements.confirmTitle = safeGetElement('confirmTitle');
@@ -1189,12 +1187,6 @@ function initializeEventListeners() {
             return false;
         }
         
-       // Test connection button
-       if (elements.testConnectionBtn) {
-        elements.testConnectionBtn.addEventListener('click', () => {
-            testConnection();
-        });
-       }
     
        // Enable schedules checkbox
        if (elements.enableSchedulesCheckbox && elements.schedulesContainer) {
@@ -1478,66 +1470,6 @@ async function waitForHomebridgeReady() {
 }
 
 /**
- * Test connection to the SleepMe API
- * Enhanced with better error handling
- * @returns {Promise<void>}
- */
-async function testConnection() {
-  try {
-      const apiTokenInput = document.getElementById('apiToken');
-      if (!apiTokenInput) {
-          console.error('API token input field not found');
-          return;
-      }
-      
-      const apiToken = apiTokenInput.value.trim();
-      if (!apiToken) {
-          // Update status element instead of toast
-          const statusElement = document.getElementById('status');
-          if (statusElement) {
-              statusElement.textContent = 'Please enter your API token';
-              statusElement.className = 'status error';
-              statusElement.classList.remove('hidden');
-          }
-          return;
-      }
-      
-      console.log('Testing API connection...'); 
-      
-      if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
-          console.error('Homebridge API not available for API test');
-          return;
-      }
-      
-      // Make request to server
-      const response = await homebridge.request('/device/test', { apiToken });
-              
-      // Update status element instead of toast
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-          if (response.success) {
-              statusElement.textContent = `Connection successful! Found ${response.devices} device(s): ${response.deviceInfo.map(d => d.name).join(', ')}`;
-              statusElement.className = 'status success';
-          } else {
-              statusElement.textContent = response.error || 'Unknown error testing connection';
-              statusElement.className = 'status error';
-          }
-          statusElement.classList.remove('hidden');
-      }
-  } catch (error) {
-      console.error('Error testing connection:', error);
-      
-      // Update status element instead of toast
-      const statusElement = document.getElementById('status');
-      if (statusElement) {
-          statusElement.textContent = `Error testing connection: ${error.message}`;
-          statusElement.className = 'status error';
-          statusElement.classList.remove('hidden');
-      }
-  }
-}
-
-/**
  * Robust initialization sequence with better error handling and fallbacks
  * Uses sequential async operations with proper error boundaries
  */
@@ -1676,7 +1608,6 @@ return {
   logMessage: logMessage,
   showLoading: showLoading,
   hideLoading: hideLoading,
-  testConnection: testConnection,
   templates: templates,
   getState: function() {
       return {...state}; // Return a copy to prevent direct modification
