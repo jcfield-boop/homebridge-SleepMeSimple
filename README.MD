@@ -89,6 +89,10 @@ Configure through the Homebridge UI or manually in your `config.json`:
 - **pollingInterval**: How frequently to check device status in seconds (default: 90, minimum: 60)
 - **logLevel**: Log detail level - "normal", "debug", or "verbose"
 - **enableSchedules**: Enable temperature scheduling features (default: false)
+- **disableAutoDiscovery**: Disable automatic device re-discovery (default: false)
+  - Set to `true` to prevent the plugin from re-discovering devices every 24 hours
+  - Recommended if you experience devices turning off unexpectedly
+  - Prevents the "device turns off at the same time every day" bug
 
 ## Using the UI Configuration
 

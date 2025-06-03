@@ -40,6 +40,12 @@
         "type": "boolean",
         "default": false
       },
+      "disableAutoDiscovery": {
+        "title": "Disable Auto-Discovery",
+        "type": "boolean",
+        "default": false,
+        "description": "Disable automatic device re-discovery that runs every 24 hours"
+      },
 "schedules": {
   "type": "array",
   "items": {

@@ -26,6 +26,7 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     readonly logLevel: LogLevel;
     readonly pollingInterval: number;
     readonly temperatureUnit: string;
+    readonly disableAutoDiscovery: boolean;
     private readonly accessoryInstances;
     private discoveryTimer?;
     private discoveryInProgress;

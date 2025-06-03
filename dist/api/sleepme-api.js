@@ -2,7 +2,7 @@
  * SleepMe API client implementation with robust error handling and rate limiting
  */
 import axios from 'axios';
-import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, RequestPriority } from '../settings.js';
+import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, INITIAL_BACKOFF_MS, MAX_BACKOFF_MS, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
 /**
  * SleepMe API Client
@@ -22,6 +22,7 @@ export class SleepMeApi {
     lastRequestTime = 0;
     processingQueue = false;
     rateLimitBackoffUntil = 0;
+    rateLimitRetries = 0;
     consecutiveErrors = 0;
     rateExceededLogged = false; // Flag to prevent redundant log messages
     // Request ID counter
@@ -618,24 +619,21 @@ export class SleepMeApi {
                     // Resolve the promise with the data
                     request.resolve(response.data);
                     this.logger.verbose(`Request ${request.id} completed in ${responseTime}ms`);
-                    // Reset consecutive errors on success
+                    // Reset consecutive errors and rate limit retries on success
                     this.consecutiveErrors = 0;
+                    this.rateLimitRetries = 0;
                 }
                 catch (error) {
                     const axiosError = error;
                     this.stats.failedRequests++;
                     this.stats.lastError = axiosError;
                     // Handle rate limiting (HTTP 429)
-                    // In the error handling part of processQueue method
                     if (axiosError.response?.status === 429) {
-                        // For rate limit errors, wait until the next minute boundary
-                        const now = Date.now();
-                        const currentMinute = Math.floor(now / 60000) * 60000;
-                        const nextMinute = currentMinute + 60000;
-                        // Add a small buffer (2 seconds) to ensure we're safely in the next minute
-                        const waitTime = (nextMinute - now) + 2000;
-                        this.rateLimitBackoffUntil = now + waitTime;
-                        this.logger.warn(`Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
+                        // Exponential backoff instead of minute alignment
+                        const backoffMs = Math.min(INITIAL_BACKOFF_MS * Math.pow(2, this.rateLimitRetries), MAX_BACKOFF_MS);
+                        this.rateLimitBackoffUntil = Date.now() + backoffMs;
+                        this.rateLimitRetries++;
+                        this.logger.warn(`Rate limit exceeded (429). Using exponential backoff: ${Math.ceil(backoffMs / 1000)}s (attempt ${this.rateLimitRetries})`);
                         // Requeue the request
                         this.requeueRequest(request);
                     }

@@ -15,6 +15,7 @@ export declare class SleepMeApi {
     private lastRequestTime;
     private processingQueue;
     private rateLimitBackoffUntil;
+    private rateLimitRetries;
     private consecutiveErrors;
     private rateExceededLogged;
     private requestIdCounter;

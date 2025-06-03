@@ -1,4 +1,42 @@
 # Changelog
+## 6.10.0 (2025-06-03)
+
+### Critical Bug Fix
+- **Device Turns Off During Daily Re-discovery**: Fixed critical bug causing devices to turn off every 24 hours
+  - Daily device discovery was re-initializing accessories with OFF state
+  - Accessory initialization was not preserving current device state
+  - Added configuration option to disable automatic re-discovery
+  - Device was being commanded OFF during 24-hour timer cycle
+
+### Fixed
+- **Rate Limiting During Re-initialization**: Fixed cascade of API calls during device re-discovery
+  - Device discovery followed immediately by OFF command and polling caused rate limits
+  - Re-initialization now preserves device state to prevent unnecessary commands
+  - Improved request spacing during initialization sequences
+  - Replaced minute-alignment with exponential backoff for rate limit handling
+
+### Added
+- **Configuration Option**: Added `disableAutoDiscovery` to prevent daily re-discovery
+  - Allows users to disable the 24-hour discovery timer
+  - Prevents unexpected device state changes
+  - Recommended for stable installations
+
+### Improved
+- **State Change Logging**: Enhanced logging for unexpected device state changes
+  - Added detection of non-user-initiated state changes
+  - Improved debugging information with time since last user action
+  - Better visibility into device behavior
+
+### Technical
+- **State Management**: Improved device state preservation during re-initialization
+  - Removed default state assignment during accessory setup
+  - Allows first status poll to set correct state instead of assuming OFF
+  - Better separation between initialization and state management
+- **Rate Limiting**: Implemented exponential backoff instead of minute boundary alignment
+  - More robust handling of 429 responses
+  - Prevents assumptions about server-side rate limit windows
+  - Reduces failed requests during high load periods
+
 ## 6.9.7 (2025-05-29)
 
 ### Fixed

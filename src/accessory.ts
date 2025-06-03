@@ -218,9 +218,11 @@ export class SleepMeAccessory implements PollableDevice {
     
     // Configure basic characteristics
     this.temperatureControlService
-      .setCharacteristic(this.Characteristic.Name, this.displayName)
-      .setCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.Characteristic.CurrentHeatingCoolingState.OFF)
-      .setCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.OFF);
+      .setCharacteristic(this.Characteristic.Name, this.displayName);
+      
+    // IMPORTANT: Do not set initial state during setup
+    // Let the first status poll determine the correct state
+    // This prevents the device from being turned OFF during re-initialization
     
     // Set up current temperature characteristic
     this.temperatureControlService
@@ -830,8 +832,23 @@ private updateDeviceState(status: DeviceStatus): void {
                       status.thermalStatus !== ThermalStatus.OFF);
                       
   if (this.isPowered !== newPowerState) {
+    // Check if this was a user action
+    const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+    const wasUserAction = timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS;
+    
+    if (!wasUserAction) {
+      this.platform.log.warn(
+        `UNEXPECTED STATE CHANGE: Device ${this.deviceId} (${this.displayName}) ` +
+        `power state changed: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'} ` +
+        `(last user action was ${Math.round(timeSinceUserAction / 1000)}s ago)`
+      );
+    } else {
+      this.platform.log.info(
+        `Device ${this.deviceId} power state changed: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`
+      );
+    }
+    
     this.isPowered = newPowerState;
-    this.platform.log.verbose(`Power state updated to ${this.isPowered ? 'ON' : 'OFF'}`);
   }
   
   // Update the current heating/cooling state

@@ -42,6 +42,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   public readonly logLevel!: LogLevel;
   public readonly pollingInterval: number;
   public readonly temperatureUnit: string = 'C';
+  public readonly disableAutoDiscovery: boolean;
   
   // Map to track active accessory instances for proper cleanup
   private readonly accessoryInstances: Map<string, SleepMeAccessory> = new Map();
@@ -93,8 +94,15 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     }
     this.logLevel = configLogLevel as LogLevel;
 
+    // Parse auto-discovery setting
+    this.disableAutoDiscovery = config.disableAutoDiscovery === true;
+
     // Create custom logger
     this.log = this.createLogger(logger);
+    
+    if (this.disableAutoDiscovery) {
+      this.log.info('Automatic device re-discovery is disabled');
+    }
     
     // Validate that the API token is present in the configuration
     if (!config.apiToken) {
@@ -186,24 +194,19 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         }, 30000); // 30 second delay before starting discovery
         
         // Set up periodic discovery to catch new or changed devices
-        // Reduce frequency and make conditional on actual need
-        this.discoveryTimer = setInterval(() => {
-          // Only start discovery if not already in progress AND we have few devices
-          // Skip discovery if we already have devices and centralized polling is working
-          if (!this.discoveryInProgress && this.accessories.length < 3) {
-            this.log.debug('Running periodic device discovery (limited device count)');
-            this.discoverDevices();
-          } else if (!this.discoveryInProgress && this.accessories.length >= 3) {
-            // Only occasionally check for new devices when we already have many
-            const shouldCheck = Math.random() < 0.1; // 10% chance
-            if (shouldCheck) {
-              this.log.debug('Randomly checking for new devices (many devices already present)');
+        if (!this.disableAutoDiscovery) {
+          // Check once per day is sufficient
+          this.discoveryTimer = setInterval(() => {
+            // Only start discovery if not already in progress
+            if (!this.discoveryInProgress) {
               this.discoverDevices();
-            } else {
-              this.log.debug('Skipping periodic discovery - many devices already managed');
             }
-          }
-        }, 12 * 60 * 60 * 1000); // Check every 12 hours instead of 24
+          }, 24 * 60 * 60 * 1000); // Check once per day
+          
+          this.log.info('Automatic device re-discovery enabled (24-hour interval)');
+        } else {
+          this.log.info('Automatic device re-discovery is disabled by configuration');
+        }
       }
     });
     
