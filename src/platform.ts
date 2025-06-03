@@ -100,6 +100,12 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     // Create custom logger
     this.log = this.createLogger(logger);
     
+    // Test log level functionality with direct output
+    this.log.info(`Log level configured as: ${this.logLevel}`);
+    this.log.info('Testing log levels...');
+    this.log.debug('This is a DEBUG message - should appear if logLevel is debug or verbose');
+    this.log.verbose('This is a VERBOSE message - should appear if logLevel is verbose');
+    
     if (this.disableAutoDiscovery) {
       this.log.info('Automatic device re-discovery is disabled');
     }
@@ -264,12 +270,18 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       error: (message: string) => logger.error(`[SleepMe Simple] ${message}`),
       debug: (message: string) => {
         if (this.logLevel === LogLevel.DEBUG || this.logLevel === LogLevel.VERBOSE) {
-          logger.debug(`[SleepMe Simple] ${message}`);
+          // Use info level when verbose is enabled to ensure visibility
+          if (this.logLevel === LogLevel.VERBOSE) {
+            logger.info(`[SleepMe Simple] [DEBUG] ${message}`);
+          } else {
+            logger.debug(`[SleepMe Simple] ${message}`);
+          }
         }
       },
       verbose: (message: string) => {
         if (this.logLevel === LogLevel.VERBOSE) {
-          logger.debug(`[SleepMe Simple] [VERBOSE] ${message}`);
+          // Use info level for verbose messages to ensure they're visible
+          logger.info(`[SleepMe Simple] [VERBOSE] ${message}`);
         }
       },
       isVerbose: () => this.logLevel === LogLevel.VERBOSE,
