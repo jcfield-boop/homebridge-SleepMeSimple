@@ -35,6 +35,13 @@
         "default": 90,
         "description": "Device status check interval (seconds)"
       },
+      "logLevel": {
+        "title": "Log Level",
+        "type": "string",
+        "enum": ["normal", "debug", "verbose"],
+        "default": "normal",
+        "description": "Controls the detail level of plugin logs"
+      },
       "enableSchedules": {
         "title": "Enable Schedules",
         "type": "boolean",

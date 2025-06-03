@@ -53,6 +53,7 @@ window.loadConfig = async function() {
       const apiTokenInput = document.getElementById('apiToken');
       const unitSelect = document.getElementById('unit');
       const pollingIntervalInput = document.getElementById('pollingInterval');
+      const logLevelSelect = document.getElementById('logLevel');
       const enableSchedulesCheckbox = document.getElementById('enableSchedules');
       const schedulesContainer = document.getElementById('schedulesContainer');
       
@@ -66,6 +67,10 @@ window.loadConfig = async function() {
       
       if (pollingIntervalInput && config.pollingInterval) {
           pollingIntervalInput.value = config.pollingInterval;
+      }
+      
+      if (logLevelSelect && config.logLevel) {
+          logLevelSelect.value = config.logLevel;
       }
       
       // Handle schedules
@@ -176,6 +181,7 @@ window.saveConfig = async function() {
       const apiToken = document.getElementById('apiToken')?.value;
       const unit = document.getElementById('unit')?.value || 'C';
       const pollingInterval = parseInt(document.getElementById('pollingInterval')?.value || '90', 10);
+      const logLevel = document.getElementById('logLevel')?.value || 'normal';
       const enableSchedules = document.getElementById('enableSchedules')?.checked || false;
       
       // Validate required fields
@@ -199,6 +205,7 @@ window.saveConfig = async function() {
           apiToken,
           unit,
           pollingInterval,
+          logLevel,
           enableSchedules
       };
       
