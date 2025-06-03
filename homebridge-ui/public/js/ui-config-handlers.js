@@ -69,8 +69,10 @@ window.loadConfig = async function() {
           pollingIntervalInput.value = config.pollingInterval;
       }
       
-      if (logLevelSelect && config.logLevel) {
-          logLevelSelect.value = config.logLevel;
+      if (logLevelSelect) {
+          // Set log level with default fallback
+          logLevelSelect.value = config.logLevel || 'normal';
+          debugLog(`Set logLevel dropdown to: ${logLevelSelect.value}`);
       }
       
       // Handle schedules
@@ -183,6 +185,15 @@ window.saveConfig = async function() {
       const pollingInterval = parseInt(document.getElementById('pollingInterval')?.value || '90', 10);
       const logLevel = document.getElementById('logLevel')?.value || 'normal';
       const enableSchedules = document.getElementById('enableSchedules')?.checked || false;
+      
+      // Debug logging for configuration values
+      console.log('Form values being saved:', {
+          apiToken: apiToken ? '[REDACTED]' : 'MISSING',
+          unit,
+          pollingInterval,
+          logLevel,
+          enableSchedules
+      });
       
       // Validate required fields
       if (!apiToken) {

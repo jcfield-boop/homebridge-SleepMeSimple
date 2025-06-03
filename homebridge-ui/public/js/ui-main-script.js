@@ -689,10 +689,7 @@ function populateTemplateCodePreview() {
               return;
           }
           
-          // Set log level if available
-          if (logLevelSelect && config.logLevel) {
-              logLevelSelect.value = config.logLevel;
-          }
+          // Log level is handled by loadConfig() in ui-config-handlers.js
           
           // Set values if they exist in config.advanced
           if (config.advanced) {
