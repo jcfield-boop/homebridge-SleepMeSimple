@@ -817,13 +817,22 @@ private updateDeviceState(status: DeviceStatus): void {
   if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
     this.targetTemperature = status.targetTemperature;
     
+    // Clamp target temperature to HomeKit valid range
+    // API returns 999 for MAX HEAT and -1 for MAX COLD, but HomeKit has stricter limits
+    let clampedTargetTemp = this.targetTemperature;
+    if (this.targetTemperature > MAX_TEMPERATURE_C) {
+      clampedTargetTemp = MAX_TEMPERATURE_C;
+    } else if (this.targetTemperature < MIN_TEMPERATURE_C) {
+      clampedTargetTemp = MIN_TEMPERATURE_C;
+    }
+    
     // Update target temperature in Thermostat service
     this.temperatureControlService.updateCharacteristic(
       this.Characteristic.TargetTemperature,
-      this.targetTemperature
+      clampedTargetTemp
     );
     
-    this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C`);
+    this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C (HomeKit: ${clampedTargetTemp}°C)`);
   }
   
   // Update power state based on thermal status and power state
