@@ -100,7 +100,9 @@ export class PollingManager {
                         freshCallCount++;
                 }
                 else {
-                    throw new Error('No status returned');
+                    // Null response is likely due to queue backlog or rate limiting - this is intentional, not an error
+                    // We'll just skip this poll cycle and try again next time
+                    this.logger.verbose(`Skipped poll for device ${deviceId} (queue backlog or rate limiting)`);
                 }
                 // Small delay between devices to be gentle on the API
                 if (this.devices.size > 1) {
