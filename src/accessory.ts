@@ -351,7 +351,8 @@ private handleTargetTemperatureGet(): number {
  * @param value Target heating cooling state value
  */
 private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
-  this.platform.log.info(`SET Target Heating Cooling State: ${value}`);
+  const shouldPowerOn = value !== this.Characteristic.TargetHeatingCoolingState.OFF;
+  this.platform.log.info(`User power change: ${shouldPowerOn ? 'ON' : 'OFF'} for ${this.deviceId} - IMMEDIATE`);
   
   // Mark user action time
   this.lastUserActionTime = Date.now();
@@ -493,7 +494,7 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
   this.targetTemperature = newTemp;
   
   // Log the change
-  this.platform.log.info(`Target temperature change request: ${previousTemp}°C → ${newTemp}°C`);
+  this.platform.log.info(`User set target temp: ${newTemp}°C for ${this.deviceId} - IMMEDIATE`);
   
   // Increment command epoch to invalidate previous commands
   const currentEpoch = ++this.commandEpoch;

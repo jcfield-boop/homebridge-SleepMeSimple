@@ -31,15 +31,21 @@ export const MAX_TEMPERATURE_C = 46; // ~115°F
  */
 export const TEMPERATURE_STEP = 1;
 /**
- * Minimum time between API requests in milliseconds
- * Provides a safer buffer to prevent rate limiting
+ * Minimum time between LOW PRIORITY API requests in milliseconds
+ * Only applies to background polling - user interactions bypass this
  */
-export const MIN_REQUEST_INTERVAL = 10000; // Increased from 6s to 10s for better rate limit compliance
+export const MIN_REQUEST_INTERVAL = 3000; // CHANGED: Reduced from 6000ms
 /**
  * Maximum API requests per minute (to respect rate limits)
  * Very conservative limit due to potential shared API usage
  */
-export const MAX_REQUESTS_PER_MINUTE = 2; // Reduced from 3 to 2 for better rate limit compliance
+export const MAX_REQUESTS_PER_MINUTE = 10; // Standard rate limit
+/**
+ * Background request threshold - start throttling background requests
+ * when we reach this percentage of MAX_REQUESTS_PER_MINUTE
+ * This reserves capacity for user interactions
+ */
+export const BACKGROUND_REQUEST_THRESHOLD = 0.8; // NEW: Add this constant
 /**
  * Default cache validity period in milliseconds
  * Base period for cache entries - will be adjusted based on device state
@@ -52,21 +58,23 @@ export const DEFAULT_CACHE_VALIDITY_MS = 120000; // 2 minutes base validity
 export const MAX_RETRIES = 3;
 /**
  * Initial backoff time in milliseconds for rate limiting
+ * Reduced for critical user interactions
  */
-export const INITIAL_BACKOFF_MS = 30000; // 30 seconds
+export const INITIAL_BACKOFF_MS = 5000; // CHANGED: Reduced from 30000ms
 /**
  * Maximum backoff time in milliseconds
  */
 export const MAX_BACKOFF_MS = 300000; // 5 minutes
 /**
  * Post-user-action quiet period in milliseconds
- * Increased as we trust API responses more
+ * Reduced to allow quicker status verification after user actions
  */
-export const USER_ACTION_QUIET_PERIOD_MS = 60000; // 60 seconds
+export const USER_ACTION_QUIET_PERIOD_MS = 30000; // CHANGED: Reduced from 60000ms
 /**
  * Command debounce delay in milliseconds
+ * Prevents rapid-fire duplicate commands from users
  */
-export const COMMAND_DEBOUNCE_DELAY_MS = 800; // 800ms
+export const COMMAND_DEBOUNCE_DELAY_MS = 500; // CHANGED: Reduced from 800ms
 /**
  * Logging levels
  */

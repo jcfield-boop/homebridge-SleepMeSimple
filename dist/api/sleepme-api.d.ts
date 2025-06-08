@@ -81,6 +81,7 @@ export declare class SleepMeApi {
      * Update device settings
      * @param deviceId Device identifier
      * @param settings Settings to update
+     * @param priority Request priority level
      * @returns Whether operation was successful
      */
     private updateDeviceSettings;
@@ -107,9 +108,17 @@ export declare class SleepMeApi {
    */
     private parseDeviceStatus;
     /**
-   * Process the request queue with improved priority handling
-   * and adaptive rate limiting
+   * Determine if we should wait for rate limits based on request priority
    */
+    private shouldWaitForRateLimit;
+    /**
+     * Handle rate limit errors with priority-aware backoff
+     */
+    private handleRateLimitError;
+    /**
+     * Process the request queue with improved priority handling
+     * and adaptive rate limiting
+     */
     private processQueue;
     /**
    * Determine if there are any queued requests

@@ -10,6 +10,7 @@ import {
   MAX_RETRIES,
   INITIAL_BACKOFF_MS,
   MAX_BACKOFF_MS,
+  BACKGROUND_REQUEST_THRESHOLD,
   RequestPriority
 } from '../settings.js';
 import { 
@@ -270,13 +271,7 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     // At this point, we need fresh data
     this.logger.debug(`Fetching status for device ${deviceId}...`);
     
-  // MORE CONSERVATIVE APPROACH:
-// Only use HIGH priority when explicitly requested by user actions
-// For system-initiated refreshes (including polling), use LOW priority
-const isUserInitiated = forceFresh && this.startupFinished;
-const priority = isUserInitiated ? 
-               RequestPriority.HIGH : 
-               RequestPriority.LOW;  // Use LOW priority for all routine polling
+const priority = forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL;
 
 this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
 
@@ -338,7 +333,7 @@ public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boole
     
     this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
     
-    const success = await this.updateDeviceSettings(deviceId, payload);
+    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
     
     if (success) {
       // Update cache with complete device state based on our command
@@ -383,7 +378,7 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
     
     this.logger.verbose(`Turn OFF payload: ${JSON.stringify(payload)}`);
     
-    const success = await this.updateDeviceSettings(deviceId, payload);
+    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
     
     if (success) {
       // Update cache with correct power state
@@ -425,7 +420,7 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
     
     this.logger.verbose(`Set temperature payload: ${JSON.stringify(payload)}`);
     
-    const success = await this.updateDeviceSettings(deviceId, payload);
+    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.HIGH);
     
     if (success) {
       // Update cache with trusted state - key to trust-based approach
@@ -460,9 +455,14 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
    * Update device settings
    * @param deviceId Device identifier
    * @param settings Settings to update
+   * @param priority Request priority level
    * @returns Whether operation was successful
    */
-  private async updateDeviceSettings(deviceId: string, settings: Record<string, unknown>): Promise<boolean> {
+  private async updateDeviceSettings(
+    deviceId: string, 
+    settings: Record<string, unknown>,
+    priority: RequestPriority = RequestPriority.CRITICAL
+  ): Promise<boolean> {
     if (!deviceId) {
       this.logger.error('Missing device ID in updateDeviceSettings');
       return false;
@@ -479,12 +479,12 @@ public async setTemperature(deviceId: string, temperature: number): Promise<bool
       // Cancel any pending device status requests for this device
       this.cancelPendingRequests(deviceId, 'getDeviceStatus');
       
-      // Make the request with CRITICAL priority for user-initiated actions
+      // Make the request with the specified priority
       await this.makeRequest<Record<string, unknown>>({
         method: 'PATCH',
         url: `/devices/${deviceId}`,
         data: settings,
-        priority: RequestPriority.CRITICAL, // User-initiated actions are critical priority
+        priority: priority,
         deviceId,
         operationType: 'updateDeviceSettings'
       });
@@ -665,6 +665,65 @@ private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
   return status;
 }
   /**
+ * Determine if we should wait for rate limits based on request priority
+ */
+private shouldWaitForRateLimit(): { shouldWait: boolean; waitTime: number; message: string } {
+  const now = Date.now();
+  
+  // Check if we have critical or high priority requests
+  const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
+  const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
+  
+  // Allow user requests to proceed even near rate limit
+  if (hasCriticalRequest || hasHighPriorityRequest) {
+    if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
+      const resetTime = this.minuteStartTime + 60000;
+      const waitTime = resetTime - now + 1000;
+      return {
+        shouldWait: true,
+        waitTime,
+        message: `Rate limit reached, waiting for user request`
+      };
+    }
+    return { shouldWait: false, waitTime: 0, message: '' };
+  }
+  
+  // For background requests, be more conservative
+  const backgroundThreshold = Math.floor(MAX_REQUESTS_PER_MINUTE * BACKGROUND_REQUEST_THRESHOLD);
+  if (this.requestsThisMinute >= backgroundThreshold) {
+    const resetTime = this.minuteStartTime + 60000;
+    const waitTime = resetTime - now + 1000;
+    return {
+      shouldWait: true,
+      waitTime,
+      message: `Background request threshold reached`
+    };
+  }
+  
+  return { shouldWait: false, waitTime: 0, message: '' };
+}
+
+/**
+ * Handle rate limit errors with priority-aware backoff
+ */
+private handleRateLimitError(request: QueuedRequest): void {
+  const now = Date.now();
+  
+  if (request.priority === RequestPriority.CRITICAL) {
+    this.rateLimitBackoffUntil = now + 5000; // Only 5 seconds for critical
+    this.logger.warn('Rate limit exceeded for critical request. Short backoff (5s)');
+  } else {
+    const currentMinute = Math.floor(now / 60000) * 60000;
+    const nextMinute = currentMinute + 60000;
+    const waitTime = (nextMinute - now) + 2000;
+    this.rateLimitBackoffUntil = now + waitTime;
+    this.logger.warn(`Rate limit exceeded. Waiting until next minute: ${Math.ceil(waitTime/1000)}s`);
+  }
+  
+  this.requeueRequest(request);
+}
+
+/**
  * Process the request queue with improved priority handling
  * and adaptive rate limiting
  */
@@ -682,56 +741,62 @@ private async processQueue(): Promise<void> {
       // Check if we need to reset rate limit counter
       this.checkRateLimit();
       
-      // Check if we're in backoff mode
+      // Check if we're in backoff mode - allow critical/high priority during shorter backoffs
       const now = Date.now();
       if (this.rateLimitBackoffUntil > now) {
-        // Only log this once, not repeatedly
-        if (!this.rateExceededLogged) {
-          const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-          this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
-          this.rateExceededLogged = true;
-        }
+        const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
+        const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
         
-        // Use a single timer rather than polling
-        await new Promise(resolve => 
-          setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
-        );
-        continue;
-      }
-      
-      // Enforce minimum interval between requests
-      const timeSinceLastRequest = now - this.lastRequestTime;
-      if (this.lastRequestTime > 0 && timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-        const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-        this.logger.debug(`Enforcing minimum request interval: waiting ${waitTime}ms`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        continue; // Re-check timing after wait
-      }
-      
-      // Check if we've hit the rate limit
-      if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
-        const resetTime = this.minuteStartTime + 60000;
-        const waitTime = resetTime - now;
-        
-        // Only log this once, not repeatedly
-        if (!this.rateExceededLogged) {
-          this.logger.info(
-            `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
+        // Skip backoff for critical/high priority if backoff is short
+        if ((hasCriticalRequest || hasHighPriorityRequest) && 
+            (this.rateLimitBackoffUntil - now) <= 10000) { // 10 seconds or less
+          this.logger.debug('Bypassing short backoff for user request');
+        } else {
+          // Only log this once, not repeatedly
+          if (!this.rateExceededLogged) {
+            const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+            this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
+            this.rateExceededLogged = true;
+          }
+          
+          // Use a single timer rather than polling
+          await new Promise(resolve => 
+            setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
           );
-          this.rateExceededLogged = true;
+          continue;
         }
-        
-        // Wait for rate limit reset with a single timer
-        await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-        continue;
       }
-
-      // Get the next request from prioritized queues
+      
+      // Get the next request to check its priority
       const request = this.getNextRequest();
       
       if (!request) {
         break; // No requests to process
+      }
+      
+      // Apply minimum interval only to LOW priority requests
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      if (request.priority === RequestPriority.LOW && 
+          this.lastRequestTime > 0 && 
+          timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+        this.logger.debug(`Enforcing minimum request interval for LOW priority: waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue; // Re-check timing after wait
+      }
+      
+      // Use smart rate limit checking
+      const rateLimitCheck = this.shouldWaitForRateLimit();
+      if (rateLimitCheck.shouldWait) {
+        // Only log this once, not repeatedly
+        if (!this.rateExceededLogged) {
+          this.logger.info(rateLimitCheck.message + `, waiting ${Math.ceil(rateLimitCheck.waitTime / 1000)}s`);
+          this.rateExceededLogged = true;
+        }
+        
+        // Wait for rate limit reset with a single timer
+        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime));
+        continue;
       }
       
       // Mark the request as executing
@@ -782,22 +847,8 @@ private async processQueue(): Promise<void> {
         
         // Handle rate limiting (HTTP 429)
         if (axiosError.response?.status === 429) {
-          // Exponential backoff instead of minute alignment
-          const backoffMs = Math.min(
-            INITIAL_BACKOFF_MS * Math.pow(2, this.rateLimitRetries),
-            MAX_BACKOFF_MS
-          );
-          
-          this.rateLimitBackoffUntil = Date.now() + backoffMs;
-          this.rateLimitRetries++;
-          
-          this.logger.warn(
-            `Rate limit exceeded (429). Using exponential backoff: ${Math.ceil(backoffMs/1000)}s (attempt ${this.rateLimitRetries})`
-          );
-          
-          // Requeue the request
-          this.requeueRequest(request);
-}
+          this.handleRateLimitError(request);
+        }
         else {
           // For other errors, check retry logic by priority
           this.consecutiveErrors++;

@@ -31,15 +31,21 @@ export declare const MAX_TEMPERATURE_C = 46;
  */
 export declare const TEMPERATURE_STEP = 1;
 /**
- * Minimum time between API requests in milliseconds
- * Provides a safer buffer to prevent rate limiting
+ * Minimum time between LOW PRIORITY API requests in milliseconds
+ * Only applies to background polling - user interactions bypass this
  */
-export declare const MIN_REQUEST_INTERVAL = 10000;
+export declare const MIN_REQUEST_INTERVAL = 3000;
 /**
  * Maximum API requests per minute (to respect rate limits)
  * Very conservative limit due to potential shared API usage
  */
-export declare const MAX_REQUESTS_PER_MINUTE = 2;
+export declare const MAX_REQUESTS_PER_MINUTE = 10;
+/**
+ * Background request threshold - start throttling background requests
+ * when we reach this percentage of MAX_REQUESTS_PER_MINUTE
+ * This reserves capacity for user interactions
+ */
+export declare const BACKGROUND_REQUEST_THRESHOLD = 0.8;
 /**
  * Default cache validity period in milliseconds
  * Base period for cache entries - will be adjusted based on device state
@@ -52,21 +58,23 @@ export declare const DEFAULT_CACHE_VALIDITY_MS = 120000;
 export declare const MAX_RETRIES = 3;
 /**
  * Initial backoff time in milliseconds for rate limiting
+ * Reduced for critical user interactions
  */
-export declare const INITIAL_BACKOFF_MS = 30000;
+export declare const INITIAL_BACKOFF_MS = 5000;
 /**
  * Maximum backoff time in milliseconds
  */
 export declare const MAX_BACKOFF_MS = 300000;
 /**
  * Post-user-action quiet period in milliseconds
- * Increased as we trust API responses more
+ * Reduced to allow quicker status verification after user actions
  */
-export declare const USER_ACTION_QUIET_PERIOD_MS = 60000;
+export declare const USER_ACTION_QUIET_PERIOD_MS = 30000;
 /**
  * Command debounce delay in milliseconds
+ * Prevents rapid-fire duplicate commands from users
  */
-export declare const COMMAND_DEBOUNCE_DELAY_MS = 800;
+export declare const COMMAND_DEBOUNCE_DELAY_MS = 500;
 /**
  * Logging levels
  */

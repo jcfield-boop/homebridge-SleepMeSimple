@@ -2,7 +2,7 @@
  * SleepMe API client implementation with robust error handling and rate limiting
  */
 import axios from 'axios';
-import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, INITIAL_BACKOFF_MS, MAX_BACKOFF_MS, RequestPriority } from '../settings.js';
+import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, BACKGROUND_REQUEST_THRESHOLD, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
 /**
  * SleepMe API Client
@@ -196,13 +196,7 @@ export class SleepMeApi {
             }
             // At this point, we need fresh data
             this.logger.debug(`Fetching status for device ${deviceId}...`);
-            // MORE CONSERVATIVE APPROACH:
-            // Only use HIGH priority when explicitly requested by user actions
-            // For system-initiated refreshes (including polling), use LOW priority
-            const isUserInitiated = forceFresh && this.startupFinished;
-            const priority = isUserInitiated ?
-                RequestPriority.HIGH :
-                RequestPriority.LOW; // Use LOW priority for all routine polling
+            const priority = forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL;
             this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
             const response = await this.makeRequest({
                 method: 'GET',
@@ -254,7 +248,7 @@ export class SleepMeApi {
                 thermal_control_status: 'active'
             };
             this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
-            const success = await this.updateDeviceSettings(deviceId, payload);
+            const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
             if (success) {
                 // Update cache with complete device state based on our command
                 // This is critical for the trust-based approach
@@ -294,7 +288,7 @@ export class SleepMeApi {
                 thermal_control_status: 'standby'
             };
             this.logger.verbose(`Turn OFF payload: ${JSON.stringify(payload)}`);
-            const success = await this.updateDeviceSettings(deviceId, payload);
+            const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
             if (success) {
                 // Update cache with correct power state
                 // This MUST set both thermalStatus AND powerState
@@ -332,7 +326,7 @@ export class SleepMeApi {
                 set_temperature_f: tempF
             };
             this.logger.verbose(`Set temperature payload: ${JSON.stringify(payload)}`);
-            const success = await this.updateDeviceSettings(deviceId, payload);
+            const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.HIGH);
             if (success) {
                 // Update cache with trusted state - key to trust-based approach
                 this.updateCacheWithTrustedState(deviceId, {
@@ -365,9 +359,10 @@ export class SleepMeApi {
      * Update device settings
      * @param deviceId Device identifier
      * @param settings Settings to update
+     * @param priority Request priority level
      * @returns Whether operation was successful
      */
-    async updateDeviceSettings(deviceId, settings) {
+    async updateDeviceSettings(deviceId, settings, priority = RequestPriority.CRITICAL) {
         if (!deviceId) {
             this.logger.error('Missing device ID in updateDeviceSettings');
             return false;
@@ -380,12 +375,12 @@ export class SleepMeApi {
             this.logger.debug(`Updating device ${deviceId} settings: ${JSON.stringify(settings)}`);
             // Cancel any pending device status requests for this device
             this.cancelPendingRequests(deviceId, 'getDeviceStatus');
-            // Make the request with CRITICAL priority for user-initiated actions
+            // Make the request with the specified priority
             await this.makeRequest({
                 method: 'PATCH',
                 url: `/devices/${deviceId}`,
                 data: settings,
-                priority: RequestPriority.CRITICAL,
+                priority: priority,
                 deviceId,
                 operationType: 'updateDeviceSettings'
             });
@@ -540,9 +535,61 @@ export class SleepMeApi {
         return status;
     }
     /**
-   * Process the request queue with improved priority handling
-   * and adaptive rate limiting
+   * Determine if we should wait for rate limits based on request priority
    */
+    shouldWaitForRateLimit() {
+        const now = Date.now();
+        // Check if we have critical or high priority requests
+        const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
+        const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
+        // Allow user requests to proceed even near rate limit
+        if (hasCriticalRequest || hasHighPriorityRequest) {
+            if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
+                const resetTime = this.minuteStartTime + 60000;
+                const waitTime = resetTime - now + 1000;
+                return {
+                    shouldWait: true,
+                    waitTime,
+                    message: `Rate limit reached, waiting for user request`
+                };
+            }
+            return { shouldWait: false, waitTime: 0, message: '' };
+        }
+        // For background requests, be more conservative
+        const backgroundThreshold = Math.floor(MAX_REQUESTS_PER_MINUTE * BACKGROUND_REQUEST_THRESHOLD);
+        if (this.requestsThisMinute >= backgroundThreshold) {
+            const resetTime = this.minuteStartTime + 60000;
+            const waitTime = resetTime - now + 1000;
+            return {
+                shouldWait: true,
+                waitTime,
+                message: `Background request threshold reached`
+            };
+        }
+        return { shouldWait: false, waitTime: 0, message: '' };
+    }
+    /**
+     * Handle rate limit errors with priority-aware backoff
+     */
+    handleRateLimitError(request) {
+        const now = Date.now();
+        if (request.priority === RequestPriority.CRITICAL) {
+            this.rateLimitBackoffUntil = now + 5000; // Only 5 seconds for critical
+            this.logger.warn('Rate limit exceeded for critical request. Short backoff (5s)');
+        }
+        else {
+            const currentMinute = Math.floor(now / 60000) * 60000;
+            const nextMinute = currentMinute + 60000;
+            const waitTime = (nextMinute - now) + 2000;
+            this.rateLimitBackoffUntil = now + waitTime;
+            this.logger.warn(`Rate limit exceeded. Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
+        }
+        this.requeueRequest(request);
+    }
+    /**
+     * Process the request queue with improved priority handling
+     * and adaptive rate limiting
+     */
     async processQueue() {
         // If already processing, exit
         if (this.processingQueue) {
@@ -554,45 +601,54 @@ export class SleepMeApi {
             while (this.hasQueuedRequests()) {
                 // Check if we need to reset rate limit counter
                 this.checkRateLimit();
-                // Check if we're in backoff mode
+                // Check if we're in backoff mode - allow critical/high priority during shorter backoffs
                 const now = Date.now();
                 if (this.rateLimitBackoffUntil > now) {
-                    // Only log this once, not repeatedly
-                    if (!this.rateExceededLogged) {
-                        const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-                        this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
-                        this.rateExceededLogged = true;
+                    const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
+                    const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
+                    // Skip backoff for critical/high priority if backoff is short
+                    if ((hasCriticalRequest || hasHighPriorityRequest) &&
+                        (this.rateLimitBackoffUntil - now) <= 10000) { // 10 seconds or less
+                        this.logger.debug('Bypassing short backoff for user request');
                     }
-                    // Use a single timer rather than polling
-                    await new Promise(resolve => setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000));
-                    continue;
-                }
-                // Enforce minimum interval between requests
-                const timeSinceLastRequest = now - this.lastRequestTime;
-                if (this.lastRequestTime > 0 && timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-                    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-                    this.logger.debug(`Enforcing minimum request interval: waiting ${waitTime}ms`);
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                    continue; // Re-check timing after wait
-                }
-                // Check if we've hit the rate limit
-                if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
-                    const resetTime = this.minuteStartTime + 60000;
-                    const waitTime = resetTime - now;
-                    // Only log this once, not repeatedly
-                    if (!this.rateExceededLogged) {
-                        this.logger.info(`Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-                            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`);
-                        this.rateExceededLogged = true;
+                    else {
+                        // Only log this once, not repeatedly
+                        if (!this.rateExceededLogged) {
+                            const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+                            this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
+                            this.rateExceededLogged = true;
+                        }
+                        // Use a single timer rather than polling
+                        await new Promise(resolve => setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000));
+                        continue;
                     }
-                    // Wait for rate limit reset with a single timer
-                    await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                    continue;
                 }
-                // Get the next request from prioritized queues
+                // Get the next request to check its priority
                 const request = this.getNextRequest();
                 if (!request) {
                     break; // No requests to process
+                }
+                // Apply minimum interval only to LOW priority requests
+                const timeSinceLastRequest = now - this.lastRequestTime;
+                if (request.priority === RequestPriority.LOW &&
+                    this.lastRequestTime > 0 &&
+                    timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+                    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+                    this.logger.debug(`Enforcing minimum request interval for LOW priority: waiting ${waitTime}ms`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    continue; // Re-check timing after wait
+                }
+                // Use smart rate limit checking
+                const rateLimitCheck = this.shouldWaitForRateLimit();
+                if (rateLimitCheck.shouldWait) {
+                    // Only log this once, not repeatedly
+                    if (!this.rateExceededLogged) {
+                        this.logger.info(rateLimitCheck.message + `, waiting ${Math.ceil(rateLimitCheck.waitTime / 1000)}s`);
+                        this.rateExceededLogged = true;
+                    }
+                    // Wait for rate limit reset with a single timer
+                    await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime));
+                    continue;
                 }
                 // Mark the request as executing
                 request.executing = true;
@@ -629,13 +685,7 @@ export class SleepMeApi {
                     this.stats.lastError = axiosError;
                     // Handle rate limiting (HTTP 429)
                     if (axiosError.response?.status === 429) {
-                        // Exponential backoff instead of minute alignment
-                        const backoffMs = Math.min(INITIAL_BACKOFF_MS * Math.pow(2, this.rateLimitRetries), MAX_BACKOFF_MS);
-                        this.rateLimitBackoffUntil = Date.now() + backoffMs;
-                        this.rateLimitRetries++;
-                        this.logger.warn(`Rate limit exceeded (429). Using exponential backoff: ${Math.ceil(backoffMs / 1000)}s (attempt ${this.rateLimitRetries})`);
-                        // Requeue the request
-                        this.requeueRequest(request);
+                        this.handleRateLimitError(request);
                     }
                     else {
                         // For other errors, check retry logic by priority
