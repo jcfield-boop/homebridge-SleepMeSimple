@@ -249,9 +249,15 @@ export class SleepMeAccessory implements PollableDevice {
    .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
    .onGet(() => this.getCurrentHeatingCoolingState());
  
- // Set up target heating/cooling state
+ // Set up target heating/cooling state - only show OFF and AUTO for cleaner UX
  this.temperatureControlService
    .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+   .setProps({
+     validValues: [
+       this.Characteristic.TargetHeatingCoolingState.OFF,
+       this.Characteristic.TargetHeatingCoolingState.AUTO
+     ]
+   })
    .onGet(() => this.getTargetHeatingCoolingState())
    .onSet((value) => {
      this.handleTargetHeatingCoolingStateSet(value as number);
@@ -492,6 +498,14 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
   
   // Update UI immediately for responsiveness
   this.targetTemperature = newTemp;
+  
+  // If device is off and user sets temperature, automatically switch to AUTO mode
+  if (!this.isPowered) {
+    this.temperatureControlService.updateCharacteristic(
+      this.Characteristic.TargetHeatingCoolingState,
+      this.Characteristic.TargetHeatingCoolingState.AUTO
+    );
+  }
   
   // Log the change
   this.platform.log.info(`User set target temp: ${newTemp}°C for ${this.deviceId} - IMMEDIATE`);
