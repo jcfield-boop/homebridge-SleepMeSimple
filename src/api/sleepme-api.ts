@@ -806,9 +806,9 @@ private handleRateLimitError(request: QueuedRequest): void {
     this.rateLimitBackoffUntil = now + 5000; // Only 5 seconds for critical
     this.logger.warn('Rate limit exceeded for critical request. Short backoff (5s)');
   } else {
-    const currentMinute = Math.floor(now / 60000) * 60000;
-    const nextMinute = currentMinute + 60000;
-    const waitTime = (nextMinute - now) + 2000;
+    // Use the same discrete minute calculation as rate limit reset
+    const nextMinute = this.minuteStartTime + 60000;
+    const waitTime = (nextMinute - now) + 1000; // 1 second buffer
     this.rateLimitBackoffUntil = now + waitTime;
     this.logger.warn(`Rate limit exceeded. Waiting until next minute: ${Math.ceil(waitTime/1000)}s`);
   }
@@ -947,6 +947,16 @@ private async processQueue(): Promise<void> {
         
         // Handle rate limiting (HTTP 429)
         if (axiosError.response?.status === 429) {
+          this.logger.warn(`429 Rate limit error on request ${request.id}: ${request.method} ${request.url} (attempt ${request.retryCount + 1})`);
+          this.logger.warn(`Current request count: ${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} in this minute window`);
+          
+          // Reset our counter if server says we're rate limited but our counter is low
+          // This handles misalignment between client and server rate limit windows
+          if (this.requestsThisMinute <= 2) {
+            this.logger.warn('Server rate limit detected with low client count - possible window misalignment, resetting to server window');
+            this.requestsThisMinute = MAX_REQUESTS_PER_MINUTE; // Set to max to trigger proper backoff
+          }
+          
           this.handleRateLimitError(request);
         }
         else {
