@@ -39,6 +39,14 @@ export declare class SleepMeApi {
      */
     private cleanupCache;
     /**
+     * Log current queue status for debugging
+     */
+    private logQueueStatus;
+    /**
+     * Clean up stale requests from all queues
+     */
+    private cleanupStaleRequests;
+    /**
      * Get devices from the SleepMe API
      * @returns Array of devices or empty array if error
      */

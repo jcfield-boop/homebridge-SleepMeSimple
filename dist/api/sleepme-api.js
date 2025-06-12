@@ -66,6 +66,8 @@ export class SleepMeApi {
         this.processQueue();
         // Set up cache cleanup interval
         setInterval(() => this.cleanupCache(), 300000); // Clean up cache every 5 minutes
+        // Set up queue cleanup interval to remove stale requests
+        setInterval(() => this.cleanupStaleRequests(), 60000); // Clean up queue every minute
         this.logger.info('SleepMe API client initialized');
     }
     /**
@@ -90,6 +92,79 @@ export class SleepMeApi {
         }
         if (expiredCount > 0) {
             this.logger.debug(`Cleaned up ${expiredCount} expired cache entries`);
+        }
+    }
+    /**
+     * Log current queue status for debugging
+     */
+    logQueueStatus(context) {
+        const now = Date.now();
+        const critical = this.criticalQueue.filter(r => !r.executing);
+        const high = this.highPriorityQueue.filter(r => !r.executing);
+        const normal = this.normalPriorityQueue.filter(r => !r.executing);
+        const low = this.lowPriorityQueue.filter(r => !r.executing);
+        const executing = [
+            ...this.criticalQueue.filter(r => r.executing),
+            ...this.highPriorityQueue.filter(r => r.executing),
+            ...this.normalPriorityQueue.filter(r => r.executing),
+            ...this.lowPriorityQueue.filter(r => r.executing)
+        ];
+        this.logger.warn(`${context}: Queue status - Critical: ${critical.length}, High: ${high.length}, Normal: ${normal.length}, Low: ${low.length}, Executing: ${executing.length}`);
+        // Log details about executing requests
+        executing.forEach(req => {
+            const executingTime = req.lastAttempt ? now - req.lastAttempt : 0;
+            this.logger.warn(`  Executing: ${req.method} ${req.url} (${Math.round(executingTime / 1000)}s)`);
+        });
+        // Log details about oldest queued requests
+        const allQueued = [...critical, ...high, ...normal, ...low].sort((a, b) => a.timestamp - b.timestamp);
+        allQueued.slice(0, 3).forEach(req => {
+            const age = Math.round((now - req.timestamp) / 1000);
+            this.logger.warn(`  Queued: ${req.priority} ${req.method} ${req.url} (${age}s old)`);
+        });
+    }
+    /**
+     * Clean up stale requests from all queues
+     */
+    cleanupStaleRequests() {
+        const now = Date.now();
+        const maxAge = 300000; // 5 minutes
+        const maxExecutingTime = 120000; // 2 minutes for executing requests
+        let cleanedCount = 0;
+        const cleanupQueue = (queue, queueName) => {
+            const initialLength = queue.length;
+            for (let i = queue.length - 1; i >= 0; i--) {
+                const request = queue[i];
+                const age = now - request.timestamp;
+                const executingTime = request.lastAttempt ? now - request.lastAttempt : 0;
+                let shouldRemove = false;
+                let reason = '';
+                // Remove very old requests
+                if (age > maxAge) {
+                    shouldRemove = true;
+                    reason = `too old (${Math.round(age / 1000)}s)`;
+                }
+                // Remove requests that have been "executing" too long
+                else if (request.executing && executingTime > maxExecutingTime) {
+                    shouldRemove = true;
+                    reason = `stuck executing (${Math.round(executingTime / 1000)}s)`;
+                }
+                if (shouldRemove) {
+                    this.logger.warn(`Removing stale request from ${queueName}: ${request.method} ${request.url} - ${reason}`);
+                    // Resolve the request with null to prevent hanging promises
+                    request.resolve(null);
+                    // Remove from queue
+                    queue.splice(i, 1);
+                    cleanedCount++;
+                }
+            }
+        };
+        // Clean up all queues
+        cleanupQueue(this.criticalQueue, 'critical');
+        cleanupQueue(this.highPriorityQueue, 'high');
+        cleanupQueue(this.normalPriorityQueue, 'normal');
+        cleanupQueue(this.lowPriorityQueue, 'low');
+        if (cleanedCount > 0) {
+            this.logger.warn(`Cleaned up ${cleanedCount} stale requests from queues`);
         }
     }
     /**
@@ -542,20 +617,22 @@ export class SleepMeApi {
         // Check if we have critical or high priority requests
         const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
         const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
-        // Allow user requests to proceed even near rate limit
-        if (hasCriticalRequest || hasHighPriorityRequest) {
+        const hasNormalRequest = this.normalPriorityQueue.some(r => !r.executing);
+        // Allow user requests and normal polling to proceed with reasonable limits
+        if (hasCriticalRequest || hasHighPriorityRequest || hasNormalRequest) {
             if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
                 const resetTime = this.minuteStartTime + 60000;
                 const waitTime = resetTime - now + 1000;
+                const requestType = hasCriticalRequest ? 'critical' : hasHighPriorityRequest ? 'high priority' : 'normal';
                 return {
                     shouldWait: true,
                     waitTime,
-                    message: `Rate limit reached, waiting for user request`
+                    message: `Rate limit reached, waiting for ${requestType} request`
                 };
             }
             return { shouldWait: false, waitTime: 0, message: '' };
         }
-        // For background requests, be more conservative
+        // For LOW priority requests only, be more conservative
         const backgroundThreshold = Math.floor(MAX_REQUESTS_PER_MINUTE * BACKGROUND_REQUEST_THRESHOLD);
         if (this.requestsThisMinute >= backgroundThreshold) {
             const resetTime = this.minuteStartTime + 60000;
@@ -563,7 +640,7 @@ export class SleepMeApi {
             return {
                 shouldWait: true,
                 waitTime,
-                message: `Background request threshold reached`
+                message: `Background request threshold reached (LOW priority only)`
             };
         }
         return { shouldWait: false, waitTime: 0, message: '' };
@@ -601,6 +678,12 @@ export class SleepMeApi {
             while (this.hasQueuedRequests()) {
                 // Check if we need to reset rate limit counter
                 this.checkRateLimit();
+                // Log queue status if we have significant backlog
+                const totalQueued = this.criticalQueue.length + this.highPriorityQueue.length +
+                    this.normalPriorityQueue.length + this.lowPriorityQueue.length;
+                if (totalQueued >= 3) {
+                    this.logQueueStatus('Queue backlog detected during processing');
+                }
                 // Check if we're in backoff mode - allow critical/high priority during shorter backoffs
                 const now = Date.now();
                 if (this.rateLimitBackoffUntil > now) {
@@ -926,13 +1009,14 @@ export class SleepMeApi {
     async makeRequest(options) {
         // Set default priority
         const priority = options.priority || RequestPriority.NORMAL;
-        // Skip redundant status updates if queue is getting large or recent rate limits
-        // More aggressive skipping to prevent queue buildup and rate limit issues
+        // Skip redundant status updates only when queue is significantly backlogged
+        // More reasonable threshold to prevent permanent queue blockage
         const totalQueuedRequests = this.criticalQueue.length + this.highPriorityQueue.length + this.normalPriorityQueue.length;
-        if ((totalQueuedRequests > 1) &&
+        const backgroundThreshold = Math.floor(MAX_REQUESTS_PER_MINUTE * BACKGROUND_REQUEST_THRESHOLD);
+        if ((totalQueuedRequests >= backgroundThreshold) &&
             options.operationType === 'getDeviceStatus' &&
             (priority === RequestPriority.NORMAL || priority === RequestPriority.LOW)) {
-            this.logger.debug(`Skipping routine status update due to queue backlog (${totalQueuedRequests} queued)`);
+            this.logger.debug(`Skipping routine status update due to significant queue backlog (${totalQueuedRequests} queued, threshold: ${backgroundThreshold})`);
             return Promise.resolve(null);
         }
         // Additional check: skip LOW priority requests if we recently had rate limiting
