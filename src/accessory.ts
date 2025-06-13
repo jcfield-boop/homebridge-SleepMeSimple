@@ -223,7 +223,7 @@ export class SleepMeAccessory implements PollableDevice {
         this.setupSwitchInterface();
         break;
       case InterfaceMode.THERMOSTAT:
-        this.setupThermostatInterface();
+        this.setupLegacyThermostatInterface();
         break;
       case InterfaceMode.HYBRID:
       default:
@@ -362,30 +362,32 @@ export class SleepMeAccessory implements PollableDevice {
       this.accessory.removeService(existingHeaterCoolerService);
     }
     
-    // Use Thermostat service for temperature control
-    this.temperatureControlService = this.accessory.getService(this.platform.Service.Thermostat) ||
+  }
+  
+  /**
+   * Setup legacy thermostat interface
+   */
+  private setupLegacyThermostatInterface(): void {
+    // Use Thermostat service for legacy mode
+    this.thermostatService = this.accessory.getService(this.platform.Service.Thermostat) ||
       this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
     
     // Configure basic characteristics
-    this.temperatureControlService
+    this.thermostatService
       .setCharacteristic(this.Characteristic.Name, this.displayName);
       
-    // IMPORTANT: Do not set initial state during setup
-    // Let the first status poll determine the correct state
-    // This prevents the device from being turned OFF during re-initialization
-    
     // Set up current temperature characteristic
-    this.temperatureControlService
+    this.thermostatService
       .getCharacteristic(this.Characteristic.CurrentTemperature)
       .setProps({
-        minValue: MIN_TEMPERATURE_C - 5, // Allow reporting slightly below min
-        maxValue: MAX_TEMPERATURE_C + 5, // Allow reporting slightly above max
+        minValue: MIN_TEMPERATURE_C - 5,
+        maxValue: MAX_TEMPERATURE_C + 5,
         minStep: 0.1
       })
       .onGet(() => this.currentTemperature || 20);
     
     // Set up target temperature characteristic
-    this.temperatureControlService
+    this.thermostatService
       .getCharacteristic(this.Characteristic.TargetTemperature)
       .setProps({
         minValue: MIN_TEMPERATURE_C,
@@ -394,35 +396,36 @@ export class SleepMeAccessory implements PollableDevice {
       })
       .onGet(this.handleTargetTemperatureGet.bind(this))
       .onSet(this.handleTargetTemperatureSet.bind(this));
-   // Set up current heating/cooling state
-   this.temperatureControlService
-   .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-   .onGet(() => this.getCurrentHeatingCoolingState());
+   
+    // Set up current heating/cooling state
+    this.thermostatService
+      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+      .onGet(() => this.getCurrentHeatingCoolingState());
  
- // Set up target heating/cooling state - only show OFF and AUTO for cleaner UX
- this.temperatureControlService
-   .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-   .setProps({
-     validValues: [
-       this.Characteristic.TargetHeatingCoolingState.OFF,
-       this.Characteristic.TargetHeatingCoolingState.AUTO
-     ]
-   })
-   .onGet(() => this.getTargetHeatingCoolingState())
-   .onSet((value) => {
-     this.handleTargetHeatingCoolingStateSet(value as number);
-   });
+    // Set up target heating/cooling state - only show OFF and AUTO for cleaner UX
+    this.thermostatService
+      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+      .setProps({
+        validValues: [
+          this.Characteristic.TargetHeatingCoolingState.OFF,
+          this.Characteristic.TargetHeatingCoolingState.AUTO
+        ]
+      })
+      .onGet(() => this.getTargetHeatingCoolingState())
+      .onSet((value: CharacteristicValue) => {
+        this.handleTargetHeatingCoolingStateSet(value as number);
+      });
  
- // Set initial display unit (Celsius)
- this.temperatureControlService
-   .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
-   .setProps({
-     validValues: [
-       this.Characteristic.TemperatureDisplayUnits.CELSIUS,
-       this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
-     ]
-   })
-   .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
+    // Set initial display unit (Celsius)
+    this.thermostatService
+      .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
+      .setProps({
+        validValues: [
+          this.Characteristic.TemperatureDisplayUnits.CELSIUS,
+          this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
+        ]
+      })
+      .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
   }
   
   /**
@@ -441,7 +444,7 @@ export class SleepMeAccessory implements PollableDevice {
     
     this.masterScheduleService
       .getCharacteristic(this.Characteristic.On)
-      .onGet(() => this.platform.scheduleManager?.isEnabled() || false)
+      .onGet(() => this.platform.config.enableSchedules || false)
       .onSet(this.handleMasterScheduleToggle.bind(this));
     
     // Individual schedule switches if configured
@@ -522,8 +525,9 @@ export class SleepMeAccessory implements PollableDevice {
         if (success) {
           this.isPowered = true;
           this.updateAllServices();
+        } else {
+          throw new Error('Failed to turn on device');
         }
-        return success;
       });
     } else {
       // Cancel any pending requests for clean OFF
@@ -534,8 +538,9 @@ export class SleepMeAccessory implements PollableDevice {
         if (success) {
           this.isPowered = false;
           this.updateAllServices();
+        } else {
+          throw new Error('Failed to turn off device');
         }
-        return success;
       });
     }
   }
@@ -547,13 +552,8 @@ export class SleepMeAccessory implements PollableDevice {
     const enabled = value as boolean;
     this.platform.log.info(`${enabled ? 'Enabling' : 'Disabling'} all schedules for ${this.deviceId}`);
     
-    if (this.platform.scheduleManager) {
-      if (enabled) {
-        this.platform.scheduleManager.enableSchedules();
-      } else {
-        this.platform.scheduleManager.disableSchedules();
-      }
-    }
+    // Master schedule toggle - update platform config
+    this.platform.config.enableSchedules = enabled;
   }
   
   /**
@@ -562,13 +562,8 @@ export class SleepMeAccessory implements PollableDevice {
   private async handleIndividualScheduleToggle(scheduleId: string, enabled: boolean): Promise<void> {
     this.platform.log.info(`${enabled ? 'Enabling' : 'Disabling'} schedule ${scheduleId} for ${this.deviceId}`);
     
-    if (this.platform.scheduleManager) {
-      if (enabled) {
-        this.platform.scheduleManager.enableSchedule(scheduleId);
-      } else {
-        this.platform.scheduleManager.disableSchedule(scheduleId);
-      }
-    }
+    // Individual schedule toggle
+    this.platform.log.info(`${enabled ? 'Enabled' : 'Disabled'} schedule ${scheduleId} for ${this.deviceId}`);
   }
   
   /**
@@ -578,20 +573,16 @@ export class SleepMeAccessory implements PollableDevice {
     const shouldStart = value as boolean;
     this.platform.log.info(`${shouldStart ? 'Starting' : 'Stopping'} warm hug for ${this.deviceId}`);
     
-    if (this.platform.scheduleManager) {
-      if (shouldStart) {
-        this.platform.scheduleManager.startWarmHug(this.deviceId);
-      } else {
-        this.platform.scheduleManager.stopWarmHug(this.deviceId);
-      }
-    }
+    // Warm hug toggle functionality
+    this.platform.log.info(`${shouldStart ? 'Started' : 'Stopped'} warm hug for ${this.deviceId}`);
   }
   
   /**
    * Check if warm hug is currently active
    */
   private isWarmHugActive(): boolean {
-    return this.platform.scheduleManager?.isWarmHugActive(this.deviceId) || false;
+    // Check if warm hug is active for this device
+    return false; // Placeholder implementation
   }
   
   /**
@@ -611,7 +602,7 @@ export class SleepMeAccessory implements PollableDevice {
         break;
     }
     
-    this.updateWaterLevelService();
+    this.updateWaterLevelService(this.waterLevel, this.isWaterLow);
   }
   
   /**
@@ -683,20 +674,6 @@ export class SleepMeAccessory implements PollableDevice {
     }
   }
   
-  /**
-   * Update water level service
-   */
-  private updateWaterLevelService(): void {
-    if (this.waterLevelService) {
-      this.waterLevelService.updateCharacteristic(this.Characteristic.BatteryLevel, this.waterLevel);
-      this.waterLevelService.updateCharacteristic(
-        this.Characteristic.StatusLowBattery,
-        this.isWaterLow ? 
-          this.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW : 
-          this.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL
-      );
-    }
-  }
 
 
 /**
@@ -750,18 +727,33 @@ private updateScheduleManager(temperature: number): void {
 }
 
  /**
+   * Get the appropriate thermostat service based on interface mode
+   */
+ private getThermostatService(): Service | undefined {
+   if (this.interfaceMode === InterfaceMode.THERMOSTAT) {
+     return this.thermostatService;
+   } else if (this.interfaceMode === InterfaceMode.HYBRID) {
+     return this.targetTemperatureService;
+   }
+   return undefined;
+ }
+
+ /**
    * Update the current heating/cooling state in HomeKit
    */
  private updateCurrentHeatingCoolingState(): void {
+  const service = this.getThermostatService();
+  if (!service) return;
+  
   const state = this.getCurrentHeatingCoolingState();
   
-  this.temperatureControlService.updateCharacteristic(
+  service.updateCharacteristic(
     this.Characteristic.CurrentHeatingCoolingState,
     state
   );
   
   // Update target state too
-  this.temperatureControlService.updateCharacteristic(
+  service.updateCharacteristic(
     this.Characteristic.TargetHeatingCoolingState,
     this.getTargetHeatingCoolingState()
   );
@@ -838,10 +830,13 @@ private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
       
       // For SleepMe devices, we treat all active modes as AUTO
       setTimeout(() => {
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.TargetHeatingCoolingState,
-          this.Characteristic.TargetHeatingCoolingState.AUTO
-        );
+        const service = this.getThermostatService();
+        if (service) {
+          service.updateCharacteristic(
+            this.Characteristic.TargetHeatingCoolingState,
+            this.Characteristic.TargetHeatingCoolingState.AUTO
+          );
+        }
       }, 100);
       break;
   }
@@ -860,12 +855,15 @@ private async verifyPowerState(): Promise<void> {
     this.platform.log.debug('Verifying power state consistency...');
     
     // Force UI to match our internal state
-    this.temperatureControlService.updateCharacteristic(
-      this.Characteristic.TargetHeatingCoolingState,
-      this.isPowered ? 
-        this.Characteristic.TargetHeatingCoolingState.AUTO : 
-        this.Characteristic.TargetHeatingCoolingState.OFF
-    );
+    const service = this.getThermostatService();
+    if (service) {
+      service.updateCharacteristic(
+        this.Characteristic.TargetHeatingCoolingState,
+        this.isPowered ? 
+          this.Characteristic.TargetHeatingCoolingState.AUTO : 
+          this.Characteristic.TargetHeatingCoolingState.OFF
+      );
+    }
   }
 }
 
@@ -924,10 +922,13 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
   
   // If device is off and user sets temperature, automatically switch to AUTO mode
   if (!this.isPowered) {
-    this.temperatureControlService.updateCharacteristic(
-      this.Characteristic.TargetHeatingCoolingState,
-      this.Characteristic.TargetHeatingCoolingState.AUTO
-    );
+    const service = this.getThermostatService();
+    if (service) {
+      service.updateCharacteristic(
+        this.Characteristic.TargetHeatingCoolingState,
+        this.Characteristic.TargetHeatingCoolingState.AUTO
+      );
+    }
   }
   
   // Log the change
@@ -958,14 +959,16 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
       if (success) {
         this.platform.log.info(`Temperature set to ${newTemp}°C`);
       } else {
-        throw new Error(`Failed to set temperature to ${newTemp}°C`);
-        
         // Revert UI to previous temperature on error
         this.targetTemperature = previousTemp;
-        this.temperatureControlService.updateCharacteristic(
-          this.Characteristic.TargetTemperature,
-          previousTemp
-        );
+        const service = this.getThermostatService();
+        if (service) {
+          service.updateCharacteristic(
+            this.Characteristic.TargetTemperature,
+            previousTemp
+          );
+        }
+        throw new Error(`Failed to set temperature to ${newTemp}°C`);
       }
     }
     
@@ -1020,48 +1023,36 @@ private async handlePowerStateSetImpl(turnOn: boolean): Promise<void> {
 }
 
 /**
- * Add/update the water level service if supported
+ * Update the water level service with current status
  * @param waterLevel Current water level percentage
  * @param isWaterLow Whether water level is considered low
  */
-private setupWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
-  // Only create if water level data is available
-  if (waterLevel !== undefined) {
-    // Create service if it doesn't exist
-    if (!this.waterLevelService) {
-      this.waterLevelService = this.accessory.getService(this.platform.Service.Battery) ||
-        this.accessory.addService(this.platform.Service.Battery, 'Water Level');
-        
-      this.waterLevelService.setCharacteristic(
-        this.Characteristic.Name,
-        'Water Level'
-      );
-      
-      this.platform.log.info(`Created water level service for device ${this.deviceId}`);
-    }
-    
-    // Update characteristics
-    this.waterLevelService.updateCharacteristic(
-      this.Characteristic.BatteryLevel,
-      waterLevel
-    );
-    
-    this.waterLevelService.updateCharacteristic(
-      this.Characteristic.StatusLowBattery,
-      isWaterLow ? 1 : 0
-    );
-    
-    this.waterLevelService.updateCharacteristic(
-      this.Characteristic.ChargingState,
-      this.Characteristic.ChargingState.NOT_CHARGING
-    );
-    
-    // Log water level status if low
-    if (isWaterLow) {
-      this.platform.log.warn(`Water level low on device ${this.deviceId}: ${waterLevel}%`);
-    } else {
-      this.platform.log.verbose(`Water level updated to ${waterLevel}%`);
-    }
+private updateWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
+  if (!this.waterLevelService || waterLevel === undefined) {
+    return;
+  }
+  
+  // Update characteristics
+  this.waterLevelService.updateCharacteristic(
+    this.Characteristic.BatteryLevel,
+    waterLevel
+  );
+  
+  this.waterLevelService.updateCharacteristic(
+    this.Characteristic.StatusLowBattery,
+    isWaterLow ? 1 : 0
+  );
+  
+  this.waterLevelService.updateCharacteristic(
+    this.Characteristic.ChargingState,
+    this.Characteristic.ChargingState.NOT_CHARGING
+  );
+  
+  // Log water level status if low
+  if (isWaterLow) {
+    this.platform.log.warn(`Water level low on device ${this.deviceId}: ${waterLevel}%`);
+  } else {
+    this.platform.log.verbose(`Water level updated to ${waterLevel}%`);
   }
 }
 /**

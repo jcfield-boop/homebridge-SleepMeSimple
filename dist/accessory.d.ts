@@ -55,9 +55,25 @@ export declare class SleepMeAccessory implements PollableDevice {
      */
     private setupInformationService;
     /**
-     * Set up the Thermostat service for temperature control
+     * Setup interface based on configured mode
      */
-    private setupTemperatureControlService;
+    private setupInterface;
+    /**
+     * Clean up existing services to avoid conflicts
+     */
+    private cleanupExistingServices;
+    /**
+     * Setup simple switch interface
+     */
+    private setupSwitchInterface;
+    /**
+     * Setup hybrid interface (power switch + temperature control + schedules)
+     */
+    private setupHybridInterface;
+    /**
+     * Setup legacy thermostat interface
+     */
+    private setupLegacyThermostatInterface;
     /**
      * Setup schedule services for the hybrid interface
      */
@@ -66,6 +82,10 @@ export declare class SleepMeAccessory implements PollableDevice {
      * Create an individual schedule service
      */
     private createIndividualScheduleService;
+    /**
+     * Setup water level service (common to all interfaces)
+     */
+    private setupWaterLevelService;
     /**
      * Power toggle handler for switch interface
      */
@@ -103,10 +123,6 @@ export declare class SleepMeAccessory implements PollableDevice {
      */
     private updateThermostatServices;
     /**
-     * Update water level service
-     */
-    private updateWaterLevelService;
-    /**
     * Get the current heating/cooling state based on device status
     */
     private getCurrentHeatingCoolingState;
@@ -119,6 +135,10 @@ export declare class SleepMeAccessory implements PollableDevice {
        * @param temperature Current temperature
        */
     private updateScheduleManager;
+    /**
+      * Get the appropriate thermostat service based on interface mode
+      */
+    private getThermostatService;
     /**
       * Update the current heating/cooling state in HomeKit
       */
@@ -154,6 +174,12 @@ export declare class SleepMeAccessory implements PollableDevice {
        * @param turnOn Whether to turn the device on
        */
     private handlePowerStateSetImpl;
+    /**
+     * Update the water level service with current status
+     * @param waterLevel Current water level percentage
+     * @param isWaterLow Whether water level is considered low
+     */
+    private updateWaterLevelService;
     /**
        * Detect device model based on attachments or other characteristics
        * @param data Raw device data from API
