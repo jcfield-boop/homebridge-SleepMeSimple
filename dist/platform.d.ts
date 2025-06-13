@@ -5,15 +5,30 @@
 import { API, Characteristic, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
 import { SleepMeApi } from './api/sleepme-api.js';
 import { Logger as CustomLogger } from './api/types.js';
-import { LogLevel } from './settings.js';
+import { LogLevel, InterfaceMode } from './settings.js';
 import { ScheduleManager } from './schedule.js';
 import { PollingManager } from './polling-manager.js';
+/**
+ * Extended platform configuration interface
+ */
+interface SleepMeConfig extends PlatformConfig {
+    apiToken?: string;
+    unit?: 'C' | 'F';
+    pollingInterval?: number;
+    logLevel?: LogLevel;
+    enableSchedules?: boolean;
+    schedules?: any[];
+    disableAutoDiscovery?: boolean;
+    interfaceMode?: InterfaceMode;
+    showIndividualSchedules?: boolean;
+    enableWarmHug?: boolean;
+}
 /**
  * SleepMe Simple Platform
  * This class is the entry point for the plugin and manages the plugin lifecycle
  */
 export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
-    readonly config: PlatformConfig;
+    readonly config: SleepMeConfig;
     readonly homebridgeApi: API;
     readonly Service: typeof Service;
     readonly Characteristic: typeof Characteristic;
@@ -41,7 +56,7 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
      * @param config - Configuration from config.json
      * @param homebridgeApi - Reference to the Homebridge API
      */
-    constructor(logger: Logger, config: PlatformConfig, homebridgeApi: API);
+    constructor(logger: Logger, config: SleepMeConfig, homebridgeApi: API);
     /**
      * Get the schedule manager
      * @returns Schedule manager instance if available
@@ -86,3 +101,4 @@ export declare class SleepMeSimplePlatform implements DynamicPlatformPlugin {
      */
     private cleanupInactiveAccessories;
 }
+export {};

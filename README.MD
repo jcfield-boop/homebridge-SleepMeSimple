@@ -39,12 +39,29 @@ SleepMe Simple addresses these problems through:
 
 ## HomeKit Integration
 
-The plugin presents each SleepMe device in HomeKit with:
+The plugin offers three interface modes to suit different user needs:
 
-1. **Temperature Control**: Simple slider for direct temperature adjustment
-2. **Power Control**: Easy on/off switching with quick feedback
-3. **Temperature Sensor**: Shows the current bed temperature
-4. **Water Level Indicator**: Uses the Battery service to show water level status
+### **Hybrid Mode (Recommended)**
+Perfect for both automations and manual control:
+- **Power Switch**: Simple ON/OFF control (ideal for automations)
+- **Temperature Sensor**: Current bed temperature monitoring
+- **Target Temperature**: Manual temperature adjustment when needed
+- **Schedule Controls**: Master schedule toggle + individual schedule switches
+- **Warm Hug**: Manual trigger for wake-up sequences
+- **Water Level**: Battery service showing water level status
+
+### **Switch Mode** 
+Automation-friendly interface:
+- **Power Switch**: Simple ON/OFF control
+- **Temperature Sensor**: Current bed temperature monitoring
+- **Water Level**: Water level monitoring
+
+### **Thermostat Mode (Legacy)**
+Traditional thermostat interface:
+- **Thermostat Service**: Combined temperature and power control
+- **Water Level**: Water level monitoring
+
+**Note**: Thermostat mode may cause rate limiting issues with HomeKit automations due to forced temperature settings.
 
 ## Advanced Technical Features
 
@@ -76,7 +93,10 @@ Configure through the Homebridge UI or manually in your `config.json`:
       "unit": "C",
       "pollingInterval": 90,
       "logLevel": "normal",
-      "enableSchedules": true
+      "interfaceMode": "hybrid",
+      "enableSchedules": true,
+      "showIndividualSchedules": true,
+      "enableWarmHug": true
     }
   ]
 }
@@ -88,19 +108,47 @@ Configure through the Homebridge UI or manually in your `config.json`:
 - **unit**: Temperature unit, "C" for Celsius or "F" for Fahrenheit (default: "C")
 - **pollingInterval**: How frequently to check device status in seconds (default: 90, minimum: 60)
 - **logLevel**: Log detail level - "normal", "debug", or "verbose"
+- **interfaceMode**: HomeKit interface mode (default: "hybrid")
+  - **"hybrid"** (Recommended): Power switch + temperature control + schedules
+  - **"switch"**: Simple power switch + temperature sensor (automation-friendly)
+  - **"thermostat"**: Traditional thermostat interface (may cause rate limits)
 - **enableSchedules**: Enable temperature scheduling features (default: false)
+- **showIndividualSchedules**: Create individual HomeKit switches for each schedule (default: true)
+- **enableWarmHug**: Add HomeKit switch for manual warm hug triggers (default: true)
 - **disableAutoDiscovery**: Disable automatic device re-discovery (default: false)
   - Set to `true` to prevent the plugin from re-discovering devices every 24 hours
   - Recommended if you experience devices turning off unexpectedly
   - Prevents the "device turns off at the same time every day" bug
 
+## Automation Best Practices
+
+### **For HomeKit Automations** 
+**Use Hybrid or Switch mode** to avoid rate limiting issues:
+
+```
+✅ GOOD - Use the Power Switch:
+Automation: Turn OFF "SleepMe Device Power"
+Result: Single API call, instant response
+
+❌ AVOID - Using Thermostat controls:
+Automation: Set thermostat to OFF mode
+Result: May require temperature + power settings = multiple API calls
+```
+
+### **Recommended Automation Setup**
+1. Set `interfaceMode` to `"hybrid"` or `"switch"`
+2. Use the **Power Switch** for all automation ON/OFF control
+3. Use the **Target Temperature** service only for manual adjustments
+4. Enable individual schedule switches for automation control of schedules
+
 ## Using the UI Configuration
 
 The plugin comes with a comprehensive configuration UI that allows you to:
 
-1. **Enter API credentials**: Test and validate your SleepMe API token
-2. **Configure basic settings**: Set temperature units, polling interval, and log level
-3. **Manage schedules**: Enable, create, edit, and remove temperature schedules
+1. **Choose interface mode**: Select the best HomeKit interface for your needs
+2. **Enter API credentials**: Test and validate your SleepMe API token
+3. **Configure basic settings**: Set temperature units, polling interval, and log level
+4. **Manage schedules**: Enable, create, edit, and remove temperature schedules
 
 ### Managing Temperature Schedules
 

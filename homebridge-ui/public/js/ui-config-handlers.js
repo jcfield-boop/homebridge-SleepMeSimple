@@ -54,7 +54,11 @@ window.loadConfig = async function() {
       const unitSelect = document.getElementById('unit');
       const pollingIntervalInput = document.getElementById('pollingInterval');
       const logLevelSelect = document.getElementById('logLevel');
+      const interfaceModeSelect = document.getElementById('interfaceMode');
       const enableSchedulesCheckbox = document.getElementById('enableSchedules');
+      const scheduleOptionsDiv = document.getElementById('scheduleOptions');
+      const showIndividualSchedulesCheckbox = document.getElementById('showIndividualSchedules');
+      const enableWarmHugCheckbox = document.getElementById('enableWarmHug');
       const schedulesContainer = document.getElementById('schedulesContainer');
       
       if (apiTokenInput && config.apiToken) {
@@ -74,14 +78,30 @@ window.loadConfig = async function() {
           logLevelSelect.value = config.logLevel || 'normal';
       }
       
+      // Handle interface mode
+      if (interfaceModeSelect) {
+          interfaceModeSelect.value = config.interfaceMode || 'hybrid';
+      }
+      
       // Handle schedules
       if (enableSchedulesCheckbox) {
           const enableSchedules = config.enableSchedules === true;
           enableSchedulesCheckbox.checked = enableSchedules;
           
-          // Show/hide schedules container based on checkbox state
+          // Show/hide schedules container and options based on checkbox state
           if (schedulesContainer) {
               schedulesContainer.classList.toggle('hidden', !enableSchedules);
+          }
+          if (scheduleOptionsDiv) {
+              scheduleOptionsDiv.classList.toggle('hidden', !enableSchedules);
+          }
+          
+          // Handle schedule sub-options
+          if (showIndividualSchedulesCheckbox) {
+              showIndividualSchedulesCheckbox.checked = config.showIndividualSchedules !== false; // Default true
+          }
+          if (enableWarmHugCheckbox) {
+              enableWarmHugCheckbox.checked = config.enableWarmHug !== false; // Default true
           }
           
           // Critical: Load schedules if available and enabled
@@ -183,7 +203,10 @@ window.saveConfig = async function() {
       const unit = document.getElementById('unit')?.value || 'C';
       const pollingInterval = parseInt(document.getElementById('pollingInterval')?.value || '90', 10);
       const logLevel = document.getElementById('logLevel')?.value || 'normal';
+      const interfaceMode = document.getElementById('interfaceMode')?.value || 'hybrid';
       const enableSchedules = document.getElementById('enableSchedules')?.checked || false;
+      const showIndividualSchedules = document.getElementById('showIndividualSchedules')?.checked !== false; // Default true
+      const enableWarmHug = document.getElementById('enableWarmHug')?.checked !== false; // Default true
       
       
       // Validate required fields
@@ -208,7 +231,10 @@ window.saveConfig = async function() {
           unit,
           pollingInterval,
           logLevel,
-          enableSchedules
+          interfaceMode,
+          enableSchedules,
+          showIndividualSchedules,
+          enableWarmHug
       };
       
       console.log('Prepared config object:', {...config, apiToken: '[REDACTED]'});

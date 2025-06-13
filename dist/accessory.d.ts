@@ -18,9 +18,16 @@ export declare class SleepMeAccessory implements PollableDevice {
     private readonly platform;
     private readonly accessory;
     private readonly apiClient;
-    private temperatureControlService;
-    private waterLevelService?;
     private informationService;
+    private powerSwitchService?;
+    private temperatureSensorService?;
+    private targetTemperatureService?;
+    private thermostatService?;
+    private waterLevelService?;
+    private scheduleServices;
+    private masterScheduleService?;
+    private warmHugService?;
+    private interfaceMode;
     private currentTemperature;
     private targetTemperature;
     private isPowered;
@@ -51,6 +58,54 @@ export declare class SleepMeAccessory implements PollableDevice {
      * Set up the Thermostat service for temperature control
      */
     private setupTemperatureControlService;
+    /**
+     * Setup schedule services for the hybrid interface
+     */
+    private setupScheduleServices;
+    /**
+     * Create an individual schedule service
+     */
+    private createIndividualScheduleService;
+    /**
+     * Power toggle handler for switch interface
+     */
+    private handlePowerToggle;
+    /**
+     * Handle master schedule toggle
+     */
+    private handleMasterScheduleToggle;
+    /**
+     * Handle individual schedule toggle
+     */
+    private handleIndividualScheduleToggle;
+    /**
+     * Handle warm hug toggle
+     */
+    private handleWarmHugToggle;
+    /**
+     * Check if warm hug is currently active
+     */
+    private isWarmHugActive;
+    /**
+     * Update all services based on current interface mode
+     */
+    private updateAllServices;
+    /**
+     * Update switch interface services
+     */
+    private updateSwitchServices;
+    /**
+     * Update hybrid interface services
+     */
+    private updateHybridServices;
+    /**
+     * Update thermostat interface services (legacy)
+     */
+    private updateThermostatServices;
+    /**
+     * Update water level service
+     */
+    private updateWaterLevelService;
     /**
     * Get the current heating/cooling state based on device status
     */
@@ -99,12 +154,6 @@ export declare class SleepMeAccessory implements PollableDevice {
        * @param turnOn Whether to turn the device on
        */
     private handlePowerStateSetImpl;
-    /**
-     * Add/update the water level service if supported
-     * @param waterLevel Current water level percentage
-     * @param isWaterLow Whether water level is considered low
-     */
-    private setupWaterLevelService;
     /**
        * Detect device model based on attachments or other characteristics
        * @param data Raw device data from API

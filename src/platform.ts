@@ -14,9 +14,36 @@ import {
 import { SleepMeApi } from './api/sleepme-api.js';
 import { SleepMeAccessory } from './accessory.js';
 import { Logger as CustomLogger } from './api/types.js';
-import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
+import { 
+  PLATFORM_NAME, 
+  PLUGIN_NAME, 
+  DEFAULT_POLLING_INTERVAL, 
+  LogLevel,
+  InterfaceMode,
+  DEFAULT_INTERFACE_MODE,
+  DEFAULT_SHOW_INDIVIDUAL_SCHEDULES,
+  DEFAULT_ENABLE_WARM_HUG
+} from './settings.js';
 import { ScheduleManager, TemperatureSchedule } from './schedule.js';
 import { PollingManager } from './polling-manager.js';
+
+/**
+ * Extended platform configuration interface
+ */
+interface SleepMeConfig extends PlatformConfig {
+  apiToken?: string;
+  unit?: 'C' | 'F';
+  pollingInterval?: number;
+  logLevel?: LogLevel;
+  enableSchedules?: boolean;
+  schedules?: any[];
+  disableAutoDiscovery?: boolean;
+  
+  // New interface configuration options
+  interfaceMode?: InterfaceMode;
+  showIndividualSchedules?: boolean;
+  enableWarmHug?: boolean;
+}
 
 /**
  * SleepMe Simple Platform
@@ -72,7 +99,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
    */
   constructor(
     logger: Logger,
-    public readonly config: PlatformConfig,
+    public readonly config: SleepMeConfig,
     public readonly homebridgeApi: API
   ) {
     // Store references to Homebridge services and characteristics
@@ -96,12 +123,28 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
 
     // Parse auto-discovery setting
     this.disableAutoDiscovery = config.disableAutoDiscovery === true;
+    
+    // Parse interface configuration with defaults
+    if (config.interfaceMode && Object.values(InterfaceMode).includes(config.interfaceMode as InterfaceMode)) {
+      this.config.interfaceMode = config.interfaceMode as InterfaceMode;
+    } else {
+      this.config.interfaceMode = DEFAULT_INTERFACE_MODE;
+    }
+    
+    this.config.showIndividualSchedules = config.showIndividualSchedules !== false; // Default true
+    this.config.enableWarmHug = config.enableWarmHug !== false; // Default true
 
     // Create custom logger
     this.log = this.createLogger(logger);
     
     if (this.disableAutoDiscovery) {
       this.log.info('Automatic device re-discovery is disabled');
+    }
+    
+    // Log interface configuration
+    this.log.info(`Using ${this.config.interfaceMode} interface mode`);
+    if (this.config.enableSchedules) {
+      this.log.info(`Schedules enabled: individual switches=${this.config.showIndividualSchedules}, warm hug=${this.config.enableWarmHug}`);
     }
     
     // Validate that the API token is present in the configuration

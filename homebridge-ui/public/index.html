@@ -883,13 +883,45 @@ button.edit:hover {
         <option value="verbose">Verbose - Detailed logging for troubleshooting</option>
     </select>
     <small class="form-text text-muted">Controls the detail level of plugin logs</small>
-</div>            
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="enableSchedules" name="enableSchedules">
-                    Enable Schedules
-                </label>
-            </div>
+</div>
+
+<div class="form-group">
+    <label for="interfaceMode">HomeKit Interface Mode:</label>
+    <select id="interfaceMode" name="interfaceMode">
+        <option value="hybrid">Hybrid (Recommended) - Power switch + temperature control + schedules</option>
+        <option value="switch">Switch - Simple power switch + temperature sensor</option>
+        <option value="thermostat">Thermostat - Traditional thermostat interface</option>
+    </select>
+    <small class="form-text text-muted">
+        <strong>Hybrid:</strong> Best of both worlds - simple automation controls + full features<br>
+        <strong>Switch:</strong> Perfect for automations - no forced temperature settings<br>
+        <strong>Thermostat:</strong> Traditional interface (may cause automation rate limits)
+    </small>
+</div>
+
+<div class="form-group">
+    <label>
+        <input type="checkbox" id="enableSchedules" name="enableSchedules">
+        Enable Schedules
+    </label>
+</div>
+
+<div id="scheduleOptions" class="form-group hidden">
+    <div class="checkbox-group">
+        <label>
+            <input type="checkbox" id="showIndividualSchedules" name="showIndividualSchedules" checked>
+            Show Individual Schedule Switches in HomeKit
+        </label>
+        <small class="form-text text-muted">Creates a separate HomeKit switch for each schedule</small>
+    </div>
+    <div class="checkbox-group">
+        <label>
+            <input type="checkbox" id="enableWarmHug" name="enableWarmHug" checked>
+            Enable Warm Hug Feature
+        </label>
+        <small class="form-text text-muted">Adds a HomeKit switch to manually trigger warm hug sequences</small>
+    </div>
+</div>
             
             <div class="button-group">
                 <button type="submit">Save Configuration</button>

@@ -94,4 +94,25 @@ export var RequestPriority;
     RequestPriority["NORMAL"] = "normal";
     RequestPriority["LOW"] = "low"; // Background operations
 })(RequestPriority = RequestPriority || (RequestPriority = {}));
+/**
+ * HomeKit interface modes
+ */
+export var InterfaceMode;
+(function (InterfaceMode) {
+    InterfaceMode["SWITCH"] = "switch";
+    InterfaceMode["THERMOSTAT"] = "thermostat";
+    InterfaceMode["HYBRID"] = "hybrid"; // Power switch + temperature control + schedules
+})(InterfaceMode = InterfaceMode || (InterfaceMode = {}));
+/**
+ * Default interface mode - hybrid provides best user experience
+ */
+export const DEFAULT_INTERFACE_MODE = InterfaceMode.HYBRID;
+/**
+ * Enable individual schedule switches by default
+ */
+export const DEFAULT_SHOW_INDIVIDUAL_SCHEDULES = true;
+/**
+ * Enable warm hug feature by default
+ */
+export const DEFAULT_ENABLE_WARM_HUG = true;
 //# sourceMappingURL=settings.js.map

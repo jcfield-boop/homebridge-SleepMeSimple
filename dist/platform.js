@@ -1,6 +1,6 @@
 import { SleepMeApi } from './api/sleepme-api.js';
 import { SleepMeAccessory } from './accessory.js';
-import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
+import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel, InterfaceMode, DEFAULT_INTERFACE_MODE } from './settings.js';
 import { ScheduleManager } from './schedule.js';
 import { PollingManager } from './polling-manager.js';
 /**
@@ -65,10 +65,24 @@ export class SleepMeSimplePlatform {
         this.logLevel = configLogLevel;
         // Parse auto-discovery setting
         this.disableAutoDiscovery = config.disableAutoDiscovery === true;
+        // Parse interface configuration with defaults
+        if (config.interfaceMode && Object.values(InterfaceMode).includes(config.interfaceMode)) {
+            this.config.interfaceMode = config.interfaceMode;
+        }
+        else {
+            this.config.interfaceMode = DEFAULT_INTERFACE_MODE;
+        }
+        this.config.showIndividualSchedules = config.showIndividualSchedules !== false; // Default true
+        this.config.enableWarmHug = config.enableWarmHug !== false; // Default true
         // Create custom logger
         this.log = this.createLogger(logger);
         if (this.disableAutoDiscovery) {
             this.log.info('Automatic device re-discovery is disabled');
+        }
+        // Log interface configuration
+        this.log.info(`Using ${this.config.interfaceMode} interface mode`);
+        if (this.config.enableSchedules) {
+            this.log.info(`Schedules enabled: individual switches=${this.config.showIndividualSchedules}, warm hug=${this.config.enableWarmHug}`);
         }
         // Validate that the API token is present in the configuration
         if (!config.apiToken) {

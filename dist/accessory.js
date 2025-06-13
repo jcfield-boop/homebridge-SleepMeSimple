@@ -1,5 +1,5 @@
 import { ThermalStatus, PowerState } from './api/types.js';
-import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, COMMAND_DEBOUNCE_DELAY_MS, USER_ACTION_QUIET_PERIOD_MS } from './settings.js';
+import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, COMMAND_DEBOUNCE_DELAY_MS, USER_ACTION_QUIET_PERIOD_MS, InterfaceMode, DEFAULT_INTERFACE_MODE } from './settings.js';
 /**
  * Create an enhanced debounced function with leading/trailing options
  * @param callback Function to debounce
@@ -54,10 +54,20 @@ export class SleepMeAccessory {
     platform;
     accessory;
     apiClient;
-    // HomeKit services
-    temperatureControlService;
-    waterLevelService;
+    // Core HomeKit services
     informationService;
+    // Interface services (depends on mode)
+    powerSwitchService;
+    temperatureSensorService;
+    targetTemperatureService;
+    thermostatService; // Legacy thermostat mode
+    waterLevelService;
+    // Schedule services (optional)
+    scheduleServices = new Map();
+    masterScheduleService;
+    warmHugService;
+    // Interface configuration
+    interfaceMode;
     // Device state
     currentTemperature = NaN;
     targetTemperature = NaN;
@@ -98,11 +108,15 @@ export class SleepMeAccessory {
             this.platform.log.error(`Accessory missing device ID: ${this.displayName}`);
             throw new Error(`Accessory missing device ID: ${this.displayName}`);
         }
-        this.platform.log.info(`Creating accessory for device ${this.deviceId} (${this.displayName})`);
+        // Determine interface mode
+        this.interfaceMode = this.platform.config.interfaceMode || DEFAULT_INTERFACE_MODE;
+        this.platform.log.info(`Creating accessory for device ${this.deviceId} (${this.displayName}) with ${this.interfaceMode} interface`);
         // Initialize accessory information service
         this.setupInformationService();
-        // Create Thermostat service (main control)
-        this.setupTemperatureControlService();
+        // Setup interface based on mode
+        this.setupInterface();
+        // Setup water level monitoring (common to all interfaces)
+        this.setupWaterLevelService();
         // Create debounced temperature setter with smart options
         // Use leading edge for immediate feedback, but also trailing edge for final value
         this.tempSetterDebounced = createSmartDebounce((newTemp, previousTemp) => {
@@ -215,6 +229,215 @@ export class SleepMeAccessory {
             ]
         })
             .setValue(this.Characteristic.TemperatureDisplayUnits.CELSIUS);
+    }
+    /**
+     * Setup schedule services for the hybrid interface
+     */
+    setupScheduleServices() {
+        if (!this.platform.config.enableSchedules) {
+            return;
+        }
+        // Master schedule control
+        this.masterScheduleService = this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Schedules`);
+        this.masterScheduleService
+            .getCharacteristic(this.Characteristic.On)
+            .onGet(() => this.platform.scheduleManager?.isEnabled() || false)
+            .onSet(this.handleMasterScheduleToggle.bind(this));
+        // Individual schedule switches if configured
+        if (this.platform.config.showIndividualSchedules !== false) {
+            if (this.platform.config.schedules) {
+                for (const schedule of this.platform.config.schedules) {
+                    this.createIndividualScheduleService(schedule);
+                }
+            }
+        }
+        // Special Warm Hug service if enabled
+        if (this.platform.config.enableWarmHug !== false) {
+            this.warmHugService = this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Warm Hug`);
+            this.warmHugService
+                .getCharacteristic(this.Characteristic.On)
+                .onGet(() => this.isWarmHugActive())
+                .onSet(this.handleWarmHugToggle.bind(this));
+        }
+    }
+    /**
+     * Create an individual schedule service
+     */
+    createIndividualScheduleService(schedule) {
+        const service = this.accessory.addService(this.platform.Service.Switch, `${this.displayName} ${schedule.name || 'Schedule'}`);
+        service
+            .getCharacteristic(this.Characteristic.On)
+            .onGet(() => schedule.enabled !== false)
+            .onSet((value) => this.handleIndividualScheduleToggle(schedule.id, value));
+        this.scheduleServices.set(schedule.id, service);
+    }
+    /**
+     * Setup water level service (common to all interfaces)
+     */
+    setupWaterLevelService() {
+        // Water level as battery service (shows percentage)
+        this.waterLevelService = this.accessory.getService(this.platform.Service.Battery) ||
+            this.accessory.addService(this.platform.Service.Battery, `${this.displayName} Water Level`);
+        this.waterLevelService
+            .getCharacteristic(this.Characteristic.BatteryLevel)
+            .onGet(() => this.waterLevel);
+        this.waterLevelService
+            .getCharacteristic(this.Characteristic.StatusLowBattery)
+            .onGet(() => this.isWaterLow ?
+            this.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
+            this.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
+    }
+    /**
+     * Power toggle handler for switch interface
+     */
+    async handlePowerToggle(value) {
+        const shouldTurnOn = value;
+        this.lastUserActionTime = Date.now();
+        // Increment command epoch to invalidate previous commands
+        const currentEpoch = ++this.commandEpoch;
+        this.platform.log.info(`User power change: ${shouldTurnOn ? 'ON' : 'OFF'} for ${this.deviceId} - IMMEDIATE`);
+        if (shouldTurnOn) {
+            // Turn on with current target temperature
+            await this.executeOperation('power', currentEpoch, async () => {
+                const success = await this.apiClient.turnDeviceOn(this.deviceId, this.targetTemperature);
+                if (success) {
+                    this.isPowered = true;
+                    this.updateAllServices();
+                }
+                return success;
+            });
+        }
+        else {
+            // Cancel any pending requests for clean OFF
+            this.apiClient.cancelAllDeviceRequests(this.deviceId);
+            await this.executeOperation('power', currentEpoch, async () => {
+                const success = await this.apiClient.turnDeviceOff(this.deviceId);
+                if (success) {
+                    this.isPowered = false;
+                    this.updateAllServices();
+                }
+                return success;
+            });
+        }
+    }
+    /**
+     * Handle master schedule toggle
+     */
+    async handleMasterScheduleToggle(value) {
+        const enabled = value;
+        this.platform.log.info(`${enabled ? 'Enabling' : 'Disabling'} all schedules for ${this.deviceId}`);
+        if (this.platform.scheduleManager) {
+            if (enabled) {
+                this.platform.scheduleManager.enableSchedules();
+            }
+            else {
+                this.platform.scheduleManager.disableSchedules();
+            }
+        }
+    }
+    /**
+     * Handle individual schedule toggle
+     */
+    async handleIndividualScheduleToggle(scheduleId, enabled) {
+        this.platform.log.info(`${enabled ? 'Enabling' : 'Disabling'} schedule ${scheduleId} for ${this.deviceId}`);
+        if (this.platform.scheduleManager) {
+            if (enabled) {
+                this.platform.scheduleManager.enableSchedule(scheduleId);
+            }
+            else {
+                this.platform.scheduleManager.disableSchedule(scheduleId);
+            }
+        }
+    }
+    /**
+     * Handle warm hug toggle
+     */
+    async handleWarmHugToggle(value) {
+        const shouldStart = value;
+        this.platform.log.info(`${shouldStart ? 'Starting' : 'Stopping'} warm hug for ${this.deviceId}`);
+        if (this.platform.scheduleManager) {
+            if (shouldStart) {
+                this.platform.scheduleManager.startWarmHug(this.deviceId);
+            }
+            else {
+                this.platform.scheduleManager.stopWarmHug(this.deviceId);
+            }
+        }
+    }
+    /**
+     * Check if warm hug is currently active
+     */
+    isWarmHugActive() {
+        return this.platform.scheduleManager?.isWarmHugActive(this.deviceId) || false;
+    }
+    /**
+     * Update all services based on current interface mode
+     */
+    updateAllServices() {
+        switch (this.interfaceMode) {
+            case InterfaceMode.SWITCH:
+                this.updateSwitchServices();
+                break;
+            case InterfaceMode.THERMOSTAT:
+                this.updateThermostatServices();
+                break;
+            case InterfaceMode.HYBRID:
+            default:
+                this.updateHybridServices();
+                break;
+        }
+        this.updateWaterLevelService();
+    }
+    /**
+     * Update switch interface services
+     */
+    updateSwitchServices() {
+        if (this.powerSwitchService) {
+            this.powerSwitchService.updateCharacteristic(this.Characteristic.On, this.isPowered);
+        }
+        if (this.temperatureSensorService) {
+            this.temperatureSensorService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature || 20);
+        }
+    }
+    /**
+     * Update hybrid interface services
+     */
+    updateHybridServices() {
+        // Update power switch
+        if (this.powerSwitchService) {
+            this.powerSwitchService.updateCharacteristic(this.Characteristic.On, this.isPowered);
+        }
+        // Update temperature sensor
+        if (this.temperatureSensorService) {
+            this.temperatureSensorService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature || 20);
+        }
+        // Update target temperature service
+        if (this.targetTemperatureService) {
+            this.targetTemperatureService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature || 20);
+            this.targetTemperatureService.updateCharacteristic(this.Characteristic.TargetTemperature, this.targetTemperature || 21);
+        }
+    }
+    /**
+     * Update thermostat interface services (legacy)
+     */
+    updateThermostatServices() {
+        if (this.thermostatService) {
+            this.thermostatService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature || 20);
+            this.thermostatService.updateCharacteristic(this.Characteristic.TargetTemperature, this.targetTemperature || 21);
+            this.thermostatService.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.getCurrentHeatingCoolingState());
+            this.thermostatService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.getTargetHeatingCoolingState());
+        }
+    }
+    /**
+     * Update water level service
+     */
+    updateWaterLevelService() {
+        if (this.waterLevelService) {
+            this.waterLevelService.updateCharacteristic(this.Characteristic.BatteryLevel, this.waterLevel);
+            this.waterLevelService.updateCharacteristic(this.Characteristic.StatusLowBattery, this.isWaterLow ?
+                this.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
+                this.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
+        }
     }
     /**
     * Get the current heating/cooling state based on device status
@@ -656,8 +879,6 @@ export class SleepMeAccessory {
         // Update current temperature
         if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
             this.currentTemperature = status.currentTemperature;
-            // Update the current temperature in Thermostat service
-            this.temperatureControlService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature);
             this.platform.log.verbose(`Current temperature updated to ${this.currentTemperature}°C`);
             // Update schedule manager with current temperature
             if (!isNaN(this.currentTemperature)) {
@@ -676,8 +897,6 @@ export class SleepMeAccessory {
             else if (this.targetTemperature < MIN_TEMPERATURE_C) {
                 clampedTargetTemp = MIN_TEMPERATURE_C;
             }
-            // Update target temperature in Thermostat service
-            this.temperatureControlService.updateCharacteristic(this.Characteristic.TargetTemperature, clampedTargetTemp);
             this.platform.log.verbose(`Target temperature updated to ${this.targetTemperature}°C (HomeKit: ${clampedTargetTemp}°C)`);
         }
         // Update power state based on thermal status and power state
@@ -698,17 +917,16 @@ export class SleepMeAccessory {
             }
             this.isPowered = newPowerState;
         }
-        // Update the current heating/cooling state
-        this.updateCurrentHeatingCoolingState();
         // Update water level if available
         if (status.waterLevel !== undefined) {
             if (status.waterLevel !== this.waterLevel || status.isWaterLow !== this.isWaterLow) {
                 this.waterLevel = status.waterLevel;
                 this.isWaterLow = !!status.isWaterLow;
-                // Update or create the water level service
-                this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
+                this.platform.log.verbose(`Water level updated to ${this.waterLevel}%`);
             }
         }
+        // Update all HomeKit services based on interface mode
+        this.updateAllServices();
     }
     /**
      * Clean up resources when this accessory is removed

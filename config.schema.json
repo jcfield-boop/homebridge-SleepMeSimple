@@ -53,6 +53,36 @@
         "default": false,
         "description": "Disable automatic device re-discovery that runs every 24 hours"
       },
+      "interfaceMode": {
+        "title": "HomeKit Interface Mode",
+        "type": "string",
+        "enum": ["hybrid", "switch", "thermostat"],
+        "default": "hybrid",
+        "description": "Choose how devices appear in HomeKit",
+        "enumNames": [
+          "Hybrid (Recommended) - Power switch + temperature control + schedules",
+          "Switch - Simple power switch + temperature sensor", 
+          "Thermostat - Traditional thermostat interface"
+        ]
+      },
+      "showIndividualSchedules": {
+        "title": "Show Individual Schedule Switches",
+        "type": "boolean", 
+        "default": true,
+        "description": "Create individual HomeKit switches for each schedule",
+        "condition": {
+          "functionBody": "return model.enableSchedules === true && (model.interfaceMode === 'hybrid' || model.interfaceMode === 'switch');"
+        }
+      },
+      "enableWarmHug": {
+        "title": "Enable Warm Hug Feature",
+        "type": "boolean",
+        "default": true,
+        "description": "Add a HomeKit switch to manually trigger warm hug wake-up sequence",
+        "condition": {
+          "functionBody": "return model.enableSchedules === true && (model.interfaceMode === 'hybrid' || model.interfaceMode === 'switch');"
+        }
+      },
 "schedules": {
   "type": "array",
   "items": {

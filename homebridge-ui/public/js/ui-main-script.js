@@ -1191,10 +1191,14 @@ function initializeEventListeners() {
        // Enable schedules checkbox
        if (elements.enableSchedulesCheckbox && elements.schedulesContainer) {
            elements.enableSchedulesCheckbox.addEventListener('change', () => {
-               elements.schedulesContainer.classList.toggle(
-                   'hidden', 
-                   !elements.enableSchedulesCheckbox.checked
-               );
+               const isEnabled = elements.enableSchedulesCheckbox.checked;
+               elements.schedulesContainer.classList.toggle('hidden', !isEnabled);
+               
+               // Also toggle schedule options
+               const scheduleOptionsDiv = document.getElementById('scheduleOptions');
+               if (scheduleOptionsDiv) {
+                   scheduleOptionsDiv.classList.toggle('hidden', !isEnabled);
+               }
            });
        }
     
