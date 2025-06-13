@@ -72,7 +72,7 @@ export class SleepMeAccessory {
     currentTemperature = NaN;
     targetTemperature = NaN;
     isPowered = false;
-    firmwareVersion = 'Unknown';
+    firmwareVersion;
     waterLevel = 100; // Default full water level
     isWaterLow = false;
     // Debounced functions for command handling
@@ -108,6 +108,8 @@ export class SleepMeAccessory {
             this.platform.log.error(`Accessory missing device ID: ${this.displayName}`);
             throw new Error(`Accessory missing device ID: ${this.displayName}`);
         }
+        // Initialize firmware version from cache or default
+        this.firmwareVersion = this.accessory.context.firmwareVersion || 'Unknown';
         // Determine interface mode
         this.interfaceMode = this.platform.config.interfaceMode || DEFAULT_INTERFACE_MODE;
         this.platform.log.info(`Creating accessory for device ${this.deviceId} (${this.displayName}) with ${this.interfaceMode} interface`);
@@ -517,10 +519,13 @@ export class SleepMeAccessory {
         if (this.temperatureSensorService) {
             this.temperatureSensorService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature || 20);
         }
-        // Update target temperature service
+        // Update target temperature service (thermostat)
         if (this.targetTemperatureService) {
             this.targetTemperatureService.updateCharacteristic(this.Characteristic.CurrentTemperature, this.currentTemperature || 20);
             this.targetTemperatureService.updateCharacteristic(this.Characteristic.TargetTemperature, this.targetTemperature || 21);
+            // Update heating/cooling states to reflect device power status
+            this.targetTemperatureService.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, this.getCurrentHeatingCoolingState());
+            this.targetTemperatureService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.getTargetHeatingCoolingState());
         }
     }
     /**
@@ -987,10 +992,12 @@ export class SleepMeAccessory {
         // Update firmware version if available
         if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
             this.firmwareVersion = status.firmwareVersion;
+            // Cache firmware version in accessory context for persistence
+            this.accessory.context.firmwareVersion = this.firmwareVersion;
             // Update HomeKit characteristic - use setCharacteristic for reliability
             try {
                 this.informationService.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
-                this.platform.log.info(`Updated firmware version to ${this.firmwareVersion} in HomeKit`);
+                this.platform.log.info(`Updated firmware version to ${this.firmwareVersion} in HomeKit and cached`);
             }
             catch (error) {
                 this.platform.log.error(`Failed to update firmware version in HomeKit: ${error}`);
