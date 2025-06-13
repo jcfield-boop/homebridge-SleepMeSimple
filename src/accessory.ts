@@ -241,19 +241,37 @@ export class SleepMeAccessory implements PollableDevice {
    * Clean up existing services to avoid conflicts
    */
   private cleanupExistingServices(): void {
-    const servicesToRemove = [
-      this.platform.Service.TemperatureSensor,
-      this.platform.Service.Switch,
-      this.platform.Service.HeaterCooler
-    ];
+    // Only remove services that conflict with the current interface mode
+    // Don't remove services that will be reused
     
-    servicesToRemove.forEach(serviceType => {
-      const existingService = this.accessory.getService(serviceType);
-      if (existingService) {
-        this.platform.log.info(`Removing existing ${serviceType.name} service`);
-        this.accessory.removeService(existingService);
+    if (this.interfaceMode === InterfaceMode.SWITCH) {
+      // Switch mode doesn't need thermostat services
+      const thermostatService = this.accessory.getService(this.platform.Service.Thermostat);
+      if (thermostatService) {
+        this.platform.log.info('Removing existing Thermostat service (switch mode)');
+        this.accessory.removeService(thermostatService);
       }
-    });
+    } else if (this.interfaceMode === InterfaceMode.THERMOSTAT) {
+      // Thermostat mode doesn't need separate switch/temperature sensor
+      const switchService = this.accessory.getService(this.platform.Service.Switch);
+      const tempSensorService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+      
+      if (switchService) {
+        this.platform.log.info('Removing existing Switch service (thermostat mode)');
+        this.accessory.removeService(switchService);
+      }
+      if (tempSensorService) {
+        this.platform.log.info('Removing existing TemperatureSensor service (thermostat mode)');
+        this.accessory.removeService(tempSensorService);
+      }
+    }
+    
+    // Always remove HeaterCooler service as we don't use it
+    const heaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
+    if (heaterCoolerService) {
+      this.platform.log.info('Removing existing HeaterCooler service');
+      this.accessory.removeService(heaterCoolerService);
+    }
   }
   
   /**
@@ -287,9 +305,13 @@ export class SleepMeAccessory implements PollableDevice {
    * Setup hybrid interface (power switch + temperature control + schedules)
    */
   private setupHybridInterface(): void {
+    this.platform.log.info(`Setting up hybrid interface for ${this.displayName}`);
+    
     // 1. Power Switch - for simple ON/OFF control
     this.powerSwitchService = this.accessory.getService(this.platform.Service.Switch) ||
       this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Power`);
+    
+    this.platform.log.info(`Created Power Switch service: ${this.displayName} Power`);
     
     this.powerSwitchService
       .getCharacteristic(this.Characteristic.On)
@@ -299,6 +321,8 @@ export class SleepMeAccessory implements PollableDevice {
     // 2. Current Temperature Sensor - for monitoring
     this.temperatureSensorService = this.accessory.getService(this.platform.Service.TemperatureSensor) ||
       this.accessory.addService(this.platform.Service.TemperatureSensor, `${this.displayName} Temperature`);
+    
+    this.platform.log.info(`Created Temperature Sensor service: ${this.displayName} Temperature`);
     
     this.temperatureSensorService
       .getCharacteristic(this.Characteristic.CurrentTemperature)
@@ -312,6 +336,8 @@ export class SleepMeAccessory implements PollableDevice {
     // 3. Target Temperature Control - simplified thermostat for temperature setting
     this.targetTemperatureService = this.accessory.getService(this.platform.Service.Thermostat) ||
       this.accessory.addService(this.platform.Service.Thermostat, `${this.displayName} Target Temperature`);
+    
+    this.platform.log.info(`Created Target Temperature service: ${this.displayName} Target Temperature`);
     
     // Configure as temperature-only control
     this.targetTemperatureService
@@ -342,26 +368,9 @@ export class SleepMeAccessory implements PollableDevice {
       
     this.targetTemperatureService
       .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-    // Remove any existing temperature or switch services to avoid duplication
-    const existingTempService = this.accessory.getService(this.platform.Service.TemperatureSensor);
-    if (existingTempService) {
-      this.platform.log.info('Removing existing temperature sensor service');
-      this.accessory.removeService(existingTempService);
-    }
+      .onGet(() => this.getCurrentHeatingCoolingState());
     
-    const existingSwitchService = this.accessory.getService(this.platform.Service.Switch);
-    if (existingSwitchService) {
-      this.platform.log.info('Removing existing switch service');
-      this.accessory.removeService(existingSwitchService);
-    }
-    
-    // Remove existing HeaterCooler service if present
-    const existingHeaterCoolerService = this.accessory.getService(this.platform.Service.HeaterCooler);
-    if (existingHeaterCoolerService) {
-      this.platform.log.info('Removing existing HeaterCooler service');
-      this.accessory.removeService(existingHeaterCoolerService);
-    }
-    
+    this.platform.log.info(`Hybrid interface setup complete for ${this.displayName}: Power Switch + Temperature Sensor + Target Temperature Control`);
   }
   
   /**
