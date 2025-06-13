@@ -150,6 +150,7 @@ export class SleepMeAccessory {
             .setCharacteristic(this.Characteristic.Model, this.deviceModel)
             .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
             .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+        this.platform.log.debug(`Initial accessory info set: Model=${this.deviceModel}, Serial=${this.deviceId}, Firmware=${this.firmwareVersion}`);
         // Set the category to THERMOSTAT which is appropriate for temperature control
         this.accessory.category = 9 /* this.platform.homebridgeApi.hap.Categories.THERMOSTAT */;
     }
@@ -986,9 +987,14 @@ export class SleepMeAccessory {
         // Update firmware version if available
         if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
             this.firmwareVersion = status.firmwareVersion;
-            // Update HomeKit characteristic
-            this.informationService.updateCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
-            this.platform.log.info(`Updated firmware version to ${this.firmwareVersion}`);
+            // Update HomeKit characteristic - use setCharacteristic for reliability
+            try {
+                this.informationService.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+                this.platform.log.info(`Updated firmware version to ${this.firmwareVersion} in HomeKit`);
+            }
+            catch (error) {
+                this.platform.log.error(`Failed to update firmware version in HomeKit: ${error}`);
+            }
         }
         // Update current temperature
         if (isNaN(this.currentTemperature) || status.currentTemperature !== this.currentTemperature) {
