@@ -433,23 +433,55 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         // Check if we already have an accessory for this device
         const existingAccessory = this.accessories.find(acc => acc.UUID === uuid);
         if (existingAccessory) {
-          // The accessory already exists, just update its context
-          this.log.info(
-            `Restoring accessory from cache: ${existingAccessory.displayName} (ID: ${device.id})`
-          );
+          // Check if we need to recreate accessory due to firmware version display issues
+          const hasCachedFirmware = existingAccessory.context.firmwareVersion && 
+                                  existingAccessory.context.firmwareVersion !== 'Unknown';
+          const needsRecreation = hasCachedFirmware && !existingAccessory.context.firmwareVersionFixed;
           
-          // Update context and display name if needed
-          existingAccessory.context.device = device;
-          if (existingAccessory.displayName !== displayName) {
-            existingAccessory.displayName = displayName;
-            this.log.debug(`Updated accessory name to: ${displayName}`);
+          if (needsRecreation) {
+            this.log.info(
+              `Recreating accessory to fix firmware version display: ${existingAccessory.displayName} (firmware: ${existingAccessory.context.firmwareVersion})`
+            );
+            
+            // Remove the old accessory
+            this.homebridgeApi.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
+            const index = this.accessories.indexOf(existingAccessory);
+            if (index !== -1) {
+              this.accessories.splice(index, 1);
+            }
+            
+            // Create new accessory with firmware fix flag
+            const newAccessory = new this.homebridgeApi.platformAccessory(displayName, uuid);
+            newAccessory.category = this.homebridgeApi.hap.Categories.THERMOSTAT;
+            newAccessory.context.device = device;
+            newAccessory.context.firmwareVersion = existingAccessory.context.firmwareVersion;
+            newAccessory.context.firmwareVersionFixed = true; // Mark as fixed to prevent recreation loop
+            
+            // Register and initialize the new accessory
+            this.homebridgeApi.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory]);
+            this.accessories.push(newAccessory);
+            this.initializeAccessory(newAccessory, device.id);
+            
+            this.log.info(`Accessory recreated successfully with firmware version: ${newAccessory.context.firmwareVersion}`);
+          } else {
+            // The accessory already exists, just update its context
+            this.log.info(
+              `Restoring accessory from cache: ${existingAccessory.displayName} (ID: ${device.id})`
+            );
+            
+            // Update context and display name if needed
+            existingAccessory.context.device = device;
+            if (existingAccessory.displayName !== displayName) {
+              existingAccessory.displayName = displayName;
+              this.log.debug(`Updated accessory name to: ${displayName}`);
+            }
+            
+            // Update platform accessories in Homebridge
+            this.homebridgeApi.updatePlatformAccessories([existingAccessory]);
+            
+            // Initialize the accessory handler
+            this.initializeAccessory(existingAccessory, device.id);
           }
-          
-          // Update platform accessories in Homebridge
-          this.homebridgeApi.updatePlatformAccessories([existingAccessory]);
-          
-          // Initialize the accessory handler
-          this.initializeAccessory(existingAccessory, device.id);
         } else {
           // Create a new accessory since one doesn't exist
           this.log.info(`Adding new accessory: ${displayName} (ID: ${device.id})`);

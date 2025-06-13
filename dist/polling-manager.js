@@ -46,8 +46,8 @@ export class PollingManager {
             return;
         this.pollingActive = true;
         this.logger.info(`Starting centralized polling for ${this.devices.size} devices every ${this.pollingInterval / 1000}s`);
-        // Initial poll after short delay
-        setTimeout(() => this.pollAllDevices(), 5000);
+        // Initial poll after longer delay to avoid startup rate limiting
+        setTimeout(() => this.pollAllDevices(), 15000);
         // Set up regular polling
         this.pollingTimer = setInterval(() => {
             this.pollAllDevices();
