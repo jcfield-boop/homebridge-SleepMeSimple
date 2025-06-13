@@ -156,6 +156,11 @@ export class SleepMeAccessory {
         if (this.firmwareVersion && this.firmwareVersion !== 'Unknown') {
             this.informationService.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
             this.platform.log.debug(`Set cached firmware version: ${this.firmwareVersion}`);
+            // Force HomeKit to refresh by updating the platform accessory
+            setTimeout(() => {
+                this.platform.homebridgeApi.updatePlatformAccessories([this.accessory]);
+                this.platform.log.debug('Forced HomeKit accessory refresh for firmware version');
+            }, 500);
         }
         else {
             // Don't set firmware version yet - wait for API response
@@ -1010,6 +1015,9 @@ export class SleepMeAccessory {
                 // Force HomeKit to update by also calling updateCharacteristic
                 setTimeout(() => {
                     this.informationService.updateCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+                    // Also force platform accessory update
+                    this.platform.homebridgeApi.updatePlatformAccessories([this.accessory]);
+                    this.platform.log.debug('Forced HomeKit platform accessory update for firmware');
                 }, 100);
                 this.platform.log.info(`Updated firmware version: ${oldVersion} → ${this.firmwareVersion} in HomeKit and cached`);
             }
