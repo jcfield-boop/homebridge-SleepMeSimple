@@ -150,6 +150,8 @@ export class SleepMeAccessory implements PollableDevice {
     // Initialize firmware version from cache or default
     this.firmwareVersion = this.accessory.context.firmwareVersion || 'Unknown';
     
+    this.platform.log.debug(`Firmware version from cache: ${this.firmwareVersion}`);
+    
     // Determine interface mode
     this.interfaceMode = this.platform.config.interfaceMode || DEFAULT_INTERFACE_MODE;
     
@@ -207,8 +209,16 @@ export class SleepMeAccessory implements PollableDevice {
     this.informationService
       .setCharacteristic(this.Characteristic.Manufacturer, 'SleepMe Inc.')
       .setCharacteristic(this.Characteristic.Model, this.deviceModel)
-      .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
-      .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+      .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId);
+    
+    // Only set firmware version if we have a real value, not 'Unknown'
+    if (this.firmwareVersion && this.firmwareVersion !== 'Unknown') {
+      this.informationService.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+      this.platform.log.debug(`Set cached firmware version: ${this.firmwareVersion}`);
+    } else {
+      // Don't set firmware version yet - wait for API response
+      this.platform.log.debug('Waiting for API to provide firmware version');
+    }
     
     this.platform.log.debug(`Initial accessory info set: Model=${this.deviceModel}, Serial=${this.deviceId}, Firmware=${this.firmwareVersion}`);
     
@@ -365,11 +375,11 @@ export class SleepMeAccessory implements PollableDevice {
       })
       .onGet(() => this.currentTemperature || 20);
     
-    // Hide heating/cooling state (always AUTO for temperature-only control)
+    // Set up heating/cooling state to reflect actual device status
     this.targetTemperatureService
       .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-      .onGet(() => this.Characteristic.TargetHeatingCoolingState.AUTO)
-      .onSet(() => { /* Do nothing - temperature control only */ });
+      .onGet(() => this.getTargetHeatingCoolingState())
+      .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
       
     this.targetTemperatureService
       .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
@@ -794,7 +804,7 @@ private handleTargetTemperatureGet(): number {
  * Handle setting the target heating cooling state
  * @param value Target heating cooling state value
  */
-private async handleTargetHeatingCoolingStateSet(value: number): Promise<void> {
+private async handleTargetHeatingCoolingStateSet(value: CharacteristicValue): Promise<void> {
   const shouldPowerOn = value !== this.Characteristic.TargetHeatingCoolingState.OFF;
   this.platform.log.info(`User power change: ${shouldPowerOn ? 'ON' : 'OFF'} for ${this.deviceId} - IMMEDIATE`);
   
@@ -1236,6 +1246,7 @@ private updateDeviceState(status: DeviceStatus): void {
   
   // Update firmware version if available
   if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
+    const oldVersion = this.firmwareVersion;
     this.firmwareVersion = status.firmwareVersion;
     
     // Cache firmware version in accessory context for persistence
@@ -1247,7 +1258,16 @@ private updateDeviceState(status: DeviceStatus): void {
         this.Characteristic.FirmwareRevision,
         this.firmwareVersion
       );
-      this.platform.log.info(`Updated firmware version to ${this.firmwareVersion} in HomeKit and cached`);
+      
+      // Force HomeKit to update by also calling updateCharacteristic
+      setTimeout(() => {
+        this.informationService.updateCharacteristic(
+          this.Characteristic.FirmwareRevision,
+          this.firmwareVersion
+        );
+      }, 100);
+      
+      this.platform.log.info(`Updated firmware version: ${oldVersion} → ${this.firmwareVersion} in HomeKit and cached`);
     } catch (error) {
       this.platform.log.error(`Failed to update firmware version in HomeKit: ${error}`);
     }

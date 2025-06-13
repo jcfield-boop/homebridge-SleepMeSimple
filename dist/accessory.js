@@ -110,6 +110,7 @@ export class SleepMeAccessory {
         }
         // Initialize firmware version from cache or default
         this.firmwareVersion = this.accessory.context.firmwareVersion || 'Unknown';
+        this.platform.log.debug(`Firmware version from cache: ${this.firmwareVersion}`);
         // Determine interface mode
         this.interfaceMode = this.platform.config.interfaceMode || DEFAULT_INTERFACE_MODE;
         this.platform.log.info(`Creating accessory for device ${this.deviceId} (${this.displayName}) with ${this.interfaceMode} interface`);
@@ -150,8 +151,16 @@ export class SleepMeAccessory {
         this.informationService
             .setCharacteristic(this.Characteristic.Manufacturer, 'SleepMe Inc.')
             .setCharacteristic(this.Characteristic.Model, this.deviceModel)
-            .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId)
-            .setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+            .setCharacteristic(this.Characteristic.SerialNumber, this.deviceId);
+        // Only set firmware version if we have a real value, not 'Unknown'
+        if (this.firmwareVersion && this.firmwareVersion !== 'Unknown') {
+            this.informationService.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+            this.platform.log.debug(`Set cached firmware version: ${this.firmwareVersion}`);
+        }
+        else {
+            // Don't set firmware version yet - wait for API response
+            this.platform.log.debug('Waiting for API to provide firmware version');
+        }
         this.platform.log.debug(`Initial accessory info set: Model=${this.deviceModel}, Serial=${this.deviceId}, Firmware=${this.firmwareVersion}`);
         // Set the category to THERMOSTAT which is appropriate for temperature control
         this.accessory.category = 9 /* this.platform.homebridgeApi.hap.Categories.THERMOSTAT */;
@@ -284,11 +293,11 @@ export class SleepMeAccessory {
             minStep: 0.1
         })
             .onGet(() => this.currentTemperature || 20);
-        // Hide heating/cooling state (always AUTO for temperature-only control)
+        // Set up heating/cooling state to reflect actual device status
         this.targetTemperatureService
             .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-            .onGet(() => this.Characteristic.TargetHeatingCoolingState.AUTO)
-            .onSet(() => { });
+            .onGet(() => this.getTargetHeatingCoolingState())
+            .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
         this.targetTemperatureService
             .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
             .onGet(() => this.getCurrentHeatingCoolingState());
@@ -991,13 +1000,18 @@ export class SleepMeAccessory {
         }
         // Update firmware version if available
         if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
+            const oldVersion = this.firmwareVersion;
             this.firmwareVersion = status.firmwareVersion;
             // Cache firmware version in accessory context for persistence
             this.accessory.context.firmwareVersion = this.firmwareVersion;
             // Update HomeKit characteristic - use setCharacteristic for reliability
             try {
                 this.informationService.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
-                this.platform.log.info(`Updated firmware version to ${this.firmwareVersion} in HomeKit and cached`);
+                // Force HomeKit to update by also calling updateCharacteristic
+                setTimeout(() => {
+                    this.informationService.updateCharacteristic(this.Characteristic.FirmwareRevision, this.firmwareVersion);
+                }, 100);
+                this.platform.log.info(`Updated firmware version: ${oldVersion} → ${this.firmwareVersion} in HomeKit and cached`);
             }
             catch (error) {
                 this.platform.log.error(`Failed to update firmware version in HomeKit: ${error}`);
