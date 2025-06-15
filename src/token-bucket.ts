@@ -39,9 +39,9 @@ export class TokenBucket {
   private readonly refillRate: number;
   private readonly refillInterval: number;
   private lastRefillTime: number;
-  private totalRequests: number = 0;
-  private allowedRequests: number = 0;
-  private rejectedRequests: number = 0;
+  private totalRequests = 0;
+  private allowedRequests = 0;
+  private rejectedRequests = 0;
 
   constructor(
     private readonly config: TokenBucketConfig,

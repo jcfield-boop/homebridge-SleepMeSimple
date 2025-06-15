@@ -4,6 +4,7 @@
 import axios from 'axios';
 import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, BACKGROUND_REQUEST_THRESHOLD, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
+import { TokenBucket } from '../token-bucket.js';
 /**
  * SleepMe API Client
  * Handles API communication with rate limiting and robust error handling
@@ -11,12 +12,11 @@ import { ThermalStatus, PowerState } from './types.js';
 export class SleepMeApi {
     apiToken;
     logger;
-    // Request queue - separate queues by priority for better management
-    criticalQueue = [];
-    highPriorityQueue = [];
-    normalPriorityQueue = [];
-    lowPriorityQueue = [];
-    // Rate limiting state
+    // Simplified request queue - just two queues based on real API constraints
+    userActionQueue = []; // CRITICAL + HIGH priority requests
+    backgroundQueue = []; // NORMAL + LOW priority requests
+    // Rate limiting state - now using token bucket for more accurate tracking
+    tokenBucket;
     requestsThisMinute = 0;
     minuteStartTime = Date.now();
     lastRequestTime = 0;
@@ -54,6 +54,13 @@ export class SleepMeApi {
             this.logger.error('Invalid API token provided');
             throw new Error('Invalid API token provided');
         }
+        // Initialize token bucket with empirically determined parameters
+        this.tokenBucket = new TokenBucket({
+            maxTokens: 7,
+            refillRate: 1,
+            refillInterval: 15000,
+            initialTokens: 7
+        }, this.logger);
         // Create a startup delay to prevent immediate requests
         this.startupComplete = new Promise(resolve => {
             setTimeout(() => {
@@ -71,11 +78,43 @@ export class SleepMeApi {
         this.logger.info('SleepMe API client initialized');
     }
     /**
-     * Get API statistics
+     * Get API statistics including token bucket status
      * @returns Current API statistics
      */
     getStats() {
-        return { ...this.stats };
+        return {
+            ...this.stats,
+            tokenBucket: this.tokenBucket.getStats()
+        };
+    }
+    /**
+     * Check if token bucket allows this request based on priority
+     * CRITICAL and HIGH priority requests can bypass token bucket constraints
+     */
+    async checkTokenBucketForRequest(priority) {
+        // CRITICAL requests always bypass token bucket (user power commands)
+        if (priority === RequestPriority.CRITICAL) {
+            this.logger.verbose('[CRITICAL PRIORITY] Bypassing token bucket constraints');
+            return true;
+        }
+        // HIGH priority requests bypass if bucket is nearly empty but not completely empty
+        if (priority === RequestPriority.HIGH) {
+            const stats = this.tokenBucket.getStats();
+            if (stats.tokensAvailable >= 1) {
+                this.logger.verbose('[HIGH PRIORITY] Using token bucket');
+                return this.tokenBucket.consume(true); // HIGH priority = user action
+            }
+            else {
+                this.logger.verbose('[HIGH PRIORITY] Bypassing empty token bucket');
+                return true;
+            }
+        }
+        // NORMAL and LOW priority requests must respect token bucket
+        const canConsume = this.tokenBucket.consume(false); // background request
+        if (!canConsume) {
+            this.logger.verbose(`[${priority} PRIORITY] Token bucket depleted, waiting...`);
+        }
+        return canConsume;
     }
     /**
      * Clean up expired cache entries
@@ -99,24 +138,20 @@ export class SleepMeApi {
      */
     logQueueStatus(context) {
         const now = Date.now();
-        const critical = this.criticalQueue.filter(r => !r.executing);
-        const high = this.highPriorityQueue.filter(r => !r.executing);
-        const normal = this.normalPriorityQueue.filter(r => !r.executing);
-        const low = this.lowPriorityQueue.filter(r => !r.executing);
+        const userActions = this.userActionQueue.filter(r => !r.executing);
+        const background = this.backgroundQueue.filter(r => !r.executing);
         const executing = [
-            ...this.criticalQueue.filter(r => r.executing),
-            ...this.highPriorityQueue.filter(r => r.executing),
-            ...this.normalPriorityQueue.filter(r => r.executing),
-            ...this.lowPriorityQueue.filter(r => r.executing)
+            ...this.userActionQueue.filter(r => r.executing),
+            ...this.backgroundQueue.filter(r => r.executing)
         ];
-        this.logger.warn(`${context}: Queue status - Critical: ${critical.length}, High: ${high.length}, Normal: ${normal.length}, Low: ${low.length}, Executing: ${executing.length}`);
+        this.logger.warn(`${context}: Queue status - User Actions: ${userActions.length}, Background: ${background.length}, Executing: ${executing.length}`);
         // Log details about executing requests
         executing.forEach(req => {
             const executingTime = req.lastAttempt ? now - req.lastAttempt : 0;
             this.logger.warn(`  Executing: ${req.method} ${req.url} (${Math.round(executingTime / 1000)}s)`);
         });
         // Log details about oldest queued requests
-        const allQueued = [...critical, ...high, ...normal, ...low].sort((a, b) => a.timestamp - b.timestamp);
+        const allQueued = [...userActions, ...background].sort((a, b) => a.timestamp - b.timestamp);
         allQueued.slice(0, 3).forEach(req => {
             const age = Math.round((now - req.timestamp) / 1000);
             this.logger.warn(`  Queued: ${req.priority} ${req.method} ${req.url} (${age}s old)`);
@@ -159,10 +194,8 @@ export class SleepMeApi {
             }
         };
         // Clean up all queues
-        cleanupQueue(this.criticalQueue, 'critical');
-        cleanupQueue(this.highPriorityQueue, 'high');
-        cleanupQueue(this.normalPriorityQueue, 'normal');
-        cleanupQueue(this.lowPriorityQueue, 'low');
+        cleanupQueue(this.userActionQueue, 'userActions');
+        cleanupQueue(this.backgroundQueue, 'background');
         if (cleanedCount > 0) {
             this.logger.warn(`Cleaned up ${cleanedCount} stale requests from queues`);
         }
@@ -614,24 +647,22 @@ export class SleepMeApi {
    */
     shouldWaitForRateLimit() {
         const now = Date.now();
-        // Check if we have critical or high priority requests
-        const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
-        const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
-        const hasNormalRequest = this.normalPriorityQueue.some(r => !r.executing);
-        // CRITICAL requests always bypass rate limits for maximum responsiveness
-        if (hasCriticalRequest) {
+        // Check if we have user action or background requests
+        const hasUserActionRequest = this.userActionQueue.some(r => !r.executing);
+        const hasBackgroundRequest = this.backgroundQueue.some(r => !r.executing);
+        // User action requests always bypass rate limits for maximum responsiveness
+        if (hasUserActionRequest) {
             return { shouldWait: false, waitTime: 0, message: '' };
         }
-        // HIGH priority and NORMAL requests respect rate limits but get priority processing
-        if (hasHighPriorityRequest || hasNormalRequest) {
+        // Background requests respect rate limits and get lower priority processing
+        if (hasBackgroundRequest) {
             if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
                 const resetTime = this.minuteStartTime + 60000;
                 const waitTime = resetTime - now + 1000;
-                const requestType = hasHighPriorityRequest ? 'high priority' : 'normal';
                 return {
                     shouldWait: true,
                     waitTime,
-                    message: `Rate limit reached, waiting for ${requestType} request`
+                    message: 'Rate limit reached, waiting for background request'
                 };
             }
             return { shouldWait: false, waitTime: 0, message: '' };
@@ -683,18 +714,16 @@ export class SleepMeApi {
                 // Check if we need to reset rate limit counter
                 this.checkRateLimit();
                 // Log queue status if we have significant backlog
-                const totalQueued = this.criticalQueue.length + this.highPriorityQueue.length +
-                    this.normalPriorityQueue.length + this.lowPriorityQueue.length;
+                const totalQueued = this.userActionQueue.length + this.backgroundQueue.length;
                 if (totalQueued >= 3) {
                     this.logQueueStatus('Queue backlog detected during processing');
                 }
                 // Check if we're in backoff mode - allow critical/high priority during shorter backoffs
                 const now = Date.now();
                 if (this.rateLimitBackoffUntil > now) {
-                    const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
-                    const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
-                    // Skip backoff for critical/high priority if backoff is short
-                    if ((hasCriticalRequest || hasHighPriorityRequest) &&
+                    const hasUserActionRequest = this.userActionQueue.some(r => !r.executing);
+                    // Skip backoff for user actions if backoff is short
+                    if (hasUserActionRequest &&
                         (this.rateLimitBackoffUntil - now) <= 10000) { // 10 seconds or less
                         this.logger.debug('Bypassing short backoff for user request');
                     }
@@ -820,10 +849,7 @@ export class SleepMeApi {
    * Determine if there are any queued requests
    */
     hasQueuedRequests() {
-        return this.criticalQueue.length > 0 ||
-            this.highPriorityQueue.length > 0 ||
-            this.normalPriorityQueue.length > 0 ||
-            this.lowPriorityQueue.length > 0;
+        return this.userActionQueue.length > 0 || this.backgroundQueue.length > 0;
     }
     /**
      * Check and reset rate limit counter using discrete minute windows
@@ -862,37 +888,20 @@ export class SleepMeApi {
             }
             return undefined;
         };
-        // Check each queue for OFF commands first
-        let nextRequest = findOffCommands(this.criticalQueue);
+        // Check for OFF commands in user action queue first
+        const nextRequest = findOffCommands(this.userActionQueue);
         if (nextRequest)
             return nextRequest;
-        nextRequest = findOffCommands(this.highPriorityQueue);
-        if (nextRequest)
-            return nextRequest;
-        // Then process remaining commands in priority order
-        if (this.criticalQueue.length > 0) {
-            const pendingRequests = this.criticalQueue.filter(r => !r.executing);
+        // Then process remaining commands in simplified priority order
+        if (this.userActionQueue.length > 0) {
+            const pendingRequests = this.userActionQueue.filter(r => !r.executing);
             if (pendingRequests.length > 0) {
                 return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
             }
         }
-        // Then, try high priority requests
-        if (this.highPriorityQueue.length > 0) {
-            const pendingRequests = this.highPriorityQueue.filter(r => !r.executing);
-            if (pendingRequests.length > 0) {
-                return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
-            }
-        }
-        // Next, try normal priority requests
-        if (this.normalPriorityQueue.length > 0) {
-            const pendingRequests = this.normalPriorityQueue.filter(r => !r.executing);
-            if (pendingRequests.length > 0) {
-                return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
-            }
-        }
-        // Finally, try low priority requests
-        if (this.lowPriorityQueue.length > 0) {
-            const pendingRequests = this.lowPriorityQueue.filter(r => !r.executing);
+        // Finally, try background requests
+        if (this.backgroundQueue.length > 0) {
+            const pendingRequests = this.backgroundQueue.filter(r => !r.executing);
             if (pendingRequests.length > 0) {
                 return pendingRequests.sort((a, b) => a.timestamp - b.timestamp)[0];
             }
@@ -908,19 +917,19 @@ export class SleepMeApi {
         // Select the appropriate queue based on priority
         switch (request.priority) {
             case RequestPriority.CRITICAL:
-                queue = this.criticalQueue;
+                queue = this.userActionQueue;
                 break;
             case RequestPriority.HIGH:
-                queue = this.highPriorityQueue;
+                queue = this.userActionQueue;
                 break;
             case RequestPriority.NORMAL:
-                queue = this.normalPriorityQueue;
+                queue = this.backgroundQueue;
                 break;
             case RequestPriority.LOW:
-                queue = this.lowPriorityQueue;
+                queue = this.backgroundQueue;
                 break;
             default:
-                queue = this.normalPriorityQueue;
+                queue = this.backgroundQueue;
         }
         const index = queue.findIndex(r => r.id === request.id);
         if (index !== -1) {
@@ -943,23 +952,23 @@ export class SleepMeApi {
         switch (request.priority) {
             case RequestPriority.CRITICAL:
                 // Critical requests go to the front of the critical queue
-                this.criticalQueue.unshift(newRequest);
+                this.userActionQueue.unshift(newRequest);
                 break;
             case RequestPriority.HIGH:
-                // High priority goes to the high priority queue
-                this.highPriorityQueue.push(newRequest);
+                // High priority goes to user action queue
+                this.userActionQueue.push(newRequest);
                 break;
             case RequestPriority.NORMAL:
-                // Normal priority goes to normal queue
-                this.normalPriorityQueue.push(newRequest);
+                // Normal priority goes to background queue
+                this.backgroundQueue.push(newRequest);
                 break;
             case RequestPriority.LOW:
-                // Low priority goes to low priority queue
-                this.lowPriorityQueue.push(newRequest);
+                // Low priority goes to background queue
+                this.backgroundQueue.push(newRequest);
                 break;
             default:
                 // Default to normal priority
-                this.normalPriorityQueue.push(newRequest);
+                this.backgroundQueue.push(newRequest);
         }
     }
     /**
@@ -983,10 +992,8 @@ export class SleepMeApi {
             }
         };
         // Process all priority queues
-        processQueue(this.criticalQueue);
-        processQueue(this.highPriorityQueue);
-        processQueue(this.normalPriorityQueue);
-        processQueue(this.lowPriorityQueue);
+        processQueue(this.userActionQueue);
+        processQueue(this.backgroundQueue);
     }
     /**
      * Check for duplicate requests and deduplicate them
@@ -996,10 +1003,8 @@ export class SleepMeApi {
      */
     shouldQueueRequest(newRequest) {
         const allQueues = [
-            this.criticalQueue,
-            this.highPriorityQueue,
-            this.normalPriorityQueue,
-            this.lowPriorityQueue
+            this.userActionQueue,
+            this.backgroundQueue
         ];
         for (const queue of allQueues) {
             const duplicate = queue.find(r => !r.executing &&
@@ -1023,7 +1028,7 @@ export class SleepMeApi {
         const priority = options.priority || RequestPriority.NORMAL;
         // Skip redundant status updates only when queue is significantly backlogged
         // More reasonable threshold to prevent permanent queue blockage
-        const totalQueuedRequests = this.criticalQueue.length + this.highPriorityQueue.length + this.normalPriorityQueue.length;
+        const totalQueuedRequests = this.userActionQueue.length + this.backgroundQueue.length;
         const backgroundThreshold = Math.floor(MAX_REQUESTS_PER_MINUTE * BACKGROUND_REQUEST_THRESHOLD);
         if ((totalQueuedRequests >= backgroundThreshold) &&
             options.operationType === 'getDeviceStatus' &&
@@ -1048,6 +1053,20 @@ export class SleepMeApi {
         // Wait for startup delay to complete for non-critical requests
         if (priority !== RequestPriority.CRITICAL && !this.startupFinished) {
             await this.startupComplete;
+        }
+        // Check token bucket availability (this may wait for tokens to be available)
+        const tokenAllowed = await this.checkTokenBucketForRequest(priority);
+        if (!tokenAllowed) {
+            // For NORMAL/LOW priority requests that can't get tokens, wait for availability
+            if (priority === RequestPriority.NORMAL || priority === RequestPriority.LOW) {
+                this.logger.debug(`[${priority} PRIORITY] Waiting for token bucket availability...`);
+                await this.tokenBucket.waitForToken();
+                // Try to consume again after waiting
+                if (!this.tokenBucket.consume(false)) { // retry as background
+                    this.logger.warn(`[${priority} PRIORITY] Still no tokens available after waiting`);
+                    return Promise.resolve(null);
+                }
+            }
         }
         // Return a new promise
         return new Promise((resolve, reject) => {
@@ -1090,19 +1109,19 @@ export class SleepMeApi {
             // Add to the appropriate queue based on priority
             switch (priority) {
                 case RequestPriority.CRITICAL:
-                    this.criticalQueue.push(request);
+                    this.userActionQueue.push(request);
                     break;
                 case RequestPriority.HIGH:
-                    this.highPriorityQueue.push(request);
+                    this.userActionQueue.push(request);
                     break;
                 case RequestPriority.NORMAL:
-                    this.normalPriorityQueue.push(request);
+                    this.backgroundQueue.push(request);
                     break;
                 case RequestPriority.LOW:
-                    this.lowPriorityQueue.push(request);
+                    this.backgroundQueue.push(request);
                     break;
                 default:
-                    this.normalPriorityQueue.push(request);
+                    this.backgroundQueue.push(request);
             }
             // Start processing the queue if not already running
             if (!this.processingQueue) {

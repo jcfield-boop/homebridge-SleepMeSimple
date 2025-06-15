@@ -48,7 +48,8 @@ export class PollingManager {
         this.logger.info(`Starting centralized polling for ${this.devices.size} devices every ${this.pollingInterval / 1000}s`);
         // Initial poll after much longer delay to avoid startup rate limiting  
         // Based on token bucket findings: need 5+ minute gaps between background calls
-        setTimeout(() => this.pollAllDevices(), 420000); // 7 minutes after discovery
+        // Reduced from 7 minutes to 8 minutes for even more conservative approach
+        setTimeout(() => this.pollAllDevices(), 480000); // 8 minutes after discovery
         // Set up regular polling
         this.pollingTimer = setInterval(() => {
             this.pollAllDevices();
@@ -64,6 +65,36 @@ export class PollingManager {
         }
         this.pollingActive = false;
         this.logger.info('Stopped centralized polling');
+    }
+    /**
+     * Validate cached devices are still accessible without consuming fresh API calls
+     * Returns devices that respond successfully to cached status requests
+     */
+    async validateCachedDevices(deviceIds) {
+        this.logger.info(`Validating ${deviceIds.length} cached devices...`);
+        const validDevices = [];
+        for (const deviceId of deviceIds) {
+            try {
+                // Use cached status check only - no fresh API calls during startup validation
+                const status = await this.api.getDeviceStatus(deviceId, false);
+                if (status) {
+                    validDevices.push(deviceId);
+                    this.logger.verbose(`Cached device ${deviceId} validated successfully`);
+                }
+                else {
+                    this.logger.warn(`Cached device ${deviceId} has no cached status, may need rediscovery`);
+                }
+            }
+            catch (error) {
+                this.logger.warn(`Cached device ${deviceId} validation failed: ${error}`);
+            }
+            // Small delay between validation checks
+            if (deviceIds.length > 1) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        this.logger.info(`${validDevices.length}/${deviceIds.length} cached devices validated`);
+        return validDevices;
     }
     /**
      * Poll all registered devices in a single batch

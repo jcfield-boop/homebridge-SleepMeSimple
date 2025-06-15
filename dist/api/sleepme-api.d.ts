@@ -6,10 +6,9 @@ import { Device, DeviceStatus, ApiStats, Logger } from './types.js';
 export declare class SleepMeApi {
     private readonly apiToken;
     private readonly logger;
-    private criticalQueue;
-    private highPriorityQueue;
-    private normalPriorityQueue;
-    private lowPriorityQueue;
+    private userActionQueue;
+    private backgroundQueue;
+    private tokenBucket;
     private requestsThisMinute;
     private minuteStartTime;
     private lastRequestTime;
@@ -30,10 +29,17 @@ export declare class SleepMeApi {
      */
     constructor(apiToken: string, logger: Logger);
     /**
-     * Get API statistics
+     * Get API statistics including token bucket status
      * @returns Current API statistics
      */
-    getStats(): ApiStats;
+    getStats(): ApiStats & {
+        tokenBucket?: any;
+    };
+    /**
+     * Check if token bucket allows this request based on priority
+     * CRITICAL and HIGH priority requests can bypass token bucket constraints
+     */
+    private checkTokenBucketForRequest;
     /**
      * Clean up expired cache entries
      */

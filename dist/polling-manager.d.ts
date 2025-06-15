@@ -8,6 +8,7 @@ export interface PollableDevice {
     deviceId: string;
     onStatusUpdate: (status: any) => void;
     onError: (error: Error) => void;
+    onValidationFailure?: (deviceId: string) => void;
 }
 /**
  * Centralized polling manager that batches device status requests
@@ -38,6 +39,11 @@ export declare class PollingManager {
      * Stop the polling cycle
      */
     private stopPolling;
+    /**
+     * Validate cached devices are still accessible without consuming fresh API calls
+     * Returns devices that respond successfully to cached status requests
+     */
+    validateCachedDevices(deviceIds: string[]): Promise<string[]>;
     /**
      * Poll all registered devices in a single batch
      * This is the core optimization - 1 API call per device instead of 2+

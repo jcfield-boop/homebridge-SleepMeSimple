@@ -392,37 +392,16 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           .map(acc => acc.context.device);
         
         if (cachedDevices.length > 0) {
-          this.log.info(`Found ${cachedDevices.length} cached devices, testing connectivity...`);
+          this.log.info(`Found ${cachedDevices.length} cached devices, attempting startup without API discovery...`);
           
-          // Test connectivity to cached devices
-          let validCachedDevices = [];
-          for (const cachedDevice of cachedDevices) {
-            try {
-              // Attempt to get device status to verify it still exists and is accessible
-              const status = await this.api.getDeviceStatus(cachedDevice.id, true);
-              if (status) {
-                this.log.info(`Cached device ${cachedDevice.id} is accessible, skipping discovery`);
-                validCachedDevices.push(cachedDevice);
-              } else {
-                this.log.warn(`Cached device ${cachedDevice.id} not accessible, will rediscover`);
-              }
-            } catch (error) {
-              this.log.warn(`Cached device ${cachedDevice.id} test failed, will rediscover: ${error}`);
-            }
-          }
-          
-          if (validCachedDevices.length === cachedDevices.length) {
-            // All cached devices are accessible, skip API discovery
-            this.log.info('All cached devices accessible, skipping GET /devices API call');
-            devices = validCachedDevices;
-          } else {
-            // Some cached devices failed, do full discovery
-            this.log.info('Some cached devices failed, performing full device discovery...');
-            devices = await this.api.getDevices();
-          }
+          // For ultra-conservative API usage, trust cached devices on startup
+          // The polling manager will validate connectivity during normal operation
+          // This eliminates the GET /devices call during startup entirely
+          devices = cachedDevices;
+          this.log.info('Using cached devices, skipping startup API discovery to conserve rate limits');
         } else {
-          // No cached devices, do full discovery
-          this.log.info('No cached devices found, fetching from API...');
+          // No cached devices, must do full discovery
+          this.log.info('No cached devices found, performing minimal API discovery...');
           devices = await this.api.getDevices();
         }
         
