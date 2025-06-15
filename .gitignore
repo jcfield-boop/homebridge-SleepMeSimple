@@ -1,2 +1,9 @@
 node_modules/
 CLAUDE.md
+
+# Testing and development files
+*.log
+*probe*.sh
+*test*.sh
+algorithm-probe*
+rate-limit-probe*
