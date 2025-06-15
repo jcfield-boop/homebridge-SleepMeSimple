@@ -656,6 +656,12 @@ export class SleepMeAccessory {
                             this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
                             // Update UI immediately for responsiveness
                             this.updateCurrentHeatingCoolingState();
+                            // Ensure all services are synchronized
+                            this.updateAllServices();
+                            // Notify polling manager that device is now inactive
+                            if (this.platform.pollingManager) {
+                                this.platform.pollingManager.notifyDeviceInactive(this.deviceId);
+                            }
                         }
                         else {
                             throw new Error('Failed to turn off device');
@@ -677,6 +683,12 @@ export class SleepMeAccessory {
                             this.platform.log.info(`Device ${this.deviceId} turned ON successfully to ${temperature}°C`);
                             // Update UI immediately for responsiveness
                             this.updateCurrentHeatingCoolingState();
+                            // Ensure all services are synchronized
+                            this.updateAllServices();
+                            // Notify polling manager that device is now active
+                            if (this.platform.pollingManager) {
+                                this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                            }
                         }
                         else {
                             throw new Error('Failed to turn on device');
@@ -777,6 +789,10 @@ export class SleepMeAccessory {
                     this.platform.log.info(`Device turned ON with new temperature ${newTemp}°C`);
                     // Update all services after power change to ensure synchronization
                     this.updateAllServices();
+                    // Notify polling manager that device is now active for more frequent polling
+                    if (this.platform.pollingManager) {
+                        this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                    }
                 }
                 else {
                     throw new Error(`Failed to turn on device with temperature ${newTemp}°C`);
@@ -800,6 +816,12 @@ export class SleepMeAccessory {
             }
             // Update the current heating/cooling state based on temperature difference
             this.updateCurrentHeatingCoolingState();
+            // Ensure all services reflect the new state
+            this.updateAllServices();
+            // Notify polling manager that device is active (either newly on or temperature changed)
+            if (this.platform.pollingManager) {
+                this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+            }
         });
     }
     /**
@@ -837,8 +859,19 @@ export class SleepMeAccessory {
                     throw new Error('Failed to turn off device');
                 }
             }
-            // Update the current heating/cooling state
+            // Update the current heating/cooling state and sync all services
             this.updateCurrentHeatingCoolingState();
+            // Ensure all services are synchronized after power state change
+            this.updateAllServices();
+            // Notify polling manager of device activity state change
+            if (this.platform.pollingManager) {
+                if (turnOn) {
+                    this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                }
+                else {
+                    this.platform.pollingManager.notifyDeviceInactive(this.deviceId);
+                }
+            }
         }
         catch (error) {
             this.platform.log.error(`Failed to set power state: ${error instanceof Error ? error.message : String(error)}`);
@@ -955,6 +988,14 @@ export class SleepMeAccessory {
             }
             // Update the current heating/cooling state based on temperature difference
             this.updateCurrentHeatingCoolingState();
+            // Ensure all services reflect the new state
+            this.updateAllServices();
+            // Notify polling manager of device activity
+            if (this.platform.pollingManager) {
+                if (this.isPowered) {
+                    this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                }
+            }
             // Status will be updated by centralized polling manager
         }
         catch (error) {

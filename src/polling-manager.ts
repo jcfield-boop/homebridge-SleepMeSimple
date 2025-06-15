@@ -21,6 +21,8 @@ export class PollingManager {
   private pollingTimer?: NodeJS.Timeout;
   private pollingActive = false;
   private currentPollCycle = 0;
+  private activeDevices: Set<string> = new Set(); // Track which devices are currently active
+  private deviceActivityTimestamps: Map<string, number> = new Map(); // Track when devices became active
   
   constructor(
     private readonly api: SleepMeApi,
@@ -40,12 +42,37 @@ export class PollingManager {
       this.startPolling();
     }
   }
+  
+  /**
+   * Notify that a device is now active (heating/cooling)
+   * Active devices get more frequent polling for progress monitoring
+   */
+  notifyDeviceActive(deviceId: string): void {
+    if (!this.activeDevices.has(deviceId)) {
+      this.activeDevices.add(deviceId);
+      this.deviceActivityTimestamps.set(deviceId, Date.now());
+      this.logger.debug(`Device ${deviceId} marked as active - will poll more frequently`);
+    }
+  }
+  
+  /**
+   * Notify that a device is now inactive (standby/off)
+   */
+  notifyDeviceInactive(deviceId: string): void {
+    if (this.activeDevices.has(deviceId)) {
+      this.activeDevices.delete(deviceId);
+      this.deviceActivityTimestamps.delete(deviceId);
+      this.logger.debug(`Device ${deviceId} marked as inactive - returning to normal polling`);
+    }
+  }
 
   /**
    * Unregister a device from polling
    */
   unregisterDevice(deviceId: string): void {
     this.devices.delete(deviceId);
+    this.activeDevices.delete(deviceId);
+    this.deviceActivityTimestamps.delete(deviceId);
     this.logger.debug(`Unregistered device ${deviceId} from centralized polling`);
     
     // Stop polling if no devices remain
@@ -135,12 +162,25 @@ export class PollingManager {
     let activeDeviceCount = 0;
     let freshCallCount = 0;
     
+    // Clean up stale active devices (active for more than 30 minutes)
+    this.cleanupStaleActiveDevices();
+    
     // Process devices sequentially to respect rate limits
     for (const [deviceId, device] of this.devices) {
       try {
-        // Check if we should force fresh data for potentially active devices
-        // Much less frequent fresh calls due to rate limits - every 10th cycle only
-        const shouldForceFresh = (this.currentPollCycle % 10 === 0);
+        const isActiveDevice = this.activeDevices.has(deviceId);
+        
+        // Active devices get more frequent fresh calls for progress monitoring
+        // Inactive devices use cached data more often to preserve API rate limits
+        let shouldForceFresh = false;
+        
+        if (isActiveDevice) {
+          // Active devices: force fresh every 3rd cycle (more frequent monitoring)
+          shouldForceFresh = (this.currentPollCycle % 3 === 0);
+        } else {
+          // Inactive devices: force fresh every 10th cycle (preserve rate limits)
+          shouldForceFresh = (this.currentPollCycle % 10 === 0);
+        }
         
         const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
         
@@ -148,12 +188,25 @@ export class PollingManager {
           device.onStatusUpdate(status);
           successCount++;
           
-          // Track active devices for logging
+          // Track active devices for logging and auto-cleanup inactive ones
           const isActive = status.powerState === 'on' && 
                           (status.thermalStatus === 'active' || 
                            status.thermalStatus === 'heating' || 
                            status.thermalStatus === 'cooling');
-          if (isActive) activeDeviceCount++;
+          
+          if (isActive) {
+            activeDeviceCount++;
+            // Auto-mark device as active if we detect it's running
+            if (!this.activeDevices.has(deviceId)) {
+              this.notifyDeviceActive(deviceId);
+            }
+          } else {
+            // Auto-mark device as inactive if we detect it's not running
+            if (this.activeDevices.has(deviceId)) {
+              this.notifyDeviceInactive(deviceId);
+            }
+          }
+          
           if (shouldForceFresh) freshCallCount++;
         } else {
           // Null response is likely due to queue backlog or rate limiting - this is intentional, not an error
@@ -180,6 +233,22 @@ export class PollingManager {
       `(${duration}ms) [${activeDeviceCount} active, ${freshCallCount} fresh calls]`
     );
   }
+  
+  /**
+   * Clean up devices that have been marked active for too long
+   * Prevents active devices from staying in aggressive polling mode indefinitely
+   */
+  private cleanupStaleActiveDevices(): void {
+    const now = Date.now();
+    const ACTIVE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    
+    for (const [deviceId, timestamp] of this.deviceActivityTimestamps) {
+      if (now - timestamp > ACTIVE_TIMEOUT) {
+        this.logger.debug(`Device ${deviceId} has been active for over 30 minutes, returning to normal polling`);
+        this.notifyDeviceInactive(deviceId);
+      }
+    }
+  }
 
   /**
    * Trigger an immediate poll for all devices
@@ -194,11 +263,12 @@ export class PollingManager {
   /**
    * Get polling statistics
    */
-  public getStats(): { deviceCount: number; cycleCount: number; isActive: boolean } {
+  public getStats(): { deviceCount: number; cycleCount: number; isActive: boolean; activeDevices: number } {
     return {
       deviceCount: this.devices.size,
       cycleCount: this.currentPollCycle,
-      isActive: this.pollingActive
+      isActive: this.pollingActive,
+      activeDevices: this.activeDevices.size
     };
   }
 
@@ -208,6 +278,21 @@ export class PollingManager {
   public cleanup(): void {
     this.stopPolling();
     this.devices.clear();
+    this.activeDevices.clear();
+    this.deviceActivityTimestamps.clear();
     this.logger.info('Polling manager cleaned up');
+  }
+  /**
+   * Get the set of currently active devices
+   */
+  public getActiveDevices(): Set<string> {
+    return new Set(this.activeDevices);
+  }
+  
+  /**
+   * Check if a specific device is marked as active
+   */
+  public isDeviceActive(deviceId: string): boolean {
+    return this.activeDevices.has(deviceId);
   }
 }

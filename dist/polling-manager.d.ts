@@ -22,11 +22,22 @@ export declare class PollingManager {
     private pollingTimer?;
     private pollingActive;
     private currentPollCycle;
+    private activeDevices;
+    private deviceActivityTimestamps;
     constructor(api: SleepMeApi, logger: Logger, pollingInterval?: number);
     /**
      * Register a device for centralized polling
      */
     registerDevice(device: PollableDevice): void;
+    /**
+     * Notify that a device is now active (heating/cooling)
+     * Active devices get more frequent polling for progress monitoring
+     */
+    notifyDeviceActive(deviceId: string): void;
+    /**
+     * Notify that a device is now inactive (standby/off)
+     */
+    notifyDeviceInactive(deviceId: string): void;
     /**
      * Unregister a device from polling
      */
@@ -51,6 +62,11 @@ export declare class PollingManager {
      */
     private pollAllDevices;
     /**
+     * Clean up devices that have been marked active for too long
+     * Prevents active devices from staying in aggressive polling mode indefinitely
+     */
+    private cleanupStaleActiveDevices;
+    /**
      * Trigger an immediate poll for all devices
      */
     triggerImmediatePoll(): void;
@@ -61,9 +77,18 @@ export declare class PollingManager {
         deviceCount: number;
         cycleCount: number;
         isActive: boolean;
+        activeDevices: number;
     };
     /**
      * Cleanup when shutting down
      */
     cleanup(): void;
+    /**
+     * Get the set of currently active devices
+     */
+    getActiveDevices(): Set<string>;
+    /**
+     * Check if a specific device is marked as active
+     */
+    isDeviceActive(deviceId: string): boolean;
 }

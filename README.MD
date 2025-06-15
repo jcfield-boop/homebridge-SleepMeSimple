@@ -267,6 +267,19 @@ If schedules aren't working properly:
 
 ## Changelog
 
+### 6.11.4 - Hybrid Interface Synchronization Fix
+- **CRITICAL FIX**: Power switch service now updates when device turned ON via target temperature setting
+- **IMPROVED**: All hybrid interface services (power switch, temperature control, heating/cooling state) remain synchronized
+- **RESOLVED**: Issue where setting temperature on OFF device would turn device ON but power switch showed OFF
+- **ENHANCED**: Service state consistency across all hybrid mode components for better user experience
+
+### 6.11.3 - Advanced Queue Simplification and Token Bucket Integration
+- **MAJOR**: Simplified complex 4-queue system to 2-queue system based on real API constraints
+- **INTEGRATED**: Empirically-tuned TokenBucket (7 tokens, 15s refill) with API client priority logic
+- **OPTIMIZED**: Ultra-conservative startup that eliminates unnecessary API calls during discovery
+- **EXTENDED**: Polling delays to 8+ minutes for maximum rate limit conservation
+- **REDUCED**: Queue complexity from CRITICAL/HIGH/NORMAL/LOW to User Actions/Background operations
+
 ### 6.11.2 - Rate Limiting Overhaul
 - **MAJOR**: Empirically determined real SleepMe API rate limits through systematic testing
 - **FIXED**: Ultra-conservative polling intervals (5min vs 3min) to prevent 429 errors

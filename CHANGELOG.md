@@ -1,4 +1,33 @@
 # Changelog
+## 6.11.5 (2025-06-15)
+
+### Fixed
+- **Service Synchronization**: Fixed issue where switch and thermostat accessories didn't stay synchronized
+  - Switch accessory now correctly reflects power state when changed via thermostat
+  - Thermostat accessory now correctly reflects power state when changed via switch
+  - Added comprehensive service synchronization after all power state changes
+  - Ensured all HomeKit services update consistently regardless of control method
+
+- **Active Device Monitoring**: Implemented aggressive polling for devices that are actively heating/cooling
+  - Active devices now get 3x more frequent status updates for better progress monitoring
+  - Polling manager automatically detects active vs inactive devices
+  - Fresh API calls every 3rd cycle for active devices vs every 10th cycle for inactive devices
+  - Auto-cleanup of stale active device tracking after 30 minutes
+
+### Improved
+- **Polling Intelligence**: Enhanced centralized polling with device activity awareness
+  - Added device activity state tracking with automatic detection
+  - Implemented rate limit preservation for inactive devices
+  - Better monitoring of temperature progress when devices are heating/cooling
+  - Optimized API usage based on actual device activity
+
+### Technical
+- **Active Device Tracking**: Added comprehensive device activity management
+  - New `notifyDeviceActive()` and `notifyDeviceInactive()` methods
+  - Activity timestamp tracking for automatic cleanup
+  - Enhanced polling statistics with active device counts
+  - Improved service synchronization across all interface modes
+
 ## 6.10.0 (2025-06-03)
 
 ### Critical Bug Fix
