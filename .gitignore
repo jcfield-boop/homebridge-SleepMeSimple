@@ -7,3 +7,9 @@ CLAUDE.md
 *test*.sh
 algorithm-probe*
 rate-limit-probe*
+
+# System and IDE files
+.DS_Store
+*.code-workspace
+CLAUDE*.md
+PERFORMANCE_IMPROVEMENTS.md

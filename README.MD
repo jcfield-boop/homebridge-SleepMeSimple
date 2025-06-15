@@ -13,9 +13,9 @@ A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad
 ## Key Features
 
 - **Intelligent Temperature Control**: Clean and responsive interface for temperature adjustments and power control
-- **Trust-based Caching**: Optimized API usage that prioritizes responsiveness while respecting rate limits
+- **Ultra-Conservative Rate Limiting**: Empirically-tuned API usage based on real SleepMe rate limits (not just documentation)
 - **Advanced Queue Management**: Prioritizes critical commands like power changes while managing background updates
-- **Rate Limit Protection**: Smart handling of API rate limits with clock-synchronized request timing
+- **Aggressive Caching**: Extended cache periods (8 minutes) to minimize API calls and prevent 429 errors
 - **Water Level Monitoring**: Check your device's water level through HomeKit
 - **Automatic Device Detection**: Auto-discovers your SleepMe devices
 - **Comprehensive Model Support**: Compatible with Dock Pro, OOLER, and ChiliPad devices
@@ -234,9 +234,21 @@ These templates are designed to work with your body's natural temperature regula
 
 ### Rate Limiting
 
-If you see rate limit warnings in your logs:
-- Increase the `pollingInterval` value (90-120 seconds recommended)
-- For logs with "Rate limit exceeded" errors, the plugin will automatically back off and retry
+**Version 6.11.2+ includes major improvements to rate limiting based on empirical testing:**
+
+The SleepMe API's actual rate limits are much stricter than documented. Through systematic testing, we discovered:
+- **Real limit**: ~7 requests max, then 1 request per 15 seconds (not "10 per minute" as documented)
+- **Token bucket algorithm**: Similar to nginx rate limiting, not sliding window
+
+**Current defaults are now ultra-conservative:**
+- Polling interval: 5 minutes (was 3 minutes)
+- Cache validity: 8 minutes (was 2 minutes)
+- Startup delays: 8+ minutes total
+
+If you still see rate limit warnings:
+- These settings should eliminate most 429 errors
+- User commands (power/temperature) still work immediately via priority system
+- Consider reporting persistent issues as the API may have changed
 
 ### Unresponsive Controls
 
@@ -253,9 +265,25 @@ If schedules aren't working properly:
 - Try creating a new schedule to verify the functionality
 - Make sure your device has the latest firmware
 
+## Changelog
+
+### 6.11.2 - Rate Limiting Overhaul
+- **MAJOR**: Empirically determined real SleepMe API rate limits through systematic testing
+- **FIXED**: Ultra-conservative polling intervals (5min vs 3min) to prevent 429 errors
+- **IMPROVED**: Aggressive caching (8min vs 2min validity) to reduce API calls
+- **DOCUMENTED**: Real API behavior (7-token bucket, 15s refill) vs incorrect documentation
+- **ENHANCED**: Startup delays extended to 8+ minutes total for safer initialization
+- **OPTIMIZED**: Fresh data requests reduced from every 5th to every 10th polling cycle
+
+### 6.11.1 - Previous Release
+- Rate limiting improvements and user action prioritization
+- Trust-based caching and command debouncing
+- Hybrid interface mode enhancements
+
 ## Support & Contributions
 
 This is a community-developed plugin with ongoing improvements. For support:
 - Open issues on GitHub
 - Contribute improvements via pull requests
 - Check the log files for detailed diagnostics with `logLevel: "verbose"`
+- Report rate limiting issues - API behavior may change over time
