@@ -775,8 +775,8 @@ export class SleepMeAccessory {
                 if (success) {
                     this.isPowered = true;
                     this.platform.log.info(`Device turned ON with new temperature ${newTemp}°C`);
-                    // Update heating/cooling state after power change
-                    this.updateCurrentHeatingCoolingState();
+                    // Update all services after power change to ensure synchronization
+                    this.updateAllServices();
                 }
                 else {
                     throw new Error(`Failed to turn on device with temperature ${newTemp}°C`);
