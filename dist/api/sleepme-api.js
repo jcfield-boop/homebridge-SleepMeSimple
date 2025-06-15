@@ -618,12 +618,16 @@ export class SleepMeApi {
         const hasCriticalRequest = this.criticalQueue.some(r => !r.executing);
         const hasHighPriorityRequest = this.highPriorityQueue.some(r => !r.executing);
         const hasNormalRequest = this.normalPriorityQueue.some(r => !r.executing);
-        // Allow user requests and normal polling to proceed with reasonable limits
-        if (hasCriticalRequest || hasHighPriorityRequest || hasNormalRequest) {
+        // CRITICAL requests always bypass rate limits for maximum responsiveness
+        if (hasCriticalRequest) {
+            return { shouldWait: false, waitTime: 0, message: '' };
+        }
+        // HIGH priority and NORMAL requests respect rate limits but get priority processing
+        if (hasHighPriorityRequest || hasNormalRequest) {
             if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
                 const resetTime = this.minuteStartTime + 60000;
                 const waitTime = resetTime - now + 1000;
-                const requestType = hasCriticalRequest ? 'critical' : hasHighPriorityRequest ? 'high priority' : 'normal';
+                const requestType = hasHighPriorityRequest ? 'high priority' : 'normal';
                 return {
                     shouldWait: true,
                     waitTime,

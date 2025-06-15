@@ -1090,9 +1090,8 @@ private updateWaterLevelService(waterLevel: number, isWaterLow: boolean): void {
   // Log water level status if low
   if (isWaterLow) {
     this.platform.log.warn(`Water level low on device ${this.deviceId}: ${waterLevel}%`);
-  } else {
-    this.platform.log.verbose(`Water level updated to ${waterLevel}%`);
   }
+  // Note: Normal water level updates are logged in updateDeviceState() to avoid duplication
 }
 /**
    * Detect device model based on attachments or other characteristics

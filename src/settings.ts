@@ -19,9 +19,10 @@ export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * Default polling interval in seconds
- * Increased to avoid rate limiting issues
+ * Based on empirical testing: 7 tokens max, 1 token per 15s = ~4 requests/minute sustainable
+ * Ultra-conservative to prevent 429 errors
  */
-export const DEFAULT_POLLING_INTERVAL = 180; // 3 minutes - safer for rate limits
+export const DEFAULT_POLLING_INTERVAL = 300; // 5 minutes - much safer for real rate limits
 
 /**
  * Minimum allowed temperature in Celsius
@@ -45,10 +46,11 @@ export const TEMPERATURE_STEP = 1;
 export const MIN_REQUEST_INTERVAL = 3000; // CHANGED: Reduced from 6000ms
 
 /**
- * Maximum API requests per minute (to respect rate limits)
- * Very conservative limit due to potential shared API usage
+ * ACTUAL empirically determined API limits (NOT the documented "10/minute")
+ * Based on testing: 7 token bucket, 1 token per 15s = ~4 sustainable requests/minute
+ * Documentation claims "10 requests per discrete minute" but real limit is much lower
  */
-export const MAX_REQUESTS_PER_MINUTE = 10; // Standard rate limit
+export const MAX_REQUESTS_PER_MINUTE = 4; // Reality: token bucket with ~4/min sustainable
 
 /**
  * Background request threshold - start throttling background requests
@@ -59,9 +61,10 @@ export const BACKGROUND_REQUEST_THRESHOLD = 0.8; // NEW: Add this constant
 
 /**
  * Default cache validity period in milliseconds
- * Base period for cache entries - will be adjusted based on device state
+ * Extended significantly due to empirical rate limits (7 tokens, 15s refill)
+ * Better to show cached data than trigger 429 errors
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 120000; // 2 minutes base validity
+export const DEFAULT_CACHE_VALIDITY_MS = 480000; // 8 minutes - aggressive caching for rate limits
 
 /**
  * Maximum number of retries for API requests 

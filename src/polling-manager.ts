@@ -62,8 +62,9 @@ export class PollingManager {
     this.pollingActive = true;
     this.logger.info(`Starting centralized polling for ${this.devices.size} devices every ${this.pollingInterval/1000}s`);
     
-    // Initial poll after longer delay to avoid startup rate limiting
-    setTimeout(() => this.pollAllDevices(), 15000);
+    // Initial poll after much longer delay to avoid startup rate limiting  
+    // Based on token bucket findings: need 5+ minute gaps between background calls
+    setTimeout(() => this.pollAllDevices(), 420000); // 7 minutes after discovery
     
     // Set up regular polling
     this.pollingTimer = setInterval(() => {
@@ -104,8 +105,8 @@ export class PollingManager {
     for (const [deviceId, device] of this.devices) {
       try {
         // Check if we should force fresh data for potentially active devices
-        // Every 5th cycle, force fresh data for better temperature tracking (reduced frequency)
-        const shouldForceFresh = (this.currentPollCycle % 5 === 0);
+        // Much less frequent fresh calls due to rate limits - every 10th cycle only
+        const shouldForceFresh = (this.currentPollCycle % 10 === 0);
         
         const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
         

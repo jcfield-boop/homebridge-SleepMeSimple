@@ -15,9 +15,10 @@ export declare const PLUGIN_NAME = "homebridge-sleepme-simple";
 export declare const API_BASE_URL = "https://api.developer.sleep.me/v1";
 /**
  * Default polling interval in seconds
- * Increased to avoid rate limiting issues
+ * Based on empirical testing: 7 tokens max, 1 token per 15s = ~4 requests/minute sustainable
+ * Ultra-conservative to prevent 429 errors
  */
-export declare const DEFAULT_POLLING_INTERVAL = 180;
+export declare const DEFAULT_POLLING_INTERVAL = 300;
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -36,10 +37,11 @@ export declare const TEMPERATURE_STEP = 1;
  */
 export declare const MIN_REQUEST_INTERVAL = 3000;
 /**
- * Maximum API requests per minute (to respect rate limits)
- * Very conservative limit due to potential shared API usage
+ * ACTUAL empirically determined API limits (NOT the documented "10/minute")
+ * Based on testing: 7 token bucket, 1 token per 15s = ~4 sustainable requests/minute
+ * Documentation claims "10 requests per discrete minute" but real limit is much lower
  */
-export declare const MAX_REQUESTS_PER_MINUTE = 10;
+export declare const MAX_REQUESTS_PER_MINUTE = 4;
 /**
  * Background request threshold - start throttling background requests
  * when we reach this percentage of MAX_REQUESTS_PER_MINUTE
@@ -48,9 +50,10 @@ export declare const MAX_REQUESTS_PER_MINUTE = 10;
 export declare const BACKGROUND_REQUEST_THRESHOLD = 0.8;
 /**
  * Default cache validity period in milliseconds
- * Base period for cache entries - will be adjusted based on device state
+ * Extended significantly due to empirical rate limits (7 tokens, 15s refill)
+ * Better to show cached data than trigger 429 errors
  */
-export declare const DEFAULT_CACHE_VALIDITY_MS = 120000;
+export declare const DEFAULT_CACHE_VALIDITY_MS = 480000;
 /**
  * Maximum number of retries for API requests
  * Higher priority requests will be retried more times

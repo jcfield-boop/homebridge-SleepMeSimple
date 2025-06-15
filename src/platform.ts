@@ -234,7 +234,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
             }
           }
           
-        }, 30000); // 30 second delay before starting discovery
+        }, 60000); // 1 minute delay before starting discovery
         
         // Set up periodic discovery to catch new or changed devices
         if (!this.disableAutoDiscovery) {
@@ -386,10 +386,45 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           attachments: [] // Add required fields with default values
         }));
       } else {
-        // Fetch devices from the API if none configured manually
-        this.log.info('No devices in configuration, fetching from API...');
+        // Smart discovery: try cached devices first to avoid unnecessary API calls
+        const cachedDevices = this.accessories
+          .filter(acc => acc.context.device && acc.context.device.id)
+          .map(acc => acc.context.device);
         
-        devices = await this.api.getDevices();
+        if (cachedDevices.length > 0) {
+          this.log.info(`Found ${cachedDevices.length} cached devices, testing connectivity...`);
+          
+          // Test connectivity to cached devices
+          let validCachedDevices = [];
+          for (const cachedDevice of cachedDevices) {
+            try {
+              // Attempt to get device status to verify it still exists and is accessible
+              const status = await this.api.getDeviceStatus(cachedDevice.id, true);
+              if (status) {
+                this.log.info(`Cached device ${cachedDevice.id} is accessible, skipping discovery`);
+                validCachedDevices.push(cachedDevice);
+              } else {
+                this.log.warn(`Cached device ${cachedDevice.id} not accessible, will rediscover`);
+              }
+            } catch (error) {
+              this.log.warn(`Cached device ${cachedDevice.id} test failed, will rediscover: ${error}`);
+            }
+          }
+          
+          if (validCachedDevices.length === cachedDevices.length) {
+            // All cached devices are accessible, skip API discovery
+            this.log.info('All cached devices accessible, skipping GET /devices API call');
+            devices = validCachedDevices;
+          } else {
+            // Some cached devices failed, do full discovery
+            this.log.info('Some cached devices failed, performing full device discovery...');
+            devices = await this.api.getDevices();
+          }
+        } else {
+          // No cached devices, do full discovery
+          this.log.info('No cached devices found, fetching from API...');
+          devices = await this.api.getDevices();
+        }
         
         if (!devices || devices.length === 0) {
           this.log.error(
