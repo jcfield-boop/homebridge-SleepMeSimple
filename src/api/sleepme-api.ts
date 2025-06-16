@@ -237,7 +237,7 @@ export class SleepMeApi {
   private cleanupStaleRequests(): void {
     const now = Date.now();
     const maxAge = 300000; // 5 minutes
-    const maxExecutingTime = 120000; // 2 minutes for executing requests
+    const maxExecutingTime = 30000; // 30 seconds for executing requests
     let cleanedCount = 0;
     
     const cleanupQueue = (queue: QueuedRequest[], queueName: string): void => {
@@ -265,8 +265,16 @@ export class SleepMeApi {
         if (shouldRemove) {
           this.logger.warn(`Removing stale request from ${queueName}: ${request.method} ${request.url} - ${reason}`);
           
-          // Resolve the request with null to prevent hanging promises
-          request.resolve(null);
+          // For critical user commands that got stuck, we assume they succeeded
+          // This prevents the need for double-button presses
+          if (request.priority === RequestPriority.CRITICAL && request.method === 'PATCH') {
+            this.logger.info(`Assuming stuck CRITICAL command succeeded: ${request.method} ${request.url}`);
+            // Resolve with a success response for PATCH commands
+            request.resolve({ success: true, assumed: true });
+          } else {
+            // For other requests, resolve with null to prevent hanging promises
+            request.resolve(null);
+          }
           
           // Remove from queue
           queue.splice(i, 1);
@@ -1315,6 +1323,7 @@ private async makeRequest<T>(options: {
     const config: AxiosRequestConfig = {
       method: options.method,
       url: API_BASE_URL + options.url,
+      timeout: priority === RequestPriority.CRITICAL ? 20000 : 15000, // 20s for critical, 15s for others
       validateStatus: (status) => {
         // Consider 2xx status codes as successful
         return status >= 200 && status < 300;

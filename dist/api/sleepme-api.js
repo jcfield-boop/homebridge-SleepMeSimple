@@ -163,7 +163,7 @@ export class SleepMeApi {
     cleanupStaleRequests() {
         const now = Date.now();
         const maxAge = 300000; // 5 minutes
-        const maxExecutingTime = 120000; // 2 minutes for executing requests
+        const maxExecutingTime = 30000; // 30 seconds for executing requests
         let cleanedCount = 0;
         const cleanupQueue = (queue, queueName) => {
             const initialLength = queue.length;
@@ -185,8 +185,17 @@ export class SleepMeApi {
                 }
                 if (shouldRemove) {
                     this.logger.warn(`Removing stale request from ${queueName}: ${request.method} ${request.url} - ${reason}`);
-                    // Resolve the request with null to prevent hanging promises
-                    request.resolve(null);
+                    // For critical user commands that got stuck, we assume they succeeded
+                    // This prevents the need for double-button presses
+                    if (request.priority === RequestPriority.CRITICAL && request.method === 'PATCH') {
+                        this.logger.info(`Assuming stuck CRITICAL command succeeded: ${request.method} ${request.url}`);
+                        // Resolve with a success response for PATCH commands
+                        request.resolve({ success: true, assumed: true });
+                    }
+                    else {
+                        // For other requests, resolve with null to prevent hanging promises
+                        request.resolve(null);
+                    }
                     // Remove from queue
                     queue.splice(i, 1);
                     cleanedCount++;
@@ -1076,6 +1085,7 @@ export class SleepMeApi {
             const config = {
                 method: options.method,
                 url: API_BASE_URL + options.url,
+                timeout: priority === RequestPriority.CRITICAL ? 20000 : 15000,
                 validateStatus: (status) => {
                     // Consider 2xx status codes as successful
                     return status >= 200 && status < 300;
