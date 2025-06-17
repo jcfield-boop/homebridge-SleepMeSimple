@@ -34,6 +34,7 @@ export declare class SleepMeAccessory implements PollableDevice {
     private firmwareVersion;
     private waterLevel;
     private isWaterLow;
+    private lastPowerOffTime;
     private tempSetterDebounced;
     private powerStateSetterDebounced;
     readonly deviceId: string;

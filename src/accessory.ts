@@ -104,6 +104,7 @@ export class SleepMeAccessory implements PollableDevice {
   private firmwareVersion: string;
   private waterLevel = 100; // Default full water level
   private isWaterLow = false;
+  private lastPowerOffTime = 0; // Track when device was last turned off
   
   // Debounced functions for command handling
   private tempSetterDebounced: (newTemp: number, previousTemp: number) => void;
@@ -567,6 +568,7 @@ export class SleepMeAccessory implements PollableDevice {
         const success = await this.apiClient.turnDeviceOff(this.deviceId);
         if (success) {
           this.isPowered = false;
+          this.lastPowerOffTime = Date.now(); // Track when we turned off
           this.updateAllServices();
         } else {
           throw new Error('Failed to turn off device');
@@ -833,6 +835,7 @@ private async handleTargetHeatingCoolingStateSet(value: CharacteristicValue): Pr
           if (success) {
             // Trust the API response - device is now off
             this.isPowered = false;
+            this.lastPowerOffTime = Date.now(); // Track when we turned off
             this.platform.log.info(`Device ${this.deviceId} turned OFF successfully`);
             
             // Update UI immediately for responsiveness
@@ -976,7 +979,9 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
   this.targetTemperature = newTemp;
   
   // If device is off and user sets temperature, automatically switch to AUTO mode
-  if (!this.isPowered) {
+  // BUT only if the user didn't recently turn the device OFF (within 10 seconds)
+  const timeSinceLastPowerOff = Date.now() - this.lastPowerOffTime;
+  if (!this.isPowered && (this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000)) {
     const service = this.getThermostatService();
     if (service) {
       service.updateCharacteristic(
@@ -984,6 +989,8 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
         this.Characteristic.TargetHeatingCoolingState.AUTO
       );
     }
+  } else if (!this.isPowered && timeSinceLastPowerOff <= 10000) {
+    this.platform.log.info(`Skipping auto-on for temperature change - device was recently turned OFF (${Math.round(timeSinceLastPowerOff/1000)}s ago)`);
   }
   
   // Log the change
@@ -995,7 +1002,9 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
   // Execute the temperature change operation
   await this.executeOperation('temperature', currentEpoch, async () => {
     // If device is off and we're changing temperature, turn it on
-    if (!this.isPowered) {
+    // BUT only if the device wasn't recently turned off (within 10 seconds)
+    const timeSinceLastPowerOff = Date.now() - this.lastPowerOffTime;
+    if (!this.isPowered && (this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000)) {
       const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
       
       if (success) {
@@ -1012,6 +1021,10 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
       } else {
         throw new Error(`Failed to turn on device with temperature ${newTemp}°C`);
       }
+    } else if (!this.isPowered) {
+      // Device is off and was recently turned off - don't auto-turn on
+      this.platform.log.info(`Skipping temperature change - device was recently turned OFF (${Math.round(timeSinceLastPowerOff/1000)}s ago)`);
+      return; // Skip the temperature change
     } else {
       // Device is already on, just change temperature
       const success = await this.apiClient.setTemperature(this.deviceId, newTemp);
@@ -1075,6 +1088,7 @@ private async handlePowerStateSetImpl(turnOn: boolean): Promise<void> {
       
       if (success) {
         this.isPowered = false;
+        this.lastPowerOffTime = Date.now(); // Track when we turned off
         this.platform.log.info(`Device turned OFF successfully`);
       } else {
         throw new Error('Failed to turn off device');
@@ -1383,6 +1397,11 @@ private updateDeviceState(status: DeviceStatus): void {
     }
     
     this.isPowered = newPowerState;
+    
+    // Track power off time if device was turned off
+    if (!newPowerState) {
+      this.lastPowerOffTime = Date.now();
+    }
   }
   
   // Update water level if available
