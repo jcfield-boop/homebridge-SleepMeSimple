@@ -107,6 +107,12 @@ export declare class SleepMeApi {
    */
     private updateCacheWithTrustedState;
     /**
+     * Helper method to infer power state from thermal status
+     * @param thermalStatus The thermal status
+     * @returns The corresponding power state
+     */
+    private inferPowerFromThermal;
+    /**
      * Get the last known temperature or a reasonable approximation
      * This helps provide a smoother UX during temperature transitions
      * @param deviceId Device identifier

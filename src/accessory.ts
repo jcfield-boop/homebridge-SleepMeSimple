@@ -1070,6 +1070,15 @@ private async handlePowerStateSetImpl(turnOn: boolean): Promise<void> {
     return;
   }
   
+  // Mark user action time
+  this.lastUserActionTime = Date.now();
+  
+  // Increment command epoch to invalidate previous commands
+  const currentEpoch = ++this.commandEpoch;
+  
+  // Cancel any pending operations for this device
+  this.apiClient.cancelAllDeviceRequests(this.deviceId);
+  
   try {
     if (turnOn) {
       // Turn on device

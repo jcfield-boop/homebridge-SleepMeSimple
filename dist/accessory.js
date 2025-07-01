@@ -850,6 +850,12 @@ export class SleepMeAccessory {
             this.platform.log.debug(`Device already ${turnOn ? 'ON' : 'OFF'}, skipping update`);
             return;
         }
+        // Mark user action time
+        this.lastUserActionTime = Date.now();
+        // Increment command epoch to invalidate previous commands
+        const currentEpoch = ++this.commandEpoch;
+        // Cancel any pending operations for this device
+        this.apiClient.cancelAllDeviceRequests(this.deviceId);
         try {
             if (turnOn) {
                 // Turn on device

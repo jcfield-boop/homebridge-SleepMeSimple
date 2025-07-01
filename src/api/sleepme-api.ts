@@ -503,6 +503,16 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
   try {
     this.logger.info(`Turning device ${deviceId} OFF`);
     
+      // Get the current cache state before cancelling requests
+    const currentCache = this.deviceStatusCache.get(deviceId);
+    const wasAlreadyOff = currentCache?.status.powerState === PowerState.OFF;
+    
+    // If already OFF, don't send another OFF command
+    if (wasAlreadyOff) {
+      this.logger.verbose(`Device ${deviceId} is already OFF, skipping redundant command`);
+      return true;
+    }
+    
     // Cancel any pending requests for this device
     this.cancelAllDeviceRequests(deviceId);
     
@@ -674,7 +684,7 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
     this.logger.verbose(
       `Cache update: Previous power=${cachedEntry.status.powerState}, ` +
       `New power=${updatedStatus.powerState}, ` +
-      `Update requested=${updates.powerState || 'none'}`
+      `Update requested=${updates.powerState || (updates.thermalStatus ? this.inferPowerFromThermal(updates.thermalStatus) : 'none')}`
     );
   } else {
     // Create a new status with reasonable defaults
@@ -713,6 +723,22 @@ private updateCacheWithTrustedState(deviceId: string, updates: Partial<DeviceSta
     `Target=${updatedStatus.targetTemperature}°C, ` +
     `Status=${updatedStatus.thermalStatus}`
   );
+}
+
+/**
+ * Helper method to infer power state from thermal status
+ * @param thermalStatus The thermal status
+ * @returns The corresponding power state
+ */
+private inferPowerFromThermal(thermalStatus: ThermalStatus): string {
+  if (thermalStatus === ThermalStatus.STANDBY || thermalStatus === ThermalStatus.OFF) {
+    return 'off';
+  } else if (thermalStatus === ThermalStatus.ACTIVE || 
+             thermalStatus === ThermalStatus.COOLING || 
+             thermalStatus === ThermalStatus.HEATING) {
+    return 'on';
+  }
+  return 'unknown';
 }
 
 /**
@@ -997,9 +1023,11 @@ private async processQueue(): Promise<void> {
           
           // Reset our counter if server says we're rate limited but our counter is low
           // This handles misalignment between client and server rate limit windows
-          if (this.requestsThisMinute <= 2) {
+          if (this.requestsThisMinute <= 3) {
             this.logger.warn('Server rate limit detected with low client count - possible window misalignment, resetting to server window');
-            this.requestsThisMinute = MAX_REQUESTS_PER_MINUTE; // Set to max to trigger proper backoff
+            // Reset to current minute and set counter to trigger backoff
+            this.minuteStartTime = Math.floor(Date.now() / 60000) * 60000;
+            this.requestsThisMinute = MAX_REQUESTS_PER_MINUTE;
           }
           
           this.handleRateLimitError(request);
