@@ -248,10 +248,10 @@ export class TokenBucket {
  */
 export function createSleepMeTokenBucket(logger: Logger): TokenBucket {
   const config: TokenBucketConfig = {
-    maxTokens: 7,           // Burst capacity from testing
+    maxTokens: 3,           // MUCH more conservative burst capacity
     refillRate: 1,          // 1 token per refill
-    refillInterval: 15000,  // 15 seconds per token (conservative)
-    initialTokens: 7        // Start with full bucket
+    refillInterval: 30000,  // 30 seconds per token (ultra-conservative)
+    initialTokens: 1        // Start with minimal tokens to avoid immediate 429s
   };
   
   return new TokenBucket(config, logger);

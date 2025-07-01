@@ -234,7 +234,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
             }
           }
           
-        }, 60000); // 1 minute delay before starting discovery
+        }, 180000); // 3 minute delay before starting discovery (due to API rate limit issues)
         
         // Set up periodic discovery to catch new or changed devices
         if (!this.disableAutoDiscovery) {

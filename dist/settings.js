@@ -15,10 +15,10 @@ export const PLUGIN_NAME = 'homebridge-sleepme-simple';
 export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 /**
  * Default polling interval in seconds
- * Based on empirical testing: 7 tokens max, 1 token per 15s = ~4 requests/minute sustainable
- * Ultra-conservative to prevent 429 errors
+ * Ultra-conservative due to stricter API rate limits observed in production
+ * 3 tokens max, 1 token per 30s = ~2 requests/minute sustainable
  */
-export const DEFAULT_POLLING_INTERVAL = 300; // 5 minutes - much safer for real rate limits
+export const DEFAULT_POLLING_INTERVAL = 600; // 10 minutes - extremely conservative for API issues
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -50,10 +50,10 @@ export const MAX_REQUESTS_PER_MINUTE = 4; // Reality: token bucket with ~4/min s
 export const BACKGROUND_REQUEST_THRESHOLD = 0.8; // NEW: Add this constant
 /**
  * Default cache validity period in milliseconds
- * Extended significantly due to empirical rate limits (7 tokens, 15s refill)
- * Better to show cached data than trigger 429 errors
+ * Very long cache period due to severe API rate limiting issues
+ * Better to show stale cached data than trigger 429 errors
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 480000; // 8 minutes - aggressive caching for rate limits
+export const DEFAULT_CACHE_VALIDITY_MS = 1800000; // 30 minutes - extremely aggressive caching
 /**
  * Maximum number of retries for API requests
  * Higher priority requests will be retried more times

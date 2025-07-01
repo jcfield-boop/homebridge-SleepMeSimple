@@ -1,4 +1,37 @@
 # Changelog
+## 6.12.0-beta.3 (2025-01-07)
+
+### BETA Release - Ultra-Conservative Rate Limiting Fix
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Critical Fixes
+- **Ultra-Conservative Rate Limiting**: Addressed immediate 429 errors on startup
+  - Reduced token bucket from 7→3 tokens maximum capacity
+  - Increased token refill interval from 15s→30s per token  
+  - Start with only 1 token instead of full bucket to avoid burst issues
+  - Increased cache validity from 8→30 minutes to reduce API dependency
+
+- **Extended Startup Delays**: Added longer delays to prevent immediate API conflicts
+  - Increased initial discovery delay from 1→3 minutes after Homebridge startup
+  - Default polling interval increased from 5→10 minutes for safety
+  - Much more conservative approach to handle stricter API enforcement
+
+### Technical Details
+- SleepMe API appears to have become more restrictive than previous empirical testing indicated
+- Even with token bucket showing available capacity, API returns 429 errors immediately
+- This release implements extreme conservation to work around the API issues
+- User commands (power/temperature) still prioritized and can bypass some limits
+
+### Breaking Changes
+- Much slower background updates (10 minute polling vs 3 minutes)
+- Longer cache periods may show stale data longer
+- Slower multi-device initialization
+
+### Testing Focus
+- Verify no more immediate 429 errors on startup
+- Check that polling eventually succeeds without rate limit errors
+- Ensure user commands still work responsively despite conservative limits
+
 ## 6.12.0-beta.2 (2025-01-07)
 
 ### BETA Release - Startup Performance Improvements

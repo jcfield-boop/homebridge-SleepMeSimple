@@ -187,10 +187,10 @@ export class TokenBucket {
  */
 export function createSleepMeTokenBucket(logger) {
     const config = {
-        maxTokens: 7,
+        maxTokens: 3,
         refillRate: 1,
-        refillInterval: 15000,
-        initialTokens: 7 // Start with full bucket
+        refillInterval: 30000,
+        initialTokens: 1 // Start with minimal tokens to avoid immediate 429s
     };
     return new TokenBucket(config, logger);
 }

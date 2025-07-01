@@ -51,12 +51,12 @@ export class SleepMeApi {
             this.logger.error('Invalid API token provided');
             throw new Error('Invalid API token provided');
         }
-        // Initialize token bucket with empirically determined parameters
+        // Initialize token bucket with ultra-conservative parameters to handle stricter API limits
         this.tokenBucket = new TokenBucket({
-            maxTokens: 7,
+            maxTokens: 3,
             refillRate: 1,
-            refillInterval: 15000,
-            initialTokens: 7
+            refillInterval: 30000,
+            initialTokens: 1 // Start conservative to avoid immediate 429s
         }, this.logger);
         // Start the queue processor
         this.processQueue();
