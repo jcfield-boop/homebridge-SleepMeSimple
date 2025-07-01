@@ -1,4 +1,39 @@
 # Changelog
+## 6.11.9 (2025-01-07)
+
+### Added
+- **Changelog Support**: Added CHANGELOG.md file to display update notes in Homebridge UI
+  - Users will now see detailed changelog when updating the plugin
+  - Provides clear information about fixes and improvements in each release
+
+## 6.11.8 (2025-01-07)
+
+### Fixed
+- **Responsiveness Issues**: Fixed race conditions causing unresponsive power commands
+  - Resolved cache state inconsistencies that caused incorrect power state reporting
+  - Fixed duplicate power commands that created API conflicts
+  - Added prevention of redundant OFF commands to reduce unnecessary API calls
+  
+- **Rate Limiting**: Improved handling of server/client rate limit window misalignment
+  - Enhanced rate limit window reset logic with proper minute alignment
+  - Better detection and recovery from API rate limit windows
+  - Reduced false rate limit triggers during normal operation
+
+- **Power State Handling**: Enhanced command coordination and request management
+  - Added proper epoch tracking to prevent stale commands from executing
+  - Improved request cancellation to avoid race conditions
+  - Enhanced power state setter with better request lifecycle management
+
+### Technical Improvements
+- Added helper method to infer power state from thermal status for better logging
+- Improved cache update logging to show accurate state transitions
+- Enhanced debugging output for troubleshooting responsiveness issues
+
+## 6.11.7 (2024-12-XX)
+
+### Previous Release
+- See git history for details on version 6.11.7 changes
+
 ## 6.11.5 (2025-06-15)
 
 ### Fixed
