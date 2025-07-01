@@ -1,4 +1,29 @@
 # Changelog
+## 6.12.0-beta.4 (2025-01-07)
+
+### BETA Release - HomeKit Interface Simplification
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### User Experience Improvements
+- **Simplified HomeKit Interface**: Fixed hybrid interface to show only Off/Auto states instead of Off/Cool/Heat/Auto
+  - Matches SleepMe device capabilities (single thermal mode with heating/cooling combined)
+  - Eliminates confusing Heat/Cool options that don't apply to SleepMe devices
+  - More intuitive user experience in HomeKit apps
+  - Automatic switch to AUTO mode when setting target temperature (already working)
+
+### Technical Details
+- Applied the same `validValues` restriction from legacy thermostat interface to hybrid interface
+- Only affects the HomeKit UI presentation, all functionality remains identical
+- Users will see cleaner Off/Auto toggle instead of four-option picker
+
+### Breaking Changes
+- None - purely cosmetic UI improvement
+
+### Testing Focus
+- Verify HomeKit interface now shows only Off/Auto options in thermostat control
+- Confirm setting target temperature automatically switches to Auto mode when device is off
+- Ensure power and temperature controls work identically to before
+
 ## 6.12.0-beta.3 (2025-01-07)
 
 ### BETA Release - Ultra-Conservative Rate Limiting Fix

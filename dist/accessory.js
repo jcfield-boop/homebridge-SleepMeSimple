@@ -269,9 +269,15 @@ export class SleepMeAccessory {
             minStep: 0.1
         })
             .onGet(() => this.currentTemperature || 20);
-        // Set up heating/cooling state to reflect actual device status
+        // Set up heating/cooling state to reflect actual device status - only show OFF and AUTO for cleaner UX
         this.targetTemperatureService
             .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+            .setProps({
+            validValues: [
+                this.Characteristic.TargetHeatingCoolingState.OFF,
+                this.Characteristic.TargetHeatingCoolingState.AUTO
+            ]
+        })
             .onGet(() => this.getTargetHeatingCoolingState())
             .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
         this.targetTemperatureService
