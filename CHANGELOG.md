@@ -1,4 +1,35 @@
 # Changelog
+## 6.12.0-beta.2 (2025-01-07)
+
+### BETA Release - Startup Performance Improvements
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Performance Improvements
+- **Removed API Startup Delay**: Eliminated 5-second artificial delay for immediate plugin responsiveness
+  - API requests now execute immediately upon plugin startup
+  - User commands no longer wait for arbitrary delay period
+  - Token bucket system provides sufficient rate limiting protection
+
+- **Faster Multi-Device Initialization**: Reduced device setup delays from 45s to 10s between devices
+  - 3 devices now initialize in ~30 seconds vs ~2 minutes previously
+  - 4x faster multi-device setup while still respecting API rate limits
+  - Improved token bucket handles rate limiting more intelligently
+
+### Technical Details
+- Startup delays were originally added during rapid development when rate limiting was less understood
+- Current sophisticated rate limiting (token bucket, priority queues, request deduplication) makes crude delays unnecessary
+- CRITICAL priority requests (user commands) already bypassed delays anyway
+- Background operations remain properly throttled by token bucket system
+
+### Breaking Changes
+- None - all functionality preserved, just faster execution
+
+### Testing Focus
+- Plugin startup responsiveness (should be immediate)
+- Multi-device setup time (should be much faster)
+- Rate limiting behavior (should be unchanged)
+- User command execution (should be immediate from startup)
+
 ## 6.12.0-beta.1 (2025-01-07)
 
 ### BETA Release - Code Refactoring & Simplification

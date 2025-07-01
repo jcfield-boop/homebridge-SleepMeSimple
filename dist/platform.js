@@ -323,10 +323,10 @@ export class SleepMeSimplePlatform {
             // Process each device with staggered initialization to prevent API rate limiting
             for (let i = 0; i < devices.length; i++) {
                 const device = devices[i];
-                // Add significant delay between devices (45 seconds)
+                // Add delay between devices to respect rate limits (reduced from 45s due to improved token bucket)
                 if (i > 0) {
-                    this.log.info(`Waiting 45s before initializing next device...`);
-                    await new Promise(resolve => setTimeout(resolve, 45000));
+                    this.log.info(`Waiting 10s before initializing next device...`);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
                 }
                 // Skip devices with missing IDs
                 if (!device.id) {

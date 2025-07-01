@@ -20,8 +20,6 @@ export declare class SleepMeApi {
     private requestIdCounter;
     private deviceStatusCache;
     private stats;
-    private readonly startupComplete;
-    private startupFinished;
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token

@@ -92,9 +92,6 @@ export class SleepMeApi {
     averageResponseTime: 0
   };
   
-  // Initial startup delay 
-  private readonly startupComplete: Promise<void>;
-  private startupFinished = false;
   
   /**
    * Create a new SleepMe API client
@@ -118,15 +115,6 @@ export class SleepMeApi {
       refillInterval: 15000,
       initialTokens: 7
     }, this.logger);
-    
-    // Create a startup delay to prevent immediate requests
-    this.startupComplete = new Promise(resolve => {
-      setTimeout(() => {
-        this.logger.debug('Initial startup delay complete');
-        this.startupFinished = true;
-        resolve();
-      }, 5000); // 5 second startup delay
-    });
     
     // Start the queue processor
     this.processQueue();
@@ -1294,10 +1282,6 @@ private async makeRequest<T>(options: {
     );
   }
   
-  // Wait for startup delay to complete for non-critical requests
-  if (priority !== RequestPriority.CRITICAL && !this.startupFinished) {
-    await this.startupComplete;
-  }
   
   // Check token bucket availability (this may wait for tokens to be available)
   const tokenAllowed = await this.checkTokenBucketForRequest(priority);
