@@ -65,12 +65,20 @@ export declare class SleepMeApi {
     */
     getDeviceStatus(deviceId: string, forceFresh?: boolean): Promise<DeviceStatus | null>;
     /**
-   * Turn device on and set temperature in a single operation
-   * With trust-based approach (no verification GET)
+   * Unified device control method
    * @param deviceId Device identifier
-   * @param temperature Target temperature in Celsius
+   * @param action Action to perform: 'on', 'off', or 'temperature'
+   * @param temperature Optional temperature for 'on' and 'temperature' actions
    * @returns Whether operation was successful
    */
+    private controlDevice;
+    /**
+     * Turn device on and set temperature in a single operation
+     * With trust-based approach (no verification GET)
+     * @param deviceId Device identifier
+     * @param temperature Target temperature in Celsius
+     * @returns Whether operation was successful
+     */
     turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean>;
     /**
    * Turn device off

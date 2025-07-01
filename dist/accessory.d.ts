@@ -108,21 +108,13 @@ export declare class SleepMeAccessory implements PollableDevice {
      */
     private isWarmHugActive;
     /**
+     * Helper method to safely update a service characteristic
+     */
+    private updateServiceCharacteristic;
+    /**
      * Update all services based on current interface mode
      */
     private updateAllServices;
-    /**
-     * Update switch interface services
-     */
-    private updateSwitchServices;
-    /**
-     * Update hybrid interface services
-     */
-    private updateHybridServices;
-    /**
-     * Update thermostat interface services (legacy)
-     */
-    private updateThermostatServices;
     /**
     * Get the current heating/cooling state based on device status
     */
@@ -149,6 +141,14 @@ export declare class SleepMeAccessory implements PollableDevice {
      * @returns Current target temperature
      */
     private handleTargetTemperatureGet;
+    /**
+     * Unified power state management method
+     * @param turnOn Whether to turn the device on or off
+     * @param epoch Command epoch for cancellation tracking
+     * @param source Source of the command for logging
+     * @param temperature Optional temperature for turn on commands
+     */
+    private setPowerState;
     /**
      * Handle setting the target heating cooling state
      * @param value Target heating cooling state value

@@ -1,4 +1,42 @@
 # Changelog
+## 6.12.0-beta.1 (2025-01-07)
+
+### BETA Release - Code Refactoring & Simplification
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Refactored & Simplified
+- **Power Handling Unification**: Merged duplicate power handling logic into single `setPowerState()` method
+  - Eliminated ~60 lines of duplicate code between thermostat and switch power handlers
+  - Improved consistency and maintainability of power state management
+  - Single source of truth for power operations across all interface modes
+
+- **Service Updates Consolidation**: Streamlined HomeKit service updates 
+  - Replaced 3 separate update methods (`updateSwitchServices`, `updateHybridServices`, `updateThermostatServices`) with unified approach
+  - Added `updateServiceCharacteristic()` helper method for safer updates
+  - Reduced redundant characteristic updates across interface modes
+
+- **Simplified Debouncing**: Replaced complex `createSmartDebounce()` with simple timeout-based debouncing
+  - Removed ~45 lines of over-engineered debouncing logic with leading/trailing edge handling  
+  - Simpler, more maintainable debouncing that's easier to debug
+  - Identical functionality with cleaner implementation
+
+- **API Methods Streamlining**: Consolidated device control patterns into unified method
+  - Created `controlDevice()` method to handle 'on', 'off', and 'temperature' actions
+  - Eliminated duplicate error handling, cache updates, and logging patterns
+  - Reduced API-related code by ~80 lines while preserving all functionality
+
+### Code Quality Improvements
+- **Reduced Lines of Code**: Overall reduction of ~200-250 lines across the codebase
+- **Better Maintainability**: Single methods for common operations reduce future bugs
+- **Preserved Functionality**: All existing features and behaviors maintained
+- **Cleaner Architecture**: More focused, single-purpose methods
+
+### Testing Notes
+- All HomeKit interfaces (Switch, Thermostat, Hybrid) should work identically to before
+- Power commands, temperature changes, and service updates should be unchanged from user perspective
+- Rate limiting and API behavior should be identical
+- Please test all interface modes and report any issues
+
 ## 6.11.9 (2025-01-07)
 
 ### Added

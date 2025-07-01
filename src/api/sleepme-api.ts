@@ -443,6 +443,84 @@ const response = await this.makeRequest<Record<string, unknown>>({
   }
 }
   /**
+ * Unified device control method
+ * @param deviceId Device identifier  
+ * @param action Action to perform: 'on', 'off', or 'temperature'
+ * @param temperature Optional temperature for 'on' and 'temperature' actions
+ * @returns Whether operation was successful
+ */
+private async controlDevice(deviceId: string, action: 'on' | 'off' | 'temperature', temperature?: number): Promise<boolean> {
+  try {
+    // Cancel any pending requests for this device
+    this.cancelAllDeviceRequests(deviceId);
+    
+    let payload: Record<string, unknown>;
+    let cacheUpdates: Partial<DeviceStatus>;
+    let logMessage: string;
+    
+    switch (action) {
+      case 'on': {
+        const targetTemp = temperature !== undefined ? temperature : 21;
+        payload = {
+          set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
+          thermal_control_status: 'active'
+        };
+        cacheUpdates = {
+          powerState: PowerState.ON,
+          targetTemperature: targetTemp,
+          thermalStatus: ThermalStatus.ACTIVE,
+          currentTemperature: this.getLastKnownTemperature(deviceId, targetTemp)
+        };
+        logMessage = `Turning device ${deviceId} ON with temperature ${targetTemp}°C`;
+        break;
+      }
+        
+      case 'off':
+        payload = { thermal_control_status: 'standby' };
+        cacheUpdates = {
+          powerState: PowerState.OFF,
+          thermalStatus: ThermalStatus.STANDBY
+        };
+        logMessage = `Turning device ${deviceId} OFF`;
+        break;
+        
+      case 'temperature':
+        if (temperature === undefined) {
+          throw new Error('Temperature is required for temperature action');
+        }
+        payload = { set_temperature_f: Math.round(this.convertCtoF(temperature)) };
+        cacheUpdates = {
+          targetTemperature: temperature,
+          powerState: PowerState.ON,
+          thermalStatus: ThermalStatus.ACTIVE
+        };
+        logMessage = `Setting device ${deviceId} temperature to ${temperature}°C`;
+        break;
+        
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+    
+    this.logger.info(logMessage);
+    this.logger.verbose(`${action.toUpperCase()} payload: ${JSON.stringify(payload)}`);
+    
+    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
+    
+    if (success) {
+      this.updateCacheWithTrustedState(deviceId, cacheUpdates);
+      this.logger.verbose(`Device ${deviceId} ${action.toUpperCase()} operation successful`);
+      return true;
+    } else {
+      this.logger.error(`Failed to ${action} device ${deviceId}`);
+      return false;
+    }
+  } catch (error) {
+    this.handleApiError(`controlDevice(${deviceId}, ${action})`, error);
+    return false;
+  }
+}
+
+/**
  * Turn device on and set temperature in a single operation
  * With trust-based approach (no verification GET)
  * @param deviceId Device identifier
@@ -450,48 +528,7 @@ const response = await this.makeRequest<Record<string, unknown>>({
  * @returns Whether operation was successful
  */
 public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boolean> {
-  try {
-    // Default temperature if none provided
-    const targetTemp = temperature !== undefined ? temperature : 21;
-    
-    this.logger.info(`Turning device ${deviceId} ON with temperature ${targetTemp}°C`);
-    
-    // Cancel any pending requests for this device to prevent race conditions
-    this.cancelAllDeviceRequests(deviceId);
-    
-    // Create payload for API - using integers for temperature values
-    const payload: Record<string, unknown> = {
-      // Set Fahrenheit as primary temp (matching API expectation)
-      set_temperature_f: Math.round(this.convertCtoF(targetTemp)),
-      thermal_control_status: 'active'
-    };
-    
-    this.logger.verbose(`Turn ON payload: ${JSON.stringify(payload)}`);
-    
-    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
-    
-    if (success) {
-      // Update cache with complete device state based on our command
-      // This is critical for the trust-based approach
-      this.updateCacheWithTrustedState(deviceId, {
-        powerState: PowerState.ON,
-        targetTemperature: targetTemp,
-        thermalStatus: ThermalStatus.ACTIVE,
-        // We don't know current temperature yet, but we'll assume it's moving toward target
-        // This gives better UX without requiring a GET
-        currentTemperature: this.getLastKnownTemperature(deviceId, targetTemp)
-      });
-      
-      this.logger.verbose(`Device ${deviceId} turned ON successfully`);
-      return true;
-    } else {
-      this.logger.error(`Failed to turn device ${deviceId} ON`);
-      return false;
-    }
-  } catch (error) {
-    this.handleApiError(`turnDeviceOn(${deviceId})`, error);
-    return false;
-  }
+  return this.controlDevice(deviceId, 'on', temperature);
 }
 
   /**
@@ -500,49 +537,17 @@ public async turnDeviceOn(deviceId: string, temperature?: number): Promise<boole
  * @returns Whether operation was successful
  */
 public async turnDeviceOff(deviceId: string): Promise<boolean> {
-  try {
-    this.logger.info(`Turning device ${deviceId} OFF`);
-    
-      // Get the current cache state before cancelling requests
-    const currentCache = this.deviceStatusCache.get(deviceId);
-    const wasAlreadyOff = currentCache?.status.powerState === PowerState.OFF;
-    
-    // If already OFF, don't send another OFF command
-    if (wasAlreadyOff) {
-      this.logger.verbose(`Device ${deviceId} is already OFF, skipping redundant command`);
-      return true;
-    }
-    
-    // Cancel any pending requests for this device
-    this.cancelAllDeviceRequests(deviceId);
-    
-    // Create payload with standby status
-    const payload = {
-      thermal_control_status: 'standby'
-    };
-    
-    this.logger.verbose(`Turn OFF payload: ${JSON.stringify(payload)}`);
-    
-    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.CRITICAL);
-    
-    if (success) {
-      // Update cache with correct power state
-      // This MUST set both thermalStatus AND powerState
-      this.updateCacheWithTrustedState(deviceId, {
-        powerState: PowerState.OFF,
-        thermalStatus: ThermalStatus.STANDBY
-      });
-      
-      this.logger.verbose(`Device ${deviceId} turned OFF successfully`);
-      return true;
-    } else {
-      this.logger.error(`Failed to turn device ${deviceId} OFF`);
-      return false;
-    }
-  } catch (error) {
-    this.handleApiError(`turnDeviceOff(${deviceId})`, error);
-    return false;
+  // Get the current cache state before making the call
+  const currentCache = this.deviceStatusCache.get(deviceId);
+  const wasAlreadyOff = currentCache?.status.powerState === PowerState.OFF;
+  
+  // If already OFF, don't send another OFF command
+  if (wasAlreadyOff) {
+    this.logger.verbose(`Device ${deviceId} is already OFF, skipping redundant command`);
+    return true;
   }
+  
+  return this.controlDevice(deviceId, 'off');
 }
   /**
  * Set device temperature
@@ -552,40 +557,7 @@ public async turnDeviceOff(deviceId: string): Promise<boolean> {
  * @returns Whether operation was successful
  */
 public async setTemperature(deviceId: string, temperature: number): Promise<boolean> {
-  try {
-    this.logger.info(`Setting device ${deviceId} temperature to ${temperature}°C`);
-    
-    // Convert to Fahrenheit and round to integer (matching API expectation)
-    const tempF = Math.round(this.convertCtoF(temperature));
-    
-    // Create payload following API format
-    const payload = {
-      set_temperature_f: tempF
-    };
-    
-    this.logger.verbose(`Set temperature payload: ${JSON.stringify(payload)}`);
-    
-    const success = await this.updateDeviceSettings(deviceId, payload, RequestPriority.HIGH);
-    
-    if (success) {
-      // Update cache with trusted state - key to trust-based approach
-      this.updateCacheWithTrustedState(deviceId, {
-        targetTemperature: temperature,
-        // Setting temperature implies the device is ON
-        powerState: PowerState.ON,
-        thermalStatus: ThermalStatus.ACTIVE
-      });
-      
-      this.logger.verbose(`Device ${deviceId} temperature set successfully to ${temperature}°C`);
-      return true;
-    } else {
-      this.logger.error(`Failed to set device ${deviceId} temperature to ${temperature}°C`);
-      return false;
-    }
-  } catch (error) {
-    this.handleApiError(`setTemperature(${deviceId})`, error);
-    return false;
-  }
+  return this.controlDevice(deviceId, 'temperature', temperature);
 }
 
   /**
