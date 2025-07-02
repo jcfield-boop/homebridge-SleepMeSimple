@@ -1,4 +1,33 @@
 # Changelog
+## 6.12.0-beta.7 (2025-01-07)
+
+### BETA Release - Temperature Dial & Firmware Debug Fixes
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### User Experience Fixes
+- **Fixed Temperature Dial Power Sync**: Temperature changes now properly update both thermostat AND power switch
+  - In hybrid mode, changing temperature on the dial now automatically turns on the power switch too
+  - No longer need to manually switch Off→Auto then set temperature
+  - Both the thermostat state (Auto) and power switch (On) update simultaneously
+  - Provides true one-step temperature setting experience
+
+### Debug Improvements  
+- **Added Firmware Version Debug Logging**: Enhanced logging to diagnose firmware display issues
+  - Will show API vs Current firmware versions in debug logs
+  - Helps identify if firmware version is being received from API but not updating display
+  - Added detailed logging for firmware update process
+
+### Technical Details
+- The issue was that hybrid mode has separate services (Power Switch + Thermostat)
+- Temperature changes were only updating the thermostat service's heating/cooling state
+- Power switch service wasn't being updated, so users had to manually switch it
+- Now both services update in sync for seamless user experience
+
+### Testing Focus
+- Verify temperature dial changes automatically turn on power switch in hybrid mode
+- Check debug logs for firmware version comparison (if issue persists)
+- Confirm both thermostat Auto state and power switch On state update together
+
 ## 6.12.0-beta.6 (2025-01-07)
 
 ### BETA Release - Restore Empirical Rate Limits + Server Sync Fix

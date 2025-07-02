@@ -913,6 +913,15 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
       );
       this.platform.log.info(`Auto-switching to AUTO mode for temperature change`);
     }
+    
+    // ALSO update the power switch in hybrid mode (if it exists)
+    if (this.powerSwitchService && !this.isPowered) {
+      this.powerSwitchService.updateCharacteristic(
+        this.Characteristic.On,
+        true
+      );
+      this.platform.log.info(`Auto-switching power switch to ON for temperature change`);
+    }
   } else {
     this.platform.log.info(`Skipping auto-on for temperature change - device was recently turned OFF (${Math.round(timeSinceLastPowerOff/1000)}s ago)`);
   }
@@ -1201,6 +1210,7 @@ private updateDeviceState(status: DeviceStatus): void {
   }
   
   // Update firmware version if available
+  this.platform.log.debug(`Firmware version check: API=${status.firmwareVersion}, Current=${this.firmwareVersion}`);
   if (status.firmwareVersion !== undefined && status.firmwareVersion !== this.firmwareVersion) {
     const oldVersion = this.firmwareVersion;
     this.firmwareVersion = status.firmwareVersion;
