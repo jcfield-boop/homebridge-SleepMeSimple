@@ -159,7 +159,7 @@ export class SleepMeSimplePlatform {
                             this.log.warn('No devices found to apply schedules to');
                         }
                     }
-                }, 180000); // 3 minute delay before starting discovery (due to API rate limit issues)
+                }, 60000); // 1 minute delay before starting discovery (reasonable startup delay)
                 // Set up periodic discovery to catch new or changed devices
                 if (!this.disableAutoDiscovery) {
                     // Check once per day is sufficient

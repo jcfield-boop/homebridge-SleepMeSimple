@@ -727,16 +727,19 @@ export class SleepMeAccessory {
         this.lastUserActionTime = Date.now();
         // Update UI immediately for responsiveness
         this.targetTemperature = newTemp;
-        // If device is off and user sets temperature, automatically switch to AUTO mode
+        // ALWAYS automatically switch to AUTO mode when user sets temperature (regardless of current state)
         // BUT only if the user didn't recently turn the device OFF (within 10 seconds)
         const timeSinceLastPowerOff = Date.now() - this.lastPowerOffTime;
-        if (!this.isPowered && (this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000)) {
+        const shouldAutoTurnOn = this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000;
+        if (shouldAutoTurnOn) {
+            // Always set to AUTO mode when user changes temperature (better UX)
             const service = this.getThermostatService();
             if (service) {
                 service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.AUTO);
+                this.platform.log.info(`Auto-switching to AUTO mode for temperature change`);
             }
         }
-        else if (!this.isPowered && timeSinceLastPowerOff <= 10000) {
+        else {
             this.platform.log.info(`Skipping auto-on for temperature change - device was recently turned OFF (${Math.round(timeSinceLastPowerOff / 1000)}s ago)`);
         }
         // Log the change
@@ -748,7 +751,8 @@ export class SleepMeAccessory {
             // If device is off and we're changing temperature, turn it on
             // BUT only if the device wasn't recently turned off (within 10 seconds)
             const timeSinceLastPowerOff = Date.now() - this.lastPowerOffTime;
-            if (!this.isPowered && (this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000)) {
+            const shouldTurnOn = !this.isPowered && (this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000);
+            if (shouldTurnOn) {
                 const success = await this.apiClient.turnDeviceOn(this.deviceId, newTemp);
                 if (success) {
                     this.isPowered = true;

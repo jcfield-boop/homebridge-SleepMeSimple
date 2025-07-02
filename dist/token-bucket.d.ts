@@ -73,6 +73,11 @@ export declare class TokenBucket {
      */
     reset(): void;
     /**
+     * Sync bucket to server state after 429 error
+     * Assumes server bucket is empty when we get 429 on what should be a valid request
+     */
+    syncToServerEmpty(): void;
+    /**
      * Manually trigger token refill calculation
      * Called automatically by consume() and canConsume()
      */

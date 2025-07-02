@@ -1,4 +1,80 @@
 # Changelog
+## 6.12.0-beta.6 (2025-01-07)
+
+### BETA Release - Restore Empirical Rate Limits + Server Sync Fix
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Major Fixes
+- **Restored Empirically-Tested Rate Limits**: Reverted from overly conservative to proven working values
+  - Token bucket: 2→7 tokens max (empirically tested burst capacity)
+  - Refill rate: 60s→15s per token (4 requests/minute sustainable vs 1/minute)
+  - Start with 3 tokens instead of 0 (conservative but not empty)
+  - Based on actual testing rather than panic-induced over-conservation
+
+- **Server Synchronization Fix**: Fixed client/server token bucket sync issues causing immediate 429s
+  - Added `syncToServerEmpty()` method to align client bucket with server state
+  - When 429 occurs, sync our bucket to match server's empty state
+  - Should eliminate most "impossible" 429 errors on first requests
+
+- **Reasonable Delays Restored**: 
+  - Startup delay: 5 minutes→1 minute (reasonable vs excessive)
+  - Polling interval: 15 minutes→5 minutes (conservative but usable)
+  - Based on actual empirical testing limits rather than fear
+
+### Technical Details
+- The issue wasn't that we needed to be more conservative than documented limits
+- Client-side token bucket was out of sync with server's actual state
+- Server bucket was already empty when client thought it had tokens available
+- Now properly syncs buckets on 429 errors to prevent future misalignment
+
+### Benefits
+- Much more responsive background updates (5 minute vs 15 minute polling)
+- Faster startup (1 minute vs 5 minute delay)
+- User commands should face much less waiting (4x more token capacity)
+- Smarter rate limiting based on actual API behavior rather than guesswork
+
+### Testing Focus
+- Verify 429 errors are significantly reduced or eliminated
+- Confirm faster polling and startup times work reliably
+- Check that server sync prevents cascading 429 failures
+- Ensure user commands are much more responsive
+
+## 6.12.0-beta.5 (2025-01-07)
+
+### BETA Release - Critical UX & Rate Limiting Fixes
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Critical Fixes
+- **Improved Thermostat UX**: Temperature changes now automatically switch device to AUTO mode
+  - Users can now simply adjust temperature dial and device turns on automatically
+  - No longer need to manually switch Off→Auto→Temperature
+  - Still respects 10-second cooldown if device was recently turned off
+  - Much more intuitive user experience
+
+- **Extreme Rate Limiting**: Addressed severe API rate limiting that was causing immediate 429 errors
+  - Reduced token bucket from 3→2 tokens maximum capacity
+  - Increased token refill from 30s→60s per token (1 request per minute sustainable)
+  - Start with 0 tokens instead of any initial burst to avoid startup 429s
+  - Increased startup delay from 3→5 minutes after Homebridge launch
+  - Increased default polling from 10→15 minutes for maximum safety
+
+### Technical Details
+- SleepMe API is rejecting even CRITICAL priority user commands with immediate 429 errors
+- This extreme conservation approach should finally work around the severe API enforcement
+- User commands still get priority but must wait for token availability
+- Background polling heavily throttled to preserve capacity for user actions
+
+### Breaking Changes  
+- Much slower background updates (15 minute polling vs 10 minutes)
+- 5 minute delay before first API calls after startup
+- Some user commands may need to wait up to 60 seconds if token bucket is empty
+
+### Testing Focus
+- Verify temperature dial changes automatically turn device to AUTO mode
+- Confirm no immediate 429 errors on any operations
+- Test that user commands eventually succeed (may be delayed)
+- Ensure extreme rate limiting doesn't break core functionality
+
 ## 6.12.0-beta.4 (2025-01-07)
 
 ### BETA Release - HomeKit Interface Simplification

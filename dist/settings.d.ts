@@ -15,10 +15,10 @@ export declare const PLUGIN_NAME = "homebridge-sleepme-simple";
 export declare const API_BASE_URL = "https://api.developer.sleep.me/v1";
 /**
  * Default polling interval in seconds
- * Ultra-conservative due to stricter API rate limits observed in production
- * 3 tokens max, 1 token per 30s = ~2 requests/minute sustainable
+ * Based on empirical testing: 7 tokens max, 1 token per 15s = ~4 requests/minute sustainable
+ * Conservative but reasonable for actual token bucket limits
  */
-export declare const DEFAULT_POLLING_INTERVAL = 600;
+export declare const DEFAULT_POLLING_INTERVAL = 300;
 /**
  * Minimum allowed temperature in Celsius
  */

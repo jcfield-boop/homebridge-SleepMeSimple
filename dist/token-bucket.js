@@ -112,6 +112,15 @@ export class TokenBucket {
         this.logger.debug(`Token bucket reset to full capacity (${this.maxTokens} tokens)`);
     }
     /**
+     * Sync bucket to server state after 429 error
+     * Assumes server bucket is empty when we get 429 on what should be a valid request
+     */
+    syncToServerEmpty() {
+        this.tokens = 0;
+        this.lastRefillTime = Date.now();
+        this.logger.warn(`Token bucket synced to server (empty) - resetting refill timer`);
+    }
+    /**
      * Manually trigger token refill calculation
      * Called automatically by consume() and canConsume()
      */
@@ -187,10 +196,10 @@ export class TokenBucket {
  */
 export function createSleepMeTokenBucket(logger) {
     const config = {
-        maxTokens: 3,
+        maxTokens: 7,
         refillRate: 1,
-        refillInterval: 30000,
-        initialTokens: 1 // Start with minimal tokens to avoid immediate 429s
+        refillInterval: 15000,
+        initialTokens: 3 // Start with partial tokens - conservative but not zero
     };
     return new TokenBucket(config, logger);
 }

@@ -51,12 +51,12 @@ export class SleepMeApi {
             this.logger.error('Invalid API token provided');
             throw new Error('Invalid API token provided');
         }
-        // Initialize token bucket with ultra-conservative parameters to handle stricter API limits
+        // Initialize token bucket with empirically tested parameters
         this.tokenBucket = new TokenBucket({
-            maxTokens: 3,
+            maxTokens: 7,
             refillRate: 1,
-            refillInterval: 30000,
-            initialTokens: 1 // Start conservative to avoid immediate 429s
+            refillInterval: 15000,
+            initialTokens: 3 // Start with partial tokens to be conservative but not zero
         }, this.logger);
         // Start the queue processor
         this.processQueue();
@@ -685,6 +685,8 @@ export class SleepMeApi {
      */
     handleRateLimitError(request) {
         const now = Date.now();
+        // Sync our token bucket to server state (assume server bucket is empty)
+        this.tokenBucket.syncToServerEmpty();
         if (request.priority === RequestPriority.CRITICAL) {
             this.rateLimitBackoffUntil = now + 5000; // Only 5 seconds for critical
             this.logger.warn('Rate limit exceeded for critical request. Short backoff (5s)');
