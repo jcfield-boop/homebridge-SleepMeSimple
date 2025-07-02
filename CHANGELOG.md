@@ -1,4 +1,35 @@
 # Changelog
+## 6.12.0-beta.8 (2025-01-07)
+
+### BETA Release - Fixed Power Switch Sync Logic
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Critical Fixes
+- **Fixed Power Switch Sync Logic**: Temperature dial now properly detects and updates power switch state
+  - Previous logic used internal device state which was unreliable
+  - Now checks actual HomeKit power switch characteristic value
+  - Should finally enable true one-step temperature setting (dial → both auto & power switch on)
+
+- **Fixed HomeKit Temperature Validation Errors**: Eliminated invalid temperature value warnings
+  - Added proper bounds checking to prevent values below HomeKit minimums
+  - Current temperature readings now respect MIN_TEMPERATURE_C limits
+  - Target temperature defaults now use valid ranges
+
+### Debug Information
+- Previous logs showed "Auto-switching to AUTO mode" working (thermostat side)
+- But power switch sync wasn't triggering due to incorrect state checking
+- Firmware version issue: API returning `undefined` instead of version string
+
+### Technical Details
+- Changed from checking `!this.isPowered` to checking actual HomeKit characteristic value
+- This ensures power switch sync works regardless of internal state confusion
+- Added Math.max() guards to prevent HomeKit validation errors on temperature values
+
+### Testing Focus
+- Verify temperature dial changes now update BOTH thermostat (Auto) AND power switch (On)
+- Confirm no more HomeKit temperature validation errors in logs
+- Check that one-step temperature setting workflow finally works end-to-end
+
 ## 6.12.0-beta.7 (2025-01-07)
 
 ### BETA Release - Temperature Dial & Firmware Debug Fixes

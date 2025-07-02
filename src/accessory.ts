@@ -319,7 +319,7 @@ export class SleepMeAccessory implements PollableDevice {
         maxValue: MAX_TEMPERATURE_C + 5,
         minStep: 0.1
       })
-      .onGet(() => this.currentTemperature || 20);
+      .onGet(() => Math.max(MIN_TEMPERATURE_C - 5, this.currentTemperature || 20));
     
     // 3. Target Temperature Control - simplified thermostat for temperature setting
     this.targetTemperatureService = this.accessory.getService(this.platform.Service.Thermostat) ||
@@ -335,7 +335,7 @@ export class SleepMeAccessory implements PollableDevice {
         maxValue: MAX_TEMPERATURE_C,
         minStep: 0.5
       })
-      .onGet(() => this.targetTemperature || 21)
+      .onGet(() => Math.max(MIN_TEMPERATURE_C, this.targetTemperature || 21))
       .onSet(this.handleTargetTemperatureSet.bind(this));
     
     // Set current temperature for the thermostat service
@@ -346,7 +346,7 @@ export class SleepMeAccessory implements PollableDevice {
         maxValue: MAX_TEMPERATURE_C + 5,
         minStep: 0.1
       })
-      .onGet(() => this.currentTemperature || 20);
+      .onGet(() => Math.max(MIN_TEMPERATURE_C - 5, this.currentTemperature || 20));
     
     // Set up heating/cooling state to reflect actual device status - only show OFF and AUTO for cleaner UX
     this.targetTemperatureService
@@ -914,13 +914,17 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
       this.platform.log.info(`Auto-switching to AUTO mode for temperature change`);
     }
     
-    // ALSO update the power switch in hybrid mode (if it exists)
-    if (this.powerSwitchService && !this.isPowered) {
-      this.powerSwitchService.updateCharacteristic(
-        this.Characteristic.On,
-        true
-      );
-      this.platform.log.info(`Auto-switching power switch to ON for temperature change`);
+    // ALSO update the power switch in hybrid mode (if it exists and device is off)
+    if (this.powerSwitchService) {
+      // Get current power switch state from HomeKit (not our internal state)
+      const currentSwitchState = this.powerSwitchService.getCharacteristic(this.Characteristic.On).value;
+      if (!currentSwitchState) {
+        this.powerSwitchService.updateCharacteristic(
+          this.Characteristic.On,
+          true
+        );
+        this.platform.log.info(`Auto-switching power switch to ON for temperature change`);
+      }
     }
   } else {
     this.platform.log.info(`Skipping auto-on for temperature change - device was recently turned OFF (${Math.round(timeSinceLastPowerOff/1000)}s ago)`);
