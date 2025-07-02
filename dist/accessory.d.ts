@@ -35,8 +35,10 @@ export declare class SleepMeAccessory implements PollableDevice {
     private waterLevel;
     private isWaterLow;
     private lastPowerOffTime;
-    private tempSetterDebounced;
-    private powerStateSetterDebounced;
+    private lastKnownTargetTemp;
+    private externalChangeDetected;
+    private lastExternalChangeTime;
+    private isFirstStatusUpdate;
     readonly deviceId: string;
     private readonly displayName;
     private deviceModel;
@@ -89,6 +91,7 @@ export declare class SleepMeAccessory implements PollableDevice {
     private setupWaterLevelService;
     /**
      * Power toggle handler for switch interface
+     * Uses optimistic updates for immediate UI feedback
      */
     private handlePowerToggle;
     /**
@@ -116,11 +119,18 @@ export declare class SleepMeAccessory implements PollableDevice {
      */
     private updateAllServices;
     /**
+     * Validate that all services show consistent states
+     * Logs warnings if inconsistencies are detected
+     */
+    private validateServiceStates;
+    /**
     * Get the current heating/cooling state based on device status
     */
     private getCurrentHeatingCoolingState;
     /**
     * Get the target heating/cooling state
+    * Return OFF when device is actually off, AUTO when on
+    * This ensures thermostat state matches actual device state
     */
     private getTargetHeatingCoolingState;
     /**
@@ -136,6 +146,11 @@ export declare class SleepMeAccessory implements PollableDevice {
       * Update the current heating/cooling state in HomeKit
       */
     private updateCurrentHeatingCoolingState;
+    /**
+     * Sync thermostat state with power switch state
+     * Ensures both services show consistent states
+     */
+    private syncThermostatState;
     /**
      * Handle getting the target temperature
      * @returns Current target temperature
@@ -156,6 +171,8 @@ export declare class SleepMeAccessory implements PollableDevice {
     private handleTargetHeatingCoolingStateSet;
     /**
        * Verify power state consistency
+       * Note: We keep thermostat in AUTO mode for responsive temperature dial
+       * Power state is shown separately via the power switch service
        */
     private verifyPowerState;
     /**
@@ -165,6 +182,14 @@ export declare class SleepMeAccessory implements PollableDevice {
      * @param operation Async operation to execute
      */
     private executeOperation;
+    /**
+     * Execute an operation with rollback support for optimistic updates
+     * @param operationType Type of operation
+     * @param epoch Command epoch to track cancellation
+     * @param operation Async operation to execute
+     * @param rollback Function to call if operation fails
+     */
+    private executeOperationWithRollback;
     /**
      * Handle target temperature setting with trust-based approach
      * @param value New target temperature value
@@ -208,6 +233,11 @@ export declare class SleepMeAccessory implements PollableDevice {
      * Called by centralized polling manager to update device state
      */
     private updateDeviceState;
+    /**
+     * Fetch initial device status immediately after initialization
+     * Tries cached data first to avoid rate limiting, then fresh if needed
+     */
+    private fetchInitialStatus;
     /**
      * Clean up resources when this accessory is removed
      */

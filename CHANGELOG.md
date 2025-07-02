@@ -1,4 +1,407 @@
 # Changelog
+## 6.12.1 (2025-01-02)
+
+### Bug Fixes
+- **Fix thermostat-switch state synchronization**: Resolved state mismatch where thermostat showed AUTO while power switch showed OFF
+  - Modified `getTargetHeatingCoolingState()` to return OFF when device is actually off instead of always AUTO
+  - Added bidirectional sync logic in `handlePowerToggle()` to update thermostat when power switch changes
+  - Enhanced `updateAllServices()` with cross-service validation and automatic correction
+  - Added `syncThermostatState()` method for consistent state management
+  - Implemented state consistency checks in `updateDeviceState()` for external control changes
+  - Both power switch and thermostat now show consistent states while maintaining responsive temperature dial
+
+## 6.12.0 (2025-01-07)
+
+### Major Performance Optimization - Near-Immediate User Responsiveness ⚡
+**Dramatically improved external change detection and API utilization for almost immediate user feedback.**
+
+### Performance Improvements
+- **Reduced Cache Duration**: Decreased from 30 minutes to 3 minutes base cache
+- **Context-Aware Caching**: Dynamic cache periods based on user/device activity
+  - User active: 60 seconds (immediate responsiveness) 
+  - Device active: 90 seconds (temperature tracking)
+  - Normal: 180 seconds (efficiency)
+  - Idle: 300 seconds (conservation)
+  - Rate limited: 600 seconds (recovery)
+- **Faster Polling**: Reduced interval from 5 minutes to 2 minutes
+- **Aggressive Polling Strategy**: Active devices poll every cycle, inactive every 2nd cycle
+- **Better API Utilization**: Increased from 8% to 40-50% of available capacity
+
+### User Experience
+- **External Change Detection**: Reduced from 9+ minutes to 2-4 minutes
+- **User Activity Tracking**: Automatically optimizes caching when users are active
+- **Trust-Based Commands**: Maintains immediate user command feedback (no validation delays)
+- **Smart Polling**: More frequent polls when needed, efficient when idle
+
+### Technical Details
+- **Available API Budget**: 240 requests/hour sustainable (4/minute)
+- **New Usage Pattern**: ~100-120 requests/hour (50% utilization vs previous 8%)
+- **Reserved Capacity**: 50% headroom for user interactions and bursts
+- **Automatic Fallback**: Longer cache periods during rate limiting
+
+### Benefits
+- 🚀 **5x Faster External Change Detection**: Minutes instead of 9+ minutes
+- ⚡ **Better API Efficiency**: 6x better utilization of available capacity
+- 🎯 **Smart Resource Usage**: Context-aware optimization
+- 🛡️ **Maintained Safety**: Robust rate limit protection with fallback
+
+**Result**: Near real-time responsiveness while maintaining excellent rate limit safety!
+
+## 6.11.14 (2025-01-07)
+
+### Critical Rate Limiting Fix - Startup Collision ⚡
+**Fixed 429 rate limit errors during startup caused by overlapping API requests.**
+
+### Rate Limiting Fix
+- **Startup Request Collision Fixed**: Initial status fetch and first polling cycle were colliding
+  - Both requests fired within 1-2 seconds causing immediate 429 errors
+  - Increased polling delay from 1s to 5s after discovery to prevent overlap
+  - Ensures initial device status completes before polling begins
+- **Cleaner Startup Sequence**: Eliminates race condition between initial fetch and polling
+
+### Technical Details
+- **Root Cause**: `req_1` (initial status) and `req_2` (poll cycle 1) fired simultaneously
+- **Solution**: Delayed first poll cycle to 5 seconds after device discovery
+- **Impact**: No more startup 429 errors and token bucket sync issues
+
+### Benefits
+- 🚫 **No More 429 Errors**: Clean startup without rate limiting collisions
+- ⚡ **Stable Token Management**: Proper spacing between API requests
+- 🔄 **Reliable Initialization**: Initial status always completes before polling starts
+
+**Result**: Startup now works reliably without hitting rate limits on the very first requests!
+
+## 6.11.13 (2025-01-07)
+
+### Smart Initialization Fix - Target Temperature Reset 🎯
+**Fixed target temperature initialization to always use current temperature at reboot for safer startup behavior.**
+
+### Temperature Initialization
+- **Safe Reboot Behavior**: Target temperature always set to current temperature on Homebridge restart
+  - Prevents unwanted heating/cooling when system starts up
+  - Target temperature no longer persists from previous sessions
+  - Example: If room is 20.5°C at startup, target is set to 20.5°C (not previous 26°C setting)
+- **Clear Startup Intent**: Neutral temperature state until user explicitly sets desired temperature
+- **Improved Logging**: "Reboot initialization" messages clearly indicate startup behavior
+
+### Benefits
+- 🛡️ **Safe Startup**: No surprise heating/cooling when Homebridge restarts
+- 🎯 **Predictable Behavior**: Target always matches current temperature initially
+- 🔄 **Clean State**: Each restart begins with neutral temperature setting
+- 📝 **Clear Logging**: Obvious distinction between reboot vs runtime behavior
+
+### Runtime Behavior Unchanged
+- External app temperature changes still respected during normal operation
+- Long inactivity periods still reset target to current temperature
+- All other defensive improvements from 6.11.12 remain active
+
+**Result**: Much safer and more predictable startup behavior - no unexpected temperature changes when restarting Homebridge!
+
+## 6.11.12 (2025-01-07)
+
+### Defensive Improvements - Native App Coexistence 🤝
+**Enhanced compatibility with native SleepMe app for seamless dual control.**
+
+### External App Integration
+- **Smart External Change Detection**: Plugin now detects when native SleepMe app changes temperature settings
+  - Tracks API temperature changes that weren't initiated by HomeKit
+  - Logs friendly "External control detected" messages instead of alarming warnings
+  - Prevents smart initialization from overriding legitimate external temperature changes
+- **Defensive Smart Temperature Logic**: More conservative initialization prevents conflicts
+  - Only applies temperature overrides during true startup or after 5+ minutes of inactivity (vs 1 minute)
+  - Completely skips smart initialization when recent external app activity detected
+  - Respects external temperature settings from native app and schedules
+- **Faster External Detection**: Reduced quiet period from 30s to 15s for quicker external change recognition
+
+### Technical Improvements
+- **External Activity Tracking**: New variables track external changes and timing
+  - `lastKnownTargetTemp`: Monitors API temperature changes
+  - `externalChangeDetected`: Flags recent external activity
+  - `isFirstStatusUpdate`: Distinguishes startup from external changes
+- **Improved Logging**: Clear distinction between HomeKit vs native app control
+  - "🔄 External control detected" for native app changes
+  - "⚡ HomeKit control" for HomeKit-initiated changes
+- **Code Cleanup**: Removed unused debounce constant
+
+### Benefits
+- 🤝 **Seamless Dual Control**: Use both HomeKit and native SleepMe app without conflicts
+- 🛡️ **Defensive Behavior**: Smart initialization won't interfere with external settings
+- 📱 **Native App Friendly**: Respects temperature changes from SleepMe app and schedules
+- 🔍 **Better Monitoring**: Clear logs distinguish between control sources
+
+**Result**: Plugin now works harmoniously with native SleepMe app, allowing users to control devices from both interfaces without temperature override conflicts!
+
+## 6.11.11 (2025-01-07)
+
+### Power Switch Improvements - Instant Responsiveness ⚡
+**Enhanced power toggle responsiveness with optimistic updates and duplicate command prevention.**
+
+### UX Improvements
+- **Instant Power Switch Feedback**: Power switch now shows ON/OFF state immediately when pressed
+  - Uses optimistic updates for instant UI feedback
+  - Automatically rolls back if API call fails
+  - Eliminates the delay that caused users to press button multiple times
+- **Duplicate Command Prevention**: Ignores duplicate power commands already in progress
+  - Prevents multiple rapid OFF commands when user presses button repeatedly
+  - Reduces unnecessary API calls and rate limiting issues
+
+### Technical Enhancements
+- **New `executeOperationWithRollback()` Method**: Supports optimistic updates with failure recovery
+  - Performs UI update immediately
+  - Calls API in background
+  - Rolls back UI state if API fails
+- **Enhanced Command Tracking**: Better detection of duplicate operations
+- **Improved Error Handling**: Graceful recovery from API failures without user confusion
+
+### Benefits
+- ⚡ **Instant feedback**: Power switch responds immediately to button press
+- 🚫 **No duplicate commands**: Prevents multiple OFF commands from rapid button pressing
+- 🔄 **Smart rollback**: Automatically recovers from API failures
+- 📱 **Better UX**: Feels like a native app with instant response
+
+### All Previous Features Included
+- Temperature dial always responsive (1-2 second startup)
+- Smart target temperature initialization
+- Enhanced debug logging and firmware display
+- Complete delay elimination for fast startup
+
+**Result**: Power switch now feels instant and prevents the multiple command issues seen in logs!
+
+## 6.11.10 (2025-01-07)
+
+### Major UX Improvements - Temperature Dial Responsiveness 🚀
+**Stable release with dramatically improved startup performance and temperature dial usability.**
+
+### Temperature Dial UX Fixes
+- **Fixed Temperature Dial Responsiveness**: Temperature dial is now always interactive
+  - Thermostat service always kept in AUTO mode for dial responsiveness
+  - No need to manually select "Auto" first before adjusting temperature
+  - Power state shown separately via power switch service
+- **Smart Target Temperature Initialization**: Target temperature intelligently defaults to current temperature
+  - Prevents unwanted heating/cooling on startup
+  - Accounts for environmental temperature changes
+  - Only uses API target temperature when device is actively controlled
+
+### Performance Improvements
+- **Eliminated All Unnecessary Delays**: Near-instant startup performance
+  - Removed 60-second device discovery delay → Immediate
+  - Removed 10-second device initialization delays → Immediate
+  - Removed 2-second status fetch delays → Immediate
+  - Reduced polling delays from 30s to 1s
+  - Removed redundant manual debouncing (HomeKit handles this natively)
+- **Optimized API Strategy**: Smart caching with fallback to fresh calls
+  - Initial status uses cached data first to avoid rate limiting
+  - Improved token bucket synchronization prevents 429 errors
+  - Enhanced rate limiting with empirically-tested values (7 tokens, 15s refill)
+
+### Technical Improvements  
+- **Enhanced Power Switch Sync**: Better reliability for hybrid interface mode
+  - Dual-checking approach for power switch state
+  - Enhanced debug logging for troubleshooting
+- **Fixed Firmware Version Display**: Proper extraction from API responses
+  - Debug logging shows API response structure
+  - Correctly displays firmware version (e.g., "5.39.2134")
+- **Improved Device State Management**: Better initialization and updates
+  - Immediate device status on startup
+  - Proper handling of device power state changes
+
+### Performance Timeline
+- **Before**: 60s discovery + 10s×devices + 2s status + 30s polling = 100+ seconds
+- **After**: Immediate discovery + immediate setup + immediate status + 1s polling = **1-2 seconds total**
+
+### Key Benefits
+- 🚀 Temperature dial responsive within 1-2 seconds of startup
+- 🌡️ Always interactive temperature control (no manual mode switching)
+- 🎯 Intelligent temperature defaults prevent unwanted heating/cooling
+- ⚡ Dramatically faster startup and response times
+- 🔄 Auto-power-on when temperature is adjusted
+- 🔌 Clear separation of temperature control vs power control
+
+## 6.12.0-beta.15 (2025-01-07)
+
+### BETA Release - Eliminate Initialization Delays ⚡
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Performance Improvements
+- **Eliminated Device Discovery Delay**: Devices now initialize immediately when Homebridge starts
+  - Removed unnecessary 5-second startup delay
+  - Device discovery starts instantly after Homebridge launch
+  - Temperature dial responsive within seconds, not minutes
+
+- **Optimized Initial Status Fetch**: Smart caching strategy to avoid rate limiting
+  - Tries cached data first for immediate state
+  - Falls back to fresh API call with 2-second delay if no cache
+  - Prevents 429 rate limit errors on startup
+
+- **Reduced Polling Delays**: First poll cycle starts in 10 seconds instead of 30
+
+### Timeline Improvements
+- **Before**: Discovery delay (60s) + Status fetch (0-30s) + Polling (30s) = 90-120s total
+- **After**: Discovery (immediate) + Cached status (immediate) + Fresh status (2s) = 2-10s total
+
+### Expected Results
+- Temperature dial responsive within 2-10 seconds
+- Device state shows correctly almost immediately  
+- Dramatically faster startup experience
+- No more long waits for basic functionality
+
+### All Previous Fixes Included
+- Temperature dial always responsive (AUTO mode)
+- Smart target temperature initialization
+- Firmware version working correctly
+- Enhanced debug logging
+
+## 6.12.0-beta.14 (2025-01-07)
+
+### BETA Release - Smart Target Temperature Initialization 🎯
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Critical UX Improvement
+- **Smart Target Temperature Initialization**: Target temperature now intelligently defaults to current temperature
+  - When device is OFF and no recent user interaction, target = current temperature
+  - Prevents device from immediately heating/cooling to arbitrary API values
+  - Accounts for environmental temperature changes
+  - Only uses API target temperature when device is actively controlled
+
+### Logic Details
+- **Initial State**: Target temperature matches current temperature (no unwanted heating/cooling)
+- **User Interaction**: Target temperature follows user input (normal operation)
+- **Device Active**: Uses API target temperature (device is intentionally running)
+- **Environmental Changes**: Target adjusts to current temperature automatically
+
+### Technical Implementation
+- Enhanced target temperature update logic in `onStatusUpdate()`
+- Tracks user interaction timing to distinguish initialization vs operation
+- Smart detection of device power state and thermal status
+- Debug logging for target temperature decisions
+
+### Benefits
+- 🌡️ No unexpected heating/cooling when accessory loads
+- 🎯 Target temperature makes sense relative to current environment
+- 🔄 Still responsive to user temperature changes
+- 🏠 Better integration with room temperature changes
+
+### Previous Fixes (Still Included)
+- Temperature dial always responsive (AUTO mode)
+- Device state initialization
+- Firmware version debug logging
+- Enhanced debug output
+
+## 6.12.0-beta.13 (2025-01-07)
+
+### BETA Release - Fix Temperature Dial Responsiveness 🌡️
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Critical UX Fix
+- **Fixed Temperature Dial Unresponsiveness**: Temperature dial is now always interactive
+  - Root cause: Thermostat service was in `OFF` mode when device was powered off
+  - When thermostat is in `OFF` mode, HomeKit disables the temperature dial
+  - Solution: Always keep thermostat service in `AUTO` mode for dial responsiveness
+  - Power state is separately shown via the power switch service
+
+### Technical Changes
+- Modified `getTargetHeatingCoolingState()` to always return `AUTO`
+- Updated power state verification to maintain `AUTO` mode
+- Enhanced heating/cooling state handler with better UX
+- Users can still turn device OFF via thermostat, but it resets to AUTO after 1 second
+
+### User Experience Improvements
+- 🌡️ Temperature dial is now always responsive (no need to select Auto first)
+- 🔄 Changing temperature will auto-power the device and switch to AUTO mode
+- 🔌 Power switch service separately shows actual device power state
+- 🎯 Clean separation of temperature control vs power control
+
+### Testing Focus
+- Verify temperature dial is immediately responsive on startup
+- Test temperature changes auto-power the device
+- Confirm power switch service shows correct device state
+- Check that turning thermostat to OFF still works (but resets to AUTO)
+
+## 6.12.0-beta.12 (2025-01-07)
+
+### BETA Release - Enhanced Temperature Dial Debug Logging
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Debug Enhancement
+- **Enhanced Temperature Dial Debug Logging**: Added detailed logging to diagnose power switch sync
+  - Shows when temperature dial is changed with current device state
+  - Logs power switch sync checks with HomeKit vs internal state
+  - Uses emojis for easy log identification
+  - Will help identify exactly what happens during temperature changes
+
+### Testing Instructions
+When you change the temperature dial, look for these log messages:
+- 🌡️ Temperature dial changed to [temp]°C
+- 🟢 Auto-switching to AUTO mode and power ON for temperature change  
+- 🔌 Power switch sync check: HomeKit=[state], Internal=[state]
+- 🟢 Auto-switching power switch to ON for temperature change
+- 🟡 Power switch already ON - no sync needed
+- ⚠️ Warning messages if services are missing
+
+### Previous Fixes (Still Included)
+- Fixed device state initialization with immediate status fetch
+- Firmware version debug logging (working correctly)
+- Reduced polling delays for faster response
+
+## 6.12.0-beta.11 (2025-01-07)
+
+### BETA Release - Fix Device State Initialization
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Critical Fixes
+- **Fixed Device State Initialization**: Devices now get current status immediately
+  - Added immediate status fetch after accessory initialization
+  - Reduced polling manager initial delay from 8 minutes to 30 seconds
+  - Eliminates "device already OFF" false messages
+  - Ensures HomeKit interface shows correct current state on startup
+
+### Improvements
+- **Faster Startup Response**: Device status updates within 30 seconds instead of 8+ minutes
+- **Better State Synchronization**: HomeKit interface immediately reflects actual device state
+- **Enhanced Debug Logging**: Shows initial status fetch attempts and results
+
+### Technical Details
+- Polling manager was using extremely conservative 8-minute startup delay
+- Added `fetchInitialStatus()` method called immediately after accessory setup
+- This provides current device state while polling manager starts up
+- Users will see correct power/temperature state right away
+
+### Testing Focus
+- Verify devices show correct current state (on/off, temperature) immediately on startup
+- Check that initial status fetch logs appear in debug output
+- Confirm no more "device already OFF" messages when device is actually on
+- Temperature dial should work correctly with proper device state
+
+## 6.12.0-beta.10 (2025-01-07)
+
+### BETA Release - Enhanced Power Switch Sync + Firmware Debug
+⚠️ **This is a beta release for testing. Please test thoroughly before using in production.**
+
+### Temperature Dial UX Fixes
+- **Enhanced Power Switch Sync Logic**: Improved reliability of temperature dial auto-power-on
+  - Now checks both HomeKit characteristic value AND internal device state
+  - Added detailed debug logging to diagnose sync issues
+  - Should reliably turn on power switch when temperature is adjusted
+  - Addresses issue where users still had to manually switch to Auto first
+
+### Firmware Version Debug Enhancement
+- **Added Comprehensive Firmware Debug Logging**: Enhanced API response parsing diagnostics
+  - Logs both 'about.firmware_version' and 'firmware_version' extraction attempts
+  - Shows available keys in 'about' object when present
+  - Helps identify if firmware data is returned but in unexpected format
+  - Debug logs will show exact API response structure for firmware investigation
+
+### Technical Improvements
+- Power switch sync now uses dual-checking approach for maximum reliability
+- Enhanced logging provides visibility into both HomeKit and internal device states
+- Firmware parsing debug will help identify API response format changes
+
+### Testing Focus
+- Verify temperature dial now works in single step (no manual Auto switch needed)
+- Check debug logs for power switch sync behavior details
+- Look for firmware extraction debug messages to identify API response structure
+- Test that both thermostat Auto state and power switch On state update together
+
 ## 6.12.0-beta.8 (2025-01-07)
 
 ### BETA Release - Fixed Power Switch Sync Logic

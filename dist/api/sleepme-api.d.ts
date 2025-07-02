@@ -19,6 +19,8 @@ export declare class SleepMeApi {
     private rateExceededLogged;
     private requestIdCounter;
     private deviceStatusCache;
+    private lastUserActivity;
+    private userActiveDevices;
     private stats;
     /**
      * Create a new SleepMe API client
@@ -46,6 +48,17 @@ export declare class SleepMeApi {
      * Log current queue status for debugging
      */
     private logQueueStatus;
+    /**
+     * Get context-aware cache validity period based on device state and user activity
+     * @param cachedStatus Cached device status
+     * @returns Cache validity period in milliseconds
+     */
+    private getContextAwareCacheValidity;
+    /**
+     * Track user activity for context-aware caching
+     * @param deviceId Device ID that user interacted with
+     */
+    trackUserActivity(deviceId?: string): void;
     /**
      * Clean up stale requests from all queues
      */

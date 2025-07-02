@@ -15,10 +15,10 @@ export declare const PLUGIN_NAME = "homebridge-sleepme-simple";
 export declare const API_BASE_URL = "https://api.developer.sleep.me/v1";
 /**
  * Default polling interval in seconds
- * Based on empirical testing: 7 tokens max, 1 token per 15s = ~4 requests/minute sustainable
- * Conservative but reasonable for actual token bucket limits
+ * Reduced to better utilize available API capacity (4 requests/minute sustainable)
+ * With context-aware caching, we can poll more frequently without hitting rate limits
  */
-export declare const DEFAULT_POLLING_INTERVAL = 300;
+export declare const DEFAULT_POLLING_INTERVAL = 120;
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -49,11 +49,19 @@ export declare const MAX_REQUESTS_PER_MINUTE = 4;
  */
 export declare const BACKGROUND_REQUEST_THRESHOLD = 0.8;
 /**
- * Default cache validity period in milliseconds
- * Very long cache period due to severe API rate limiting issues
- * Better to show stale cached data than trigger 429 errors
+ * Cache validity periods for different contexts (in milliseconds)
+ * Optimized for available API capacity (4 requests/minute sustainable)
  */
-export declare const DEFAULT_CACHE_VALIDITY_MS = 1800000;
+export declare const CACHE_USER_ACTIVE = 60000;
+export declare const CACHE_DEVICE_ACTIVE = 90000;
+export declare const CACHE_NORMAL = 180000;
+export declare const CACHE_IDLE = 300000;
+export declare const CACHE_RECOVERY = 600000;
+/**
+ * Default cache validity period in milliseconds
+ * Reduced to 3 minutes to better utilize available API capacity
+ */
+export declare const DEFAULT_CACHE_VALIDITY_MS = 180000;
 /**
  * Maximum number of retries for API requests
  * Higher priority requests will be retried more times
@@ -72,12 +80,7 @@ export declare const MAX_BACKOFF_MS = 300000;
  * Post-user-action quiet period in milliseconds
  * Reduced to allow quicker status verification after user actions
  */
-export declare const USER_ACTION_QUIET_PERIOD_MS = 30000;
-/**
- * Command debounce delay in milliseconds
- * Prevents rapid-fire duplicate commands from users
- */
-export declare const COMMAND_DEBOUNCE_DELAY_MS = 500;
+export declare const USER_ACTION_QUIET_PERIOD_MS = 15000;
 /**
  * Logging levels
  */

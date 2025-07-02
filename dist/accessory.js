@@ -1,22 +1,6 @@
 import { ThermalStatus, PowerState } from './api/types.js';
-import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, COMMAND_DEBOUNCE_DELAY_MS, USER_ACTION_QUIET_PERIOD_MS, InterfaceMode, DEFAULT_INTERFACE_MODE } from './settings.js';
-/**
- * Simple debounce function
- * @param callback Function to debounce
- * @param wait Wait time in milliseconds
- * @returns Debounced function
- */
-function simpleDebounce(callback, wait) {
-    let timeout = null;
-    return (...args) => {
-        if (timeout) {
-            clearTimeout(timeout);
-        }
-        timeout = setTimeout(() => {
-            callback(...args);
-        }, wait);
-    };
-}
+import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, USER_ACTION_QUIET_PERIOD_MS, InterfaceMode, DEFAULT_INTERFACE_MODE } from './settings.js';
+// HomeKit provides built-in debouncing, so no manual debouncing needed
 /**
  * SleepMe Accessory
  * Provides a simplified interface for SleepMe devices
@@ -48,9 +32,12 @@ export class SleepMeAccessory {
     waterLevel = 100; // Default full water level
     isWaterLow = false;
     lastPowerOffTime = 0; // Track when device was last turned off
-    // Debounced functions for command handling
-    tempSetterDebounced;
-    powerStateSetterDebounced;
+    // External change detection for defensive coexistence with native app
+    lastKnownTargetTemp = NaN; // Track what we last knew from API
+    externalChangeDetected = false; // Flag for recent external activity
+    lastExternalChangeTime = 0; // When external change was detected
+    isFirstStatusUpdate = true; // Track first update to distinguish from external changes
+    // HomeKit handles debouncing natively, so no manual debouncing needed
     // Device properties
     deviceId;
     displayName;
@@ -93,14 +80,7 @@ export class SleepMeAccessory {
         this.setupInterface();
         // Setup water level monitoring (common to all interfaces)
         this.setupWaterLevelService();
-        // Create debounced temperature setter
-        this.tempSetterDebounced = simpleDebounce((newTemp, previousTemp) => {
-            this.handleTargetTemperatureSetImpl(newTemp, previousTemp);
-        }, COMMAND_DEBOUNCE_DELAY_MS);
-        // Create debounced power state setter
-        this.powerStateSetterDebounced = simpleDebounce((turnOn) => {
-            this.handlePowerStateSetImpl(turnOn);
-        }, COMMAND_DEBOUNCE_DELAY_MS);
+        // HomeKit handles debouncing natively - no manual debouncing needed
         // Register with centralized polling manager instead of individual polling
         if (this.platform.pollingManager) {
             this.platform.pollingManager.registerDevice(this);
@@ -110,6 +90,8 @@ export class SleepMeAccessory {
             this.platform.log.warn(`No polling manager available for ${this.displayName}`);
         }
         this.platform.log.info(`Accessory initialized: ${this.displayName} (ID: ${this.deviceId})`);
+        // Fetch initial device status immediately to avoid waiting for polling cycle
+        this.fetchInitialStatus();
     }
     /**
      * Set up the accessory information service
@@ -245,6 +227,7 @@ export class SleepMeAccessory {
             maxValue: MAX_TEMPERATURE_C + 5,
             minStep: 0.1
         })
+            .updateValue(Math.max(MIN_TEMPERATURE_C - 5, this.currentTemperature || 20))
             .onGet(() => Math.max(MIN_TEMPERATURE_C - 5, this.currentTemperature || 20));
         // 3. Target Temperature Control - simplified thermostat for temperature setting
         this.targetTemperatureService = this.accessory.getService(this.platform.Service.Thermostat) ||
@@ -258,6 +241,7 @@ export class SleepMeAccessory {
             maxValue: MAX_TEMPERATURE_C,
             minStep: 0.5
         })
+            .updateValue(Math.max(MIN_TEMPERATURE_C, this.targetTemperature || 21))
             .onGet(() => Math.max(MIN_TEMPERATURE_C, this.targetTemperature || 21))
             .onSet(this.handleTargetTemperatureSet.bind(this));
         // Set current temperature for the thermostat service
@@ -268,6 +252,7 @@ export class SleepMeAccessory {
             maxValue: MAX_TEMPERATURE_C + 5,
             minStep: 0.1
         })
+            .updateValue(Math.max(MIN_TEMPERATURE_C - 5, this.currentTemperature || 20))
             .onGet(() => Math.max(MIN_TEMPERATURE_C - 5, this.currentTemperature || 20));
         // Set up heating/cooling state to reflect actual device status - only show OFF and AUTO for cleaner UX
         this.targetTemperatureService
@@ -401,39 +386,67 @@ export class SleepMeAccessory {
     }
     /**
      * Power toggle handler for switch interface
+     * Uses optimistic updates for immediate UI feedback
      */
     async handlePowerToggle(value) {
         const shouldTurnOn = value;
         this.lastUserActionTime = Date.now();
+        // Check for duplicate command (same state already in progress)
+        if (this.pendingOperation === 'power' && this.isPowered === shouldTurnOn) {
+            this.platform.log.debug(`Ignoring duplicate power ${shouldTurnOn ? 'ON' : 'OFF'} command - already in progress`);
+            return;
+        }
         // Increment command epoch to invalidate previous commands
         const currentEpoch = ++this.commandEpoch;
-        this.platform.log.info(`User power change: ${shouldTurnOn ? 'ON' : 'OFF'} for ${this.deviceId} - IMMEDIATE`);
+        this.platform.log.info(`⚡ User power change: ${shouldTurnOn ? 'ON' : 'OFF'} for ${this.deviceId} - OPTIMISTIC UPDATE`);
+        // Store previous state for rollback if needed
+        const previousPowerState = this.isPowered;
+        const previousPowerOffTime = this.lastPowerOffTime;
+        // Optimistic update: Update UI immediately for responsiveness
+        this.isPowered = shouldTurnOn;
+        if (!shouldTurnOn) {
+            this.lastPowerOffTime = Date.now();
+        }
+        // Sync thermostat state immediately when power switch changes
+        this.syncThermostatState();
+        this.updateAllServices();
+        this.platform.log.debug(`🔄 Optimistic update: power switch now shows ${shouldTurnOn ? 'ON' : 'OFF'}, thermostat synced`);
         if (shouldTurnOn) {
             // Turn on with current target temperature
-            await this.executeOperation('power', currentEpoch, async () => {
+            await this.executeOperationWithRollback('power', currentEpoch, 
+            // Operation
+            async () => {
                 const success = await this.apiClient.turnDeviceOn(this.deviceId, this.targetTemperature);
-                if (success) {
-                    this.isPowered = true;
-                    this.updateAllServices();
-                }
-                else {
+                if (!success) {
                     throw new Error('Failed to turn on device');
                 }
+            }, 
+            // Rollback on failure
+            () => {
+                this.isPowered = previousPowerState;
+                this.syncThermostatState();
+                this.updateAllServices();
+                this.platform.log.warn(`🔙 Rolled back power state to ${previousPowerState ? 'ON' : 'OFF'} due to API failure`);
             });
         }
         else {
             // Cancel any pending requests for clean OFF
             this.apiClient.cancelAllDeviceRequests(this.deviceId);
-            await this.executeOperation('power', currentEpoch, async () => {
+            await this.executeOperationWithRollback('power', currentEpoch, 
+            // Operation  
+            async () => {
                 const success = await this.apiClient.turnDeviceOff(this.deviceId);
-                if (success) {
-                    this.isPowered = false;
-                    this.lastPowerOffTime = Date.now(); // Track when we turned off
-                    this.updateAllServices();
-                }
-                else {
+                if (!success) {
                     throw new Error('Failed to turn off device');
                 }
+            }, 
+            // Rollback on failure
+            () => {
+                this.isPowered = previousPowerState;
+                this.lastPowerOffTime = previousPowerOffTime;
+                this.syncThermostatState();
+                this.updateAllServices();
+                this.platform.log.warn(`🔙 Rolled back power state to ${previousPowerState ? 'ON' : 'OFF'} due to API failure`);
             });
         }
     }
@@ -504,6 +517,34 @@ export class SleepMeAccessory {
         }
         // Update water level (common to all modes)
         this.updateWaterLevelService(this.waterLevel, this.isWaterLow);
+        // Cross-service validation - ensure power switch and thermostat states are consistent
+        this.validateServiceStates();
+    }
+    /**
+     * Validate that all services show consistent states
+     * Logs warnings if inconsistencies are detected
+     */
+    validateServiceStates() {
+        // Only validate in HYBRID mode where we have both power switch and thermostat
+        if (this.interfaceMode !== InterfaceMode.HYBRID || !this.powerSwitchService || !this.targetTemperatureService) {
+            return;
+        }
+        const powerSwitchState = this.powerSwitchService.getCharacteristic(this.Characteristic.On).value;
+        const thermostatState = this.targetTemperatureService.getCharacteristic(this.Characteristic.TargetHeatingCoolingState).value;
+        const expectedThermostatState = this.isPowered ?
+            this.Characteristic.TargetHeatingCoolingState.AUTO :
+            this.Characteristic.TargetHeatingCoolingState.OFF;
+        // Check for mismatches
+        if (powerSwitchState !== this.isPowered) {
+            this.platform.log.warn(`Power switch state mismatch: HomeKit=${powerSwitchState}, Internal=${this.isPowered} - correcting`);
+            this.powerSwitchService.updateCharacteristic(this.Characteristic.On, this.isPowered);
+        }
+        if (thermostatState !== expectedThermostatState) {
+            this.platform.log.warn(`Thermostat state mismatch: HomeKit=${thermostatState === this.Characteristic.TargetHeatingCoolingState.OFF ? 'OFF' : 'AUTO'}, Expected=${expectedThermostatState === this.Characteristic.TargetHeatingCoolingState.OFF ? 'OFF' : 'AUTO'} - correcting`);
+            this.targetTemperatureService.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, expectedThermostatState);
+        }
+        // Log validation success in verbose mode
+        this.platform.log.verbose(`Service state validation passed: power=${this.isPowered}, thermostat=${expectedThermostatState === this.Characteristic.TargetHeatingCoolingState.OFF ? 'OFF' : 'AUTO'}`);
     }
     /**
     * Get the current heating/cooling state based on device status
@@ -534,11 +575,16 @@ export class SleepMeAccessory {
     }
     /**
     * Get the target heating/cooling state
+    * Return OFF when device is actually off, AUTO when on
+    * This ensures thermostat state matches actual device state
     */
     getTargetHeatingCoolingState() {
-        return this.isPowered ?
-            this.Characteristic.TargetHeatingCoolingState.AUTO :
-            this.Characteristic.TargetHeatingCoolingState.OFF;
+        // Return OFF when device is actually powered off
+        if (!this.isPowered) {
+            return this.Characteristic.TargetHeatingCoolingState.OFF;
+        }
+        // Return AUTO when device is powered on
+        return this.Characteristic.TargetHeatingCoolingState.AUTO;
     }
     /**
        * Update the schedule manager with current temperature
@@ -577,6 +623,20 @@ export class SleepMeAccessory {
         service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.getTargetHeatingCoolingState());
     }
     /**
+     * Sync thermostat state with power switch state
+     * Ensures both services show consistent states
+     */
+    syncThermostatState() {
+        const service = this.getThermostatService();
+        if (!service)
+            return;
+        const targetState = this.getTargetHeatingCoolingState();
+        const currentState = this.getCurrentHeatingCoolingState();
+        service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, targetState);
+        service.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, currentState);
+        this.platform.log.debug(`Synced thermostat state: target=${targetState === this.Characteristic.TargetHeatingCoolingState.OFF ? 'OFF' : 'AUTO'}, current=${currentState === this.Characteristic.CurrentHeatingCoolingState.OFF ? 'OFF' : 'ON'}`);
+    }
+    /**
      * Handle getting the target temperature
      * @returns Current target temperature
      */
@@ -598,6 +658,8 @@ export class SleepMeAccessory {
         }
         // Mark user action time
         this.lastUserActionTime = Date.now();
+        // Track user activity for context-aware caching
+        this.apiClient.trackUserActivity(this.deviceId);
         // Cancel any pending operations for this device
         this.apiClient.cancelAllDeviceRequests(this.deviceId);
         await this.executeOperation('power', epoch, async () => {
@@ -645,43 +707,39 @@ export class SleepMeAccessory {
      */
     async handleTargetHeatingCoolingStateSet(value) {
         const shouldPowerOn = value !== this.Characteristic.TargetHeatingCoolingState.OFF;
-        this.platform.log.info(`User power change: ${shouldPowerOn ? 'ON' : 'OFF'} for ${this.deviceId} - IMMEDIATE`);
+        this.platform.log.info(`🎛️ User changed heating/cooling state: ${shouldPowerOn ? 'ON' : 'OFF'} for ${this.deviceId}`);
         // Increment command epoch to invalidate previous commands
         const currentEpoch = ++this.commandEpoch;
         if (value === this.Characteristic.TargetHeatingCoolingState.OFF) {
-            // Turn off
+            // Turn off device
+            this.platform.log.info(`🔴 Turning device OFF via heating/cooling state`);
             await this.setPowerState(false, currentEpoch, 'thermostat');
-        }
-        else {
-            // Turn on with current temperature (AUTO/HEAT/COOL modes)
-            await this.setPowerState(true, currentEpoch, 'thermostat');
-            // For SleepMe devices, we treat all active modes as AUTO
+            // BUT immediately reset to AUTO mode to keep temperature dial responsive
             setTimeout(() => {
                 const service = this.getThermostatService();
                 if (service) {
                     service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.AUTO);
+                    this.platform.log.debug(`Reset thermostat to AUTO mode to keep temperature dial responsive`);
                 }
-            }, 100);
+            }, 1000);
+        }
+        else {
+            // Turn on with current temperature (AUTO/HEAT/COOL modes)
+            this.platform.log.info(`🟢 Turning device ON via heating/cooling state`);
+            await this.setPowerState(true, currentEpoch, 'thermostat');
         }
     }
     /**
        * Verify power state consistency
+       * Note: We keep thermostat in AUTO mode for responsive temperature dial
+       * Power state is shown separately via the power switch service
        */
     async verifyPowerState() {
-        // Changed comparison to correctly compare the power state with the heating/cooling state
-        const currentTargetState = this.getTargetHeatingCoolingState();
-        const expectedState = this.isPowered ?
-            this.Characteristic.TargetHeatingCoolingState.AUTO :
-            this.Characteristic.TargetHeatingCoolingState.OFF;
-        if (currentTargetState !== expectedState) {
-            this.platform.log.debug('Verifying power state consistency...');
-            // Force UI to match our internal state
-            const service = this.getThermostatService();
-            if (service) {
-                service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.isPowered ?
-                    this.Characteristic.TargetHeatingCoolingState.AUTO :
-                    this.Characteristic.TargetHeatingCoolingState.OFF);
-            }
+        // Always keep thermostat in AUTO mode for temperature dial responsiveness
+        // The power switch service shows the actual device power state
+        const service = this.getThermostatService();
+        if (service) {
+            service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.AUTO);
         }
     }
     /**
@@ -712,19 +770,56 @@ export class SleepMeAccessory {
         }
     }
     /**
+     * Execute an operation with rollback support for optimistic updates
+     * @param operationType Type of operation
+     * @param epoch Command epoch to track cancellation
+     * @param operation Async operation to execute
+     * @param rollback Function to call if operation fails
+     */
+    async executeOperationWithRollback(operationType, epoch, operation, rollback) {
+        // Set pending operation
+        this.pendingOperation = operationType;
+        try {
+            // Only execute if the epoch hasn't changed (no newer commands queued)
+            if (epoch === this.commandEpoch) {
+                await operation();
+                this.platform.log.debug(`✅ ${operationType} operation completed successfully`);
+            }
+            else {
+                this.platform.log.debug(`Skipping stale ${operationType} operation (epoch ${epoch}, current ${this.commandEpoch})`);
+                // Still call rollback since we did optimistic update
+                rollback();
+            }
+        }
+        catch (error) {
+            this.platform.log.error(`❌ Error in ${operationType} operation: ${error instanceof Error ? error.message : String(error)}`);
+            // Call rollback to undo optimistic update
+            rollback();
+            // Don't re-throw - we've handled the error with rollback
+        }
+        finally {
+            // Clear pending operation
+            this.pendingOperation = null;
+        }
+    }
+    /**
      * Handle target temperature setting with trust-based approach
      * @param value New target temperature value
      */
     async handleTargetTemperatureSet(value) {
         const newTemp = value;
+        this.platform.log.info(`🌡️ Temperature dial changed to ${newTemp}°C (current: ${this.targetTemperature}°C, device powered: ${this.isPowered})`);
         // Skip if no real change
         if (!isNaN(this.targetTemperature) && Math.abs(this.targetTemperature - newTemp) < 0.5) {
+            this.platform.log.debug(`Temperature change too small (${Math.abs(this.targetTemperature - newTemp)}°C), skipping`);
             return;
         }
         // Store previous temperature before updating UI
         const previousTemp = this.targetTemperature;
         // Mark user action time
         this.lastUserActionTime = Date.now();
+        // Track user activity for context-aware caching
+        this.apiClient.trackUserActivity(this.deviceId);
         // Update UI immediately for responsiveness
         this.targetTemperature = newTemp;
         // ALWAYS automatically switch to AUTO mode when user sets temperature (regardless of current state)
@@ -732,20 +827,32 @@ export class SleepMeAccessory {
         const timeSinceLastPowerOff = Date.now() - this.lastPowerOffTime;
         const shouldAutoTurnOn = this.lastPowerOffTime === 0 || timeSinceLastPowerOff > 10000;
         if (shouldAutoTurnOn) {
+            this.platform.log.info(`🟢 Auto-switching to AUTO mode and power ON for temperature change`);
             // Always set to AUTO mode when user changes temperature (better UX)
             const service = this.getThermostatService();
             if (service) {
                 service.updateCharacteristic(this.Characteristic.TargetHeatingCoolingState, this.Characteristic.TargetHeatingCoolingState.AUTO);
-                this.platform.log.info(`Auto-switching to AUTO mode for temperature change`);
+                this.platform.log.debug(`Thermostat service switched to AUTO mode`);
+            }
+            else {
+                this.platform.log.warn(`No thermostat service found for AUTO mode switch`);
             }
             // ALSO update the power switch in hybrid mode (if it exists and device is off)
             if (this.powerSwitchService) {
-                // Get current power switch state from HomeKit (not our internal state)
+                // Check both HomeKit characteristic value AND our internal state for reliability
                 const currentSwitchState = this.powerSwitchService.getCharacteristic(this.Characteristic.On).value;
-                if (!currentSwitchState) {
+                this.platform.log.info(`🔌 Power switch sync check: HomeKit=${currentSwitchState}, Internal=${this.isPowered}`);
+                // Update power switch if either HomeKit or internal state shows device is off
+                if (!currentSwitchState || !this.isPowered) {
                     this.powerSwitchService.updateCharacteristic(this.Characteristic.On, true);
-                    this.platform.log.info(`Auto-switching power switch to ON for temperature change`);
+                    this.platform.log.info(`🟢 Auto-switching power switch to ON for temperature change (was HomeKit=${currentSwitchState}, Internal=${this.isPowered})`);
                 }
+                else {
+                    this.platform.log.info(`🟡 Power switch already ON - no sync needed (HomeKit=${currentSwitchState}, Internal=${this.isPowered})`);
+                }
+            }
+            else {
+                this.platform.log.warn(`⚠️ No power switch service found for hybrid mode sync`);
             }
         }
         else {
@@ -1020,9 +1127,55 @@ export class SleepMeAccessory {
                 this.updateScheduleManager(this.currentTemperature);
             }
         }
-        // Update target temperature
+        // Update target temperature with smart initialization logic
         if (isNaN(this.targetTemperature) || status.targetTemperature !== this.targetTemperature) {
-            this.targetTemperature = status.targetTemperature;
+            // Detect external temperature changes from native app
+            const hasExternalTempChange = !isNaN(this.lastKnownTargetTemp) &&
+                this.lastKnownTargetTemp !== status.targetTemperature &&
+                status.targetTemperature !== this.targetTemperature;
+            if (hasExternalTempChange) {
+                const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+                const wasRecentUserAction = timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS;
+                if (!wasRecentUserAction) {
+                    this.externalChangeDetected = true;
+                    this.lastExternalChangeTime = Date.now();
+                    this.platform.log.info(`🔄 External temperature change detected: ${this.lastKnownTargetTemp}°C → ${status.targetTemperature}°C ` +
+                        `(likely from native app or schedule)`);
+                }
+            }
+            // Determine the appropriate target temperature
+            let newTargetTemp = status.targetTemperature;
+            // Smart initialization: Only override on first startup or after long periods of inactivity
+            // AND only if there's no evidence of external control
+            const timeSinceLastUserAction = Date.now() - this.lastUserActionTime;
+            const timeSinceExternalChange = Date.now() - this.lastExternalChangeTime;
+            const isFirstStartup = this.isFirstStatusUpdate && this.lastUserActionTime === 0;
+            const isLongInactive = !this.isFirstStatusUpdate && timeSinceLastUserAction > 300000; // 5 minutes instead of 1
+            const hasRecentExternalActivity = this.externalChangeDetected && timeSinceExternalChange < 300000; // 5 minutes
+            const isPoweredOff = status.powerState === PowerState.OFF || status.thermalStatus === ThermalStatus.OFF;
+            // Smart initialization: At reboot/startup, always set target to current temperature
+            // This prevents unwanted heating/cooling when Homebridge starts up
+            // During runtime, respect external temperature changes from native app
+            if (isFirstStartup && isPoweredOff && !isNaN(status.currentTemperature)) {
+                // At reboot, always initialize target to current temperature for safety
+                newTargetTemp = status.currentTemperature;
+                this.platform.log.debug(`Reboot initialization: Setting target to current temperature (${newTargetTemp}°C) ` +
+                    `to prevent unwanted heating/cooling on startup`);
+            }
+            else if (hasRecentExternalActivity) {
+                this.platform.log.debug(`Respecting external temperature setting (${newTargetTemp}°C) - ` +
+                    `recent external activity detected`);
+            }
+            else if (isLongInactive && isPoweredOff && !hasRecentExternalActivity && !isNaN(status.currentTemperature)) {
+                // After long inactivity, also reset to current temperature
+                newTargetTemp = status.currentTemperature;
+                this.platform.log.debug(`Long inactivity reset: Setting target to current temperature (${newTargetTemp}°C) ` +
+                    `after extended period of inactivity`);
+            }
+            // Update tracking variables
+            this.lastKnownTargetTemp = status.targetTemperature;
+            this.targetTemperature = newTargetTemp;
+            this.isFirstStatusUpdate = false;
             // Clamp target temperature to HomeKit valid range
             // API returns 999 for MAX HEAT and -1 for MAX COLD, but HomeKit has stricter limits
             let clampedTargetTemp = this.targetTemperature;
@@ -1043,18 +1196,20 @@ export class SleepMeAccessory {
             const timeSinceUserAction = Date.now() - this.lastUserActionTime;
             const wasUserAction = timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS;
             if (!wasUserAction) {
-                this.platform.log.warn(`UNEXPECTED STATE CHANGE: Device ${this.deviceId} (${this.displayName}) ` +
+                this.platform.log.info(`🔄 External control detected: Device ${this.deviceId} (${this.displayName}) ` +
                     `power state changed: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'} ` +
-                    `(last user action was ${Math.round(timeSinceUserAction / 1000)}s ago)`);
+                    `(likely from native app or schedule)`);
             }
             else {
-                this.platform.log.info(`Device ${this.deviceId} power state changed: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
+                this.platform.log.info(`⚡ HomeKit control: Device ${this.deviceId} power state changed: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
             }
             this.isPowered = newPowerState;
             // Track power off time if device was turned off
             if (!newPowerState) {
                 this.lastPowerOffTime = Date.now();
             }
+            // Sync thermostat state when power state changes from external sources
+            this.syncThermostatState();
         }
         // Update water level if available
         if (status.waterLevel !== undefined) {
@@ -1066,6 +1221,44 @@ export class SleepMeAccessory {
         }
         // Update all HomeKit services based on interface mode
         this.updateAllServices();
+        // Final state consistency check after all updates
+        this.validateServiceStates();
+    }
+    /**
+     * Fetch initial device status immediately after initialization
+     * Tries cached data first to avoid rate limiting, then fresh if needed
+     */
+    async fetchInitialStatus() {
+        try {
+            this.platform.log.debug(`Fetching initial status for ${this.deviceId}`);
+            // First try cached data to avoid immediate rate limiting
+            const status = await this.apiClient.getDeviceStatus(this.deviceId, false); // Try cached first
+            if (status) {
+                this.platform.log.info(`Got initial cached status for ${this.deviceId}: power=${status.powerState}, temp=${status.currentTemperature}°C`);
+                this.onStatusUpdate(status);
+            }
+            else {
+                // No cached data available, try fresh call immediately
+                this.platform.log.debug(`No cached status, trying fresh call immediately...`);
+                try {
+                    const freshStatus = await this.apiClient.getDeviceStatus(this.deviceId, true);
+                    if (freshStatus) {
+                        this.platform.log.info(`Got initial fresh status for ${this.deviceId}: power=${freshStatus.powerState}, temp=${freshStatus.currentTemperature}°C`);
+                        this.onStatusUpdate(freshStatus);
+                    }
+                    else {
+                        this.platform.log.warn(`No fresh status available for ${this.deviceId}`);
+                    }
+                }
+                catch (error) {
+                    this.platform.log.warn(`Failed to fetch fresh initial status for ${this.deviceId}: ${error}`);
+                    // Will be retried by polling manager shortly
+                }
+            }
+        }
+        catch (error) {
+            this.platform.log.error(`Failed to fetch initial status for ${this.deviceId}: ${error}`);
+        }
     }
     /**
      * Clean up resources when this accessory is removed

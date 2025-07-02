@@ -2,7 +2,7 @@
  * SleepMe API client implementation with robust error handling and rate limiting
  */
 import axios from 'axios';
-import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, BACKGROUND_REQUEST_THRESHOLD, RequestPriority } from '../settings.js';
+import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, MIN_REQUEST_INTERVAL, DEFAULT_CACHE_VALIDITY_MS, CACHE_USER_ACTIVE, CACHE_DEVICE_ACTIVE, CACHE_NORMAL, CACHE_IDLE, CACHE_RECOVERY, MAX_RETRIES, BACKGROUND_REQUEST_THRESHOLD, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
 import { TokenBucket } from '../token-bucket.js';
 /**
@@ -29,6 +29,9 @@ export class SleepMeApi {
     requestIdCounter = 0;
     // Device status cache
     deviceStatusCache = new Map();
+    // User activity tracking for context-aware caching
+    lastUserActivity = 0;
+    userActiveDevices = new Set();
     // API statistics for monitoring
     stats = {
         totalRequests: 0,
@@ -147,6 +150,53 @@ export class SleepMeApi {
         });
     }
     /**
+     * Get context-aware cache validity period based on device state and user activity
+     * @param cachedStatus Cached device status
+     * @returns Cache validity period in milliseconds
+     */
+    getContextAwareCacheValidity(cachedStatus) {
+        const now = Date.now();
+        // Check if device is actively heating/cooling (needs frequent updates)
+        const isDeviceActive = cachedStatus.status.powerState === PowerState.ON &&
+            (cachedStatus.status.thermalStatus === ThermalStatus.ACTIVE ||
+                cachedStatus.status.thermalStatus === ThermalStatus.HEATING ||
+                cachedStatus.status.thermalStatus === ThermalStatus.COOLING);
+        // Check if user has been active recently (5 minutes)
+        const isUserActive = (now - this.lastUserActivity) < 300000;
+        // Check if we're in rate limit recovery mode
+        const isRateLimited = this.rateLimitBackoffUntil > now;
+        // Return appropriate cache validity based on context
+        if (isRateLimited) {
+            return CACHE_RECOVERY; // Longer cache during rate limit recovery
+        }
+        else if (isUserActive) {
+            return CACHE_USER_ACTIVE; // Short cache when user is active
+        }
+        else if (isDeviceActive) {
+            return CACHE_DEVICE_ACTIVE; // Medium cache for active devices
+        }
+        else if ((now - this.lastUserActivity) > 1800000) { // 30 minutes idle
+            return CACHE_IDLE; // Longer cache when idle
+        }
+        else {
+            return CACHE_NORMAL; // Default cache period
+        }
+    }
+    /**
+     * Track user activity for context-aware caching
+     * @param deviceId Device ID that user interacted with
+     */
+    trackUserActivity(deviceId) {
+        this.lastUserActivity = Date.now();
+        if (deviceId) {
+            this.userActiveDevices.add(deviceId);
+            // Remove from active set after 10 minutes
+            setTimeout(() => {
+                this.userActiveDevices.delete(deviceId);
+            }, 600000);
+        }
+    }
+    /**
      * Clean up stale requests from all queues
      */
     cleanupStaleRequests() {
@@ -155,7 +205,6 @@ export class SleepMeApi {
         const maxExecutingTime = 30000; // 30 seconds for executing requests
         let cleanedCount = 0;
         const cleanupQueue = (queue, queueName) => {
-            const initialLength = queue.length;
             for (let i = queue.length - 1; i >= 0; i--) {
                 const request = queue[i];
                 const age = now - request.timestamp;
@@ -255,33 +304,17 @@ export class SleepMeApi {
             if (!forceFresh) {
                 const cachedStatus = this.deviceStatusCache.get(deviceId);
                 const now = Date.now();
-                // Use cache with dynamic validity based on confidence and source
-                // High confidence cache (from PATCH responses) can be used longer
+                // Use cache with dynamic validity based on confidence, source, and context
                 if (cachedStatus) {
-                    let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
-                    // Adjust validity period based on confidence, source, and device state
-                    // More aggressive caching for routine polling efficiency, but shorter for active devices
+                    let validityPeriod = this.getContextAwareCacheValidity(cachedStatus);
+                    // Further adjust based on confidence and source
                     if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
-                        // Check if device is actively heating/cooling (needs more frequent updates)
-                        const isDeviceActive = cachedStatus.status.powerState === PowerState.ON &&
-                            (cachedStatus.status.thermalStatus === ThermalStatus.ACTIVE ||
-                                cachedStatus.status.thermalStatus === ThermalStatus.HEATING ||
-                                cachedStatus.status.thermalStatus === ThermalStatus.COOLING);
-                        if (isDeviceActive) {
-                            // Active devices need fresher data for temperature tracking
-                            validityPeriod = cachedStatus.source === 'patch' ?
-                                DEFAULT_CACHE_VALIDITY_MS * 2 : // Shorter validity for active PATCH responses
-                                DEFAULT_CACHE_VALIDITY_MS * 1.5; // Shorter validity for active GET
-                        }
-                        else {
-                            // Inactive devices can use longer cache periods
-                            validityPeriod = cachedStatus.source === 'patch' ?
-                                DEFAULT_CACHE_VALIDITY_MS * 4 : // Longer validity for inactive PATCH responses
-                                DEFAULT_CACHE_VALIDITY_MS * 3; // Extended validity for inactive GET
-                        }
+                        // High confidence data can use slightly longer periods
+                        validityPeriod = Math.min(validityPeriod * 1.2, CACHE_IDLE);
                     }
                     else if (cachedStatus.isOptimistic) {
-                        validityPeriod = DEFAULT_CACHE_VALIDITY_MS; // Normal validity for optimistic updates
+                        // Optimistic updates use shorter periods for validation
+                        validityPeriod = Math.min(validityPeriod * 0.8, CACHE_USER_ACTIVE);
                     }
                     if (now - cachedStatus.timestamp < validityPeriod) {
                         const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
@@ -342,6 +375,8 @@ export class SleepMeApi {
    */
     async controlDevice(deviceId, action, temperature) {
         try {
+            // Track user activity for context-aware caching
+            this.trackUserActivity(deviceId);
             // Cancel any pending requests for this device
             this.cancelAllDeviceRequests(deviceId);
             let payload;
@@ -614,6 +649,15 @@ export class SleepMeApi {
         // Extract firmware version and other details
         const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') ||
             this.extractNestedValue(response, 'firmware_version');
+        // Enhanced debug logging for firmware version parsing
+        this.logger.debug(`Firmware extraction debug:`);
+        this.logger.debug(`  - about.firmware_version: ${this.extractNestedValue(response, 'about.firmware_version')}`);
+        this.logger.debug(`  - firmware_version: ${this.extractNestedValue(response, 'firmware_version')}`);
+        this.logger.debug(`  - has 'about' object: ${response.about !== undefined}`);
+        if (response.about) {
+            this.logger.debug(`  - about object keys: ${Object.keys(response.about).join(', ')}`);
+        }
+        this.logger.debug(`  - final firmwareVersion: ${firmwareVersion}`);
         if (firmwareVersion) {
             status.firmwareVersion = String(firmwareVersion);
         }

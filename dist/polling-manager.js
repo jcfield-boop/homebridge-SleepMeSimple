@@ -71,10 +71,8 @@ export class PollingManager {
             return;
         this.pollingActive = true;
         this.logger.info(`Starting centralized polling for ${this.devices.size} devices every ${this.pollingInterval / 1000}s`);
-        // Initial poll after much longer delay to avoid startup rate limiting  
-        // Based on token bucket findings: need 5+ minute gaps between background calls
-        // Reduced from 7 minutes to 8 minutes for even more conservative approach
-        setTimeout(() => this.pollAllDevices(), 480000); // 8 minutes after discovery
+        // Start polling after initial device status fetches complete to avoid rate limiting collision
+        setTimeout(() => this.pollAllDevices(), 5000); // 5 seconds after discovery
         // Set up regular polling
         this.pollingTimer = setInterval(() => {
             this.pollAllDevices();
@@ -115,7 +113,7 @@ export class PollingManager {
             }
             // Small delay between validation checks
             if (deviceIds.length > 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
         }
         this.logger.info(`${validDevices.length}/${deviceIds.length} cached devices validated`);
@@ -142,16 +140,16 @@ export class PollingManager {
         for (const [deviceId, device] of this.devices) {
             try {
                 const isActiveDevice = this.activeDevices.has(deviceId);
-                // Active devices get more frequent fresh calls for progress monitoring
-                // Inactive devices use cached data more often to preserve API rate limits
+                // With improved API utilization, we can poll every cycle
+                // Context-aware caching in the API client handles the optimization
                 let shouldForceFresh = false;
                 if (isActiveDevice) {
-                    // Active devices: force fresh every 3rd cycle (more frequent monitoring)
-                    shouldForceFresh = (this.currentPollCycle % 3 === 0);
+                    // Active devices: force fresh every cycle for progress monitoring
+                    shouldForceFresh = true;
                 }
                 else {
-                    // Inactive devices: force fresh every 10th cycle (preserve rate limits)
-                    shouldForceFresh = (this.currentPollCycle % 10 === 0);
+                    // Inactive devices: force fresh every 2nd cycle for external change detection
+                    shouldForceFresh = (this.currentPollCycle % 2 === 0);
                 }
                 const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
                 if (status) {
@@ -185,7 +183,7 @@ export class PollingManager {
                 }
                 // Small delay between devices to be gentle on the API
                 if (this.devices.size > 1) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, 200));
                 }
             }
             catch (error) {
