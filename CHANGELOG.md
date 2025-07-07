@@ -1,4 +1,13 @@
 # Changelog
+## 6.12.6 (2025-01-07)
+
+### Repository URL Fix for Changelog Display
+- **Fixed Repository URL**: Corrected GitHub repository URL in package.json for proper changelog fetching
+  - Changed from non-existent `jamesfield/homebridge-SleepMeSimple` to actual `jcfield-boop/homebridge-SleepMeSimple`
+  - Homebridge UX can now successfully fetch CHANGELOG.md from the correct GitHub repository
+  - Resolves "Could not retrieve changelog, perhaps this plugin does not provide a CHANGELOG.md file" error
+  - All repository metadata URLs now point to the correct, accessible GitHub repository
+
 ## 6.12.5 (2025-01-07)
 
 ### Homebridge UX Compatibility Fix
