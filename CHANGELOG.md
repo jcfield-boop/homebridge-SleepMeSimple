@@ -1,4 +1,13 @@
 # Changelog
+## 6.12.5 (2025-01-07)
+
+### Homebridge UX Compatibility Fix
+- **Immediate Changelog Display Fix**: Ensures changelog displays properly in Homebridge v1.10.0 and UI v4.78.1
+  - Publishes version with repository metadata already in place
+  - Users upgrading from 6.12.4 → 6.12.5 will now see proper changelog display
+  - Resolves "Release notes are only shown when updating to the latest version" message
+  - Future updates will work correctly with new Homebridge UX requirements
+
 ## 6.12.4 (2025-01-07)
 
 ### Package Metadata Enhancement
