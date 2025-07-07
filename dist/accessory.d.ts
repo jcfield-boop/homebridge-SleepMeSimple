@@ -1,117 +1,94 @@
 /**
  * SleepMe Accessory
  *
- * This class implements a simplified HomeKit interface for SleepMe devices,
- * using separate services for temperature reporting, power control, and temperature adjustment
+ * Implements HomeKit interface for SleepMe devices with simplified thermostat control
+ * that only offers AUTO or OFF states
  */
 import { PlatformAccessory } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
 import { SleepMeApi } from './api/sleepme-api.js';
 /**
  * SleepMe Accessory
- * Provides a simplified interface for SleepMe devices using separate HomeKit services
+ * Provides a simplified HomeKit interface for SleepMe devices
+ * with only AUTO and OFF (standby) modes
  */
 export declare class SleepMeAccessory {
     private readonly platform;
     private readonly accessory;
-    private readonly apiClient;
-    private temperatureSensorService;
-    private switchService;
-    private temperatureControlService;
+    private readonly api;
+    private thermostatService;
     private waterLevelService?;
     private informationService;
     private currentTemperature;
     private targetTemperature;
     private isPowered;
-    private firmwareVersion;
     private waterLevel;
     private isWaterLow;
     private readonly deviceId;
     private readonly displayName;
     private deviceModel;
+    private firmwareVersion;
     private statusUpdateTimer?;
-    private lastTemperatureSetTime;
-    private readonly Characteristic;
+    private lastStatusUpdate;
+    private lastUserActionTime;
+    private failedUpdateAttempts;
+    private updateInProgress;
+    private debouncedTemperatureSet;
+    private debouncedPowerSet;
     /**
      * Constructor for the SleepMe accessory
      */
-    constructor(platform: SleepMeSimplePlatform, accessory: PlatformAccessory, apiClient: SleepMeApi);
+    constructor(platform: SleepMeSimplePlatform, accessory: PlatformAccessory, api: SleepMeApi);
     /**
      * Set up the accessory information service
      */
     private setupInformationService;
     /**
-     * Set up the temperature sensor service
+     * Set up the thermostat service with simplified controls (only OFF and AUTO)
      */
-    private setupTemperatureSensorService;
+    private setupThermostatService;
     /**
-     * Set up the power switch service
+     * Handle target temperature changes from HomeKit
      */
-    private setupPowerSwitchService;
+    private handleTargetTemperatureSet;
     /**
-     * Set up the temperature control service (using Lightbulb)
+     * Actually set temperature on the device (called by debounced handler)
      */
-    private setupTemperatureControlService;
+    private setTemperature;
     /**
-     * Add/update the water level service if supported
-     * @param waterLevel - Current water level percentage
-     * @param isWaterLow - Whether water level is considered low
+     * Handle target heating cooling state changes from HomeKit
      */
-    private setupWaterLevelService;
+    private handleTargetHeatingCoolingStateSet;
+    /**
+     * Actually set power state on device (called by debounced handler)
+     */
+    private setPowerState;
+    /**
+     * Get current heating/cooling state based on temperature relation
+     */
+    private getCurrentHeatingCoolingState;
+    /**
+     * Get target heating/cooling state (AUTO when on, OFF when off)
+     */
+    private getTargetHeatingCoolingState;
+    /**
+     * Update heating/cooling state characteristics in HomeKit
+     */
+    private updateHeatingCoolingStates;
     /**
      * Set up the status polling mechanism
      */
     private setupStatusPolling;
     /**
-     * Detect device model based on attachments or other characteristics
-     * @param data - Raw device data from API
-     * @returns Detected device model name
+     * Set up water level service for compatible devices
      */
-    private detectDeviceModel;
+    private setupWaterLevelService;
     /**
-     * Refresh the device status from the API
-     * @param isInitialSetup - Whether this is the initial setup refresh
+     * Refresh device status from the API
      */
     private refreshDeviceStatus;
     /**
-     * Convert temperature to percentage (for the brightness control)
-     * @param temperature - Temperature in Celsius
-     * @returns Percentage value for slider (0-100)
-     */
-    private temperatureToPercentage;
-    /**
-     * Convert percentage to temperature
-     * @param percentage - Percentage value from slider (0-100)
-     * @returns Temperature in Celsius
-     */
-    private percentageToTemperature;
-    /**
-     * Handler for CurrentTemperature GET
-     * @returns Current temperature value
-     */
-    private handleCurrentTemperatureGet;
-    /**
-     * Handler for power state GET
-     * @returns Current power state (boolean)
-     */
-    private handlePowerStateGet;
-    /**
-     * Handler for power state SET
-     * @param value - New power state value
-     */
-    private handlePowerStateSet;
-    /**
-     * Handler for temperature control GET
-     * @returns Current temperature as percentage for slider
-     */
-    private handleTemperatureControlGet;
-    /**
-     * Handler for temperature control SET
-     * @param value - New temperature percentage from slider
-     */
-    private handleTemperatureControlSet;
-    /**
-     * Clean up resources when this accessory is removed
+     * Clean up resources when accessory is removed
      */
     cleanup(): void;
 }

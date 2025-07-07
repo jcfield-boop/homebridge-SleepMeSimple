@@ -12,8 +12,7 @@ export enum ScheduleType {
   EVERYDAY = 'Everyday',
   WEEKDAYS = 'Weekdays',
   WEEKEND = 'Weekend',
-  SPECIFIC_DAY = 'Specific Day',
-  WARM_HUG = 'Warm Hug'
+  SPECIFIC_DAY = 'Specific Day'
 }
 
 /**
@@ -37,6 +36,8 @@ export interface TemperatureSchedule {
   day?: DayOfWeek;              // Day of week for specific day schedules
   time: string;                 // Time in 24-hour format (HH:MM)
   temperature: number;          // Target temperature
+  description?: string;         // Description of the schedule (e.g., "cool down")
+  isWarmHug?: boolean;          // Whether this is a warm hug wake-up schedule
   nextExecutionTime?: number;   // Next execution timestamp (ms)
   lastExecutionTime?: number;   // Last execution timestamp (ms)
 }
@@ -192,12 +193,12 @@ private checkSchedules(): void {
         shouldRunToday = true;
       } else if (schedule.type === ScheduleType.SPECIFIC_DAY && schedule.day === currentDay) {
         shouldRunToday = true;
-      } else if (schedule.type === ScheduleType.WARM_HUG) {
+      } else if (schedule.isWarmHug=== true) {
         // Warm hug follows same logic as other schedule types
-        if (schedule.day !== undefined) {
-          shouldRunToday = schedule.day === currentDay;
+        if (schedule.isWarmHug) {
+          this.startWarmHug(deviceId, schedule);
         } else {
-          shouldRunToday = true; // Default to running every day
+          this.executeSchedule(deviceId, schedule);
         }
       }
       
@@ -206,23 +207,23 @@ private checkSchedules(): void {
         `nextExecution=${new Date(schedule.nextExecutionTime).toLocaleString()}, ` +
         `shouldRunToday=${shouldRunToday}, now=${new Date(now).toLocaleString()}`);
       
-      // Check if it's time to execute and schedule applies today
-      if (shouldRunToday && now >= schedule.nextExecutionTime) {
-        this.logger.info(`Executing schedule ${index} (${schedule.type}) at ${schedule.time} ` +
-          `for device ${deviceId}: ${schedule.temperature}°C`);
-        
-        if (schedule.type === ScheduleType.WARM_HUG) {
-          this.startWarmHug(deviceId, schedule);
-        } else {
-          this.executeSchedule(deviceId, schedule);
-        }
-        
-        // Update last execution time and calculate next execution
-        deviceSchedules[index].lastExecutionTime = now;
-        deviceSchedules[index].nextExecutionTime = this.calculateNextExecutionTime(schedule);
-        
-        this.logger.debug(`Next execution for schedule ${index}: ${new Date(deviceSchedules[index].nextExecutionTime!).toLocaleString()}`);
-      }
+// Check if it's time to execute and schedule applies today
+if (shouldRunToday && now >= schedule.nextExecutionTime) {
+  this.logger.info(`Executing schedule ${index} (${schedule.type}) at ${schedule.time} ` +
+    `for device ${deviceId}: ${schedule.temperature}°C`);
+  
+  if (schedule.isWarmHug === true) {
+    this.startWarmHug(deviceId, schedule);
+  } else {
+    this.executeSchedule(deviceId, schedule);
+  }
+  
+  // Update last execution time and calculate next execution
+  deviceSchedules[index].lastExecutionTime = now;
+  deviceSchedules[index].nextExecutionTime = this.calculateNextExecutionTime(schedule);
+  
+  this.logger.debug(`Next execution for schedule ${index}: ${new Date(deviceSchedules[index].nextExecutionTime!).toLocaleString()}`);
+}
     });
   });
 }
@@ -348,8 +349,8 @@ private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
   const scheduleDate = new Date();
   scheduleDate.setHours(hours, minutes, 0, 0);
   
-  // For Warm Hug, subtract the duration to start earlier
-  if (schedule.type === ScheduleType.WARM_HUG) {
+  // For Warm Hug schedules, subtract the duration to start earlier
+  if (schedule.isWarmHug === true) {
     scheduleDate.setMinutes(scheduleDate.getMinutes() - this.warmHugConfig.duration);
   }
   
@@ -381,40 +382,24 @@ private calculateNextExecutionTime(schedule: TemperatureSchedule): number {
       }
       break;
       
-      case ScheduleType.SPECIFIC_DAY:
-        if (schedule.day === undefined) {
-          this.logger.error('Specific day schedule missing day property');
-          return 0;
-        }
-        
-        // Wrap the declaration in a block to satisfy ESLint
-        {
-          const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-          
-          // If today is the target day but time has passed, add 7 days
-          if (daysUntilTargetDay === 0) {
-            scheduleDate.setDate(scheduleDate.getDate() + 7);
-          } else {
-            scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
-          }
-        }
-        break;
+    case ScheduleType.SPECIFIC_DAY:
+      if (schedule.day === undefined) {
+        this.logger.error('Specific day schedule missing day property');
+        return 0;
+      }
       
-        case ScheduleType.WARM_HUG:
-          // Handle like regular schedules but start earlier (already adjusted above)
-          // Apply the same day-of-week logic as above types
-          if (schedule.day !== undefined) {
-            // Wrap in a block
-            {
-              const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
-              if (daysUntilTargetDay === 0) {
-                scheduleDate.setDate(scheduleDate.getDate() + 7);
-              } else {
-                scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
-              }
-            }
-          }
-          break;
+      // Wrap the declaration in a block to satisfy ESLint
+      {
+        const daysUntilTargetDay = (schedule.day - scheduleDate.getDay() + 7) % 7;
+        
+        // If today is the target day but time has passed, add 7 days
+        if (daysUntilTargetDay === 0) {
+          scheduleDate.setDate(scheduleDate.getDate() + 7);
+        } else {
+          scheduleDate.setDate(scheduleDate.getDate() + daysUntilTargetDay);
+        }
+      }
+      break;
       
     default:
       this.logger.error(`Unknown schedule type: ${schedule.type}`);
@@ -486,7 +471,6 @@ public static scheduleTypeFromString(typeStr: string): ScheduleType {
     case 'Weekdays': return ScheduleType.WEEKDAYS;
     case 'Weekend': return ScheduleType.WEEKEND;
     case 'Specific Day': return ScheduleType.SPECIFIC_DAY;
-    case 'Warm Hug': return ScheduleType.WARM_HUG;
     default: return ScheduleType.EVERYDAY; // Default to everyday if unknown
   }
 }

@@ -1,6 +1,1258 @@
 # Changelog
-## 5.5.5 (2025-04-01)
+## 6.9.0 (2025-04-25)
 
+### Changed
+- **Simplified HomeKit Interface**: Restricted thermostat modes to only show "Off" and "Auto" options
+  - Modified thermostat service to restrict `TargetHeatingCoolingState` to only OFF and AUTO values
+  - Simplified thermostat handling to better match SleepMe device's actual behavior
+  - Improved power state verification to ensure consistent UI representation
+  - Enhanced HomeKit integration by removing unnecessary heating/cooling states
+  - Streamlined user experience with clearer controls that match device functionality
+
+### Technical
+- **HomeKit Integration**: Better alignment with SleepMe device behavior
+  - Restricted valid thermostat mode values to only those actually used
+  - Enhanced state synchronization between internal tracking and HomeKit UI
+  - Improved power state verification with explicit characteristic updates
+  - Simplified control logic by removing unnecessary heating/cooling state management
+  - Added better logging for thermostat state changes
+## 6.8.1 (2025-04-20)
+
+### Changed
+- **Simplified HomeKit Interface**: Reduced thermostat modes to only show "Off" and "Auto" options
+  - Modified thermostat service to restrict `TargetHeatingCoolingState` to only OFF and AUTO values
+  - Simplified thermostat handling to better match SleepMe device's actual behavior
+  - Improved power state verification to ensure consistent UI representation
+  - Enhanced HomeKit integration by removing unnecessary heating/cooling states
+  - Streamlined user experience with clearer controls that match device functionality
+
+### Technical
+- **HomeKit Integration**: Better alignment with SleepMe device behavior
+  - Restricted valid thermostat mode values to only those actually used
+  - Enhanced state synchronization between internal tracking and HomeKit UI
+  - Improved power state verification with explicit characteristic updates
+  - Simplified control logic by removing unnecessary heating/cooling state management
+  - Added better logging for thermostat state changes
+## 6.7.0 (2025-04-20)
+
+### Fixed
+- **Schedule Visibility Logic**: Properly handle enabling/disabling schedules section
+  - Fixed issue where schedules section would still appear when disabled
+  - Added proper state management to preserve schedules in config when disabled
+  - Enhanced initialization code to respect schedule enable status from config
+  - Improved UI state handling with both CSS class and display property control
+  - Added defensive validation before any schedule operations
+
+### Improved
+- **Configuration Management**: Better handling of schedule configuration
+  - Preserved existing schedules in config.json even when schedules are disabled
+  - Added proper state verification throughout the configuration process
+  - Enhanced logging to track schedule enable/disable status
+  - Fixed schedule container visibility handling with multiple redundant methods
+  - Improved error reporting for schedule operations
+
+### Technical
+- **State Management**: Enhanced conditional UI element handling
+  - Implemented areSchedulesEnabled helper for centralized state checking
+  - Added multiple validation points to prevent schedule operations when disabled
+  - Improved initialization sequence for conditional elements
+  - Enhanced DOM manipulation with both class and style property updates
+  - Fixed edge cases in configuration loading and saving
+## 6.6.1 (2025-04-14)
+
+### Fixed
+- **UI Conditional Elements**: Fixed issue where Day selection wasn't properly hidden by default
+  - Enhanced initialization of conditional UI elements with both class and style manipulation
+  - Added robust event listeners for visibility toggle based on schedule type
+  - Added explicit DOM state verification to ensure elements appear/disappear correctly
+  - Fixed initial state handling on page load
+
+- **Template Preview Functionality**: Repaired non-functional "Preview Schedules" button
+  - Completely rewrote template preview generation for better reliability
+  - Added proper container detection and element creation logic
+  - Enhanced template data access for consistent previewing
+  - Improved button generation with direct event binding
+  - Added better error handling and user feedback for preview operations
+  - Fixed temperature unit conversion in schedule previews
+
+### Technical
+- **DOM Manipulation**: Improved element state management with dual class/style approach
+  - Enhanced visibility toggling with both class manipulation and explicit style properties
+  - Added debugging information for state changes throughout UI interactions
+  - Improved error boundaries to prevent cascading failures in UI components
+  - Enhanced logging for easier troubleshooting of UI element states
+## 6.6.0 (2025-04-12)
+
+### Added
+- **Flexible Warm Hug Feature**: Transformed "Warm Hug Wake Up" from a schedule type to a checkbox option
+  - Added "Make this a Warm Hug Wake Up" checkbox that can be applied to any schedule type
+  - Enhanced schedule execution logic to check for isWarmHug flag instead of schedule type
+  - Added visual indicators in the UI to show which schedules use the warm hug feature
+  - Improved schedule management with more customization options
+
+### Changed
+- **Schedule Data Structure**: Updated TemperatureSchedule interface to use isWarmHug flag
+  - Removed ScheduleType.WARM_HUG from the enum
+  - Modified schedule processing to support the new flag-based system
+  - Simplified schedule type handling in the backend
+  - Ensured consistent naming with "Warm Hug Wake Up" throughout the UI
+
+### Fixed
+- **UI Element Visibility**: Fixed issue where Day selection field was not properly hidden by default
+  - Improved initialization sequence for conditional UI elements
+  - Added proper state handling for the day selection field
+  - Ensured warm hug info is shown only when the warm hug feature is enabled
+  - Enhanced error handling for UI element initialization
+
+### Technical Improvements
+- **Type Safety**: Enhanced TypeScript interfaces for better type checking
+  - Made description field properly optional in TemperatureSchedule interface
+  - Improved schedule parsing from configuration
+  - Added proper typing for all schedule properties
+  - Fixed ESLint warnings through proper interface definitions
+
+## 6.5.14 (2025-05-05)
+
+### Fixed
+- **UI Issues**: Resolved persistent UI status message and conditional display problems
+  - Fixed "Please Wait: Loading configuration..." message that remained on screen
+  - Enhanced day selector visibility to properly hide/show based on selection
+  - Improved initialization sequence for conditional UI elements
+  - Added additional error handling for UI state management
+  - Enhanced status message cleanup mechanism
+
+### Improved
+- **Sleep Cycle Sorting**: Enhanced schedule display with natural sleep cycle ordering
+  - Added intelligent sorting based on sleep phases rather than strict chronological ordering
+  - Organized schedules into bedtime (8PM-midnight), overnight (midnight-6AM), and morning (6AM-10AM) phases
+  - Maintained chronological sorting within each sleep phase
+  - Improved user experience by showing schedules in natural progression regardless of 24-hour clock values
+  - Enhanced visual grouping of related sleep cycle events
+  - Preserved all existing schedule display functionality including template badges and phase coloring
+
+### Changed
+- **UI Simplification**: Removed redundant UI elements for a cleaner interface
+  - Removed Test Connection button from main configuration form
+  - Removed Save Configuration button as changes are automatically saved
+  - Simplified schedule management UI with automatic saving
+
+### Fixed
+- **Terminology Consistency**: Renamed "Warm Hug" to "Warm Hug Wake Up" for clarity
+  - Updated all instances in schedule type dropdown
+  - Modified template definitions to use consistent naming
+  - Updated schedule rendering and UI display code
+  - Enhanced schedule form to use the more descriptive name
+  - Maintained all functionality while improving terminology clarity
+## 6.5.13 (2025-05-03)
+
+### Improved
+- **Sleep Cycle Sorting**: Enhanced schedule display with natural sleep cycle ordering
+  - Added intelligent sorting based on sleep phases rather than strict chronological ordering
+  - Organized schedules into bedtime (8PM-midnight), overnight (midnight-6AM), and morning (6AM-10AM) phases
+  - Maintained chronological sorting within each sleep phase
+  - Improved user experience by showing schedules in natural progression regardless of 24-hour clock values
+  - Enhanced visual grouping of related sleep cycle events
+  - Preserved all existing schedule display functionality including template badges and phase coloring
+
+### Changed
+- **UI Simplification**: Removed redundant UI elements for a cleaner interface
+  - Removed Test Connection button from main configuration form
+  - Removed Save Configuration button as changes are automatically saved
+  - Simplified schedule management UI with automatic saving
+  - Improved conditional display of day selection for Specific Day schedules
+
+### Fixed
+- **Terminology Consistency**: Renamed "Warm Hug" to "Warm Hug Wake Up" for clarity
+  - Updated all instances in schedule type dropdown
+  - Modified template definitions to use consistent naming
+  - Updated schedule rendering and UI display code
+  - Enhanced schedule form to use the more descriptive name
+  - Maintained all functionality while improving terminology clarity
+
+## 6.5.12 (2025-04-30)
+
+### Improved
+- **Sleep Cycle Sorting**: Enhanced schedule display with natural sleep cycle ordering
+  - Added intelligent sorting based on sleep phases rather than strict chronological ordering
+  - Organized schedules into bedtime (8PM-midnight), overnight (midnight-6AM), and morning (6AM-10AM) phases
+  - Maintained chronological sorting within each sleep phase
+  - Improved user experience by showing schedules in natural progression regardless of 24-hour clock values
+  - Enhanced visual grouping of related sleep cycle events
+  - Preserved all existing schedule display functionality including template badges and phase coloring
+
+### Technical
+- **Schedule Organization**: Added more intuitive organization logic
+  - Implemented `getSleepPhaseOrder` function to categorize times into sleep cycle phases
+  - Created two-level sorting system (primary by sleep phase, secondary by time)
+  - Enhanced schedule grouping to better reflect natural sleep routines
+  - Maintained backwards compatibility with existing schedule data structure
+  - Added appropriate documentation for future maintenance
+## 6.5.10 (2025-04-28)
+
+### Fixed
+- **Real API Testing**: Completely replaced mock connection testing with actual SleepMe API validation
+  - Implemented proper API call to validate user's token against the real SleepMe API endpoint
+  - Added comprehensive response parsing with device detection and enumeration
+  - Enhanced error handling with specific messages for different error types (401, 403, 429)
+  - Implemented timeout protection to prevent UI hanging if API is unresponsive
+  - Added detailed error reporting with server-side message extraction when available
+  - Created proper loading indicator management during API testing
+  - Fixed response formatting to show actual connected devices when successful
+
+### Improved
+- **Error Feedback**: Enhanced user feedback for connection testing
+  - Added more descriptive error messages based on HTTP status codes
+  - Improved error details display for better troubleshooting guidance
+  - Added network error detection with friendly explanations
+  - Enhanced timeout handling with clear user feedback
+  - Implemented automatic spinner management throughout the test process
+  - Added detailed console logging for better debugging capabilities
+
+### Technical
+- **API Integration**: Better handling of SleepMe API communication
+  - Added proper authentication header formatting
+  - Enhanced response parsing with support for different API response formats
+  - Implemented consistent error structure between server and client
+  - Added timeout protection at both server and client levels
+  - Improved device information extraction and formatting
+  - Created more resilient promise handling with Promise.race for timeouts
+
+## 6.5.8 (2025-04-25)
+
+### Fixed
+- **Schedule Persistence Breakthrough**: Completely solved the issue of schedules not displaying in the UI
+  - Implemented dedicated ScheduleLoader module to safeguard schedule data throughout application lifecycle
+  - Added protected scope storage for schedules that can't be accidentally overwritten
+  - Implemented DOM observation to detect and recover from schedule rendering failures
+  - Added function wrapping to integrate with existing code without breaking changes
+  - Created robust schedule restoration system with multiple recovery mechanisms
+  - Fixed subtle race condition between configuration loading and schedule rendering
+  - Enhanced schedule data integrity with proper deep copying
+  - Added multiple verification points throughout the rendering process
+  - Implemented automatic schedule re-rendering when failures are detected
+  - Fixed "window.schedules is empty" issue with script scope isolation
+
+### Technical
+- **Enhanced Data Flow**: Improved data preservation between initialization stages
+  - Added module encapsulation with closure-based private data
+  - Enhanced function interception with proper context preservation
+  - Created non-destructive patching of core UI functions
+  - Implemented MutationObserver for real-time UI state monitoring
+  - Added multiple fallback mechanisms for error recovery
+  - Enhanced debugging with detailed console logging
+  - Fixed timing issues in asynchronous initialization sequence
+  - Improved error boundaries around critical operations
+  - Added explicit state tracking for schedule loading status
+## 6.5.7 (2025-04-20)
+### Fixed
+- **Critical Schedule Loading Fix**: Resolved issue where schedules were loaded from config.json but then lost before rendering
+  - Added proper deep copying of schedule data using JSON.parse(JSON.stringify())
+  - Fixed initialization order to ensure schedules aren't overwritten during startup
+  - Enhanced failsafe mechanism to reload configurations if schedules are lost
+  - Implemented explicit initialization of window.schedules array before rendering
+  - Added more comprehensive error handling throughout schedule loading process
+  - Improved schedule state verification with detailed logging
+  - Fixed race condition in schedule initialization process
+
+### Technical
+- **Improved State Management**: Enhanced schedule data persistence during initialization
+  - Used proper deep copy technique to prevent reference issues
+  - Added verification steps to confirm schedule data integrity
+  - Improved error recovery with config reloading mechanism
+  - Enhanced logging for better visibility into schedule loading process
+  - Fixed timing-related issues with delayed rendering
+
+##6.5.6 (2025-04-20)
+Fixed
+
+Critical Schedule Display Fix: Resolved issue where schedules were loaded from config.json but not displayed in UI
+
+Fixed schedule initialization sequence in ui-config-handlers.js to properly populate window.schedules
+Added explicit initialization of window.schedules array prior to rendering
+Enhanced verification of config.enableSchedules flag before processing schedule data
+Improved DOM element verification to ensure schedule list container exists
+Added proper deep copying of schedule data using JSON.parse(JSON.stringify())
+Implemented delayed rendering with setTimeout to ensure DOM is fully processed
+Added comprehensive error handling throughout schedule initialization process
+Enhanced logging for better troubleshooting of schedule rendering issues
+Fixed race condition between config loading and UI rendering
+Added verification steps for renderScheduleList function availability
+
+
+
+Technical
+
+Enhanced State Management: Improved schedule data handling with better initialization sequence
+
+Improved data flow between configuration loading and UI rendering
+Fixed timing issues between async operations
+Enhanced DOM readiness checking before manipulation
+Added proper event sequencing for reliable initialization
+Implemented explicit state verification at critical points
+
+
+## 6.5.2 (2025-04-05)
+
+### Fixed
+- **Critical Configuration Access Fix**: Completely redesigned configuration handling to resolve persistent issues with config.json access
+  - Shifted from server-side configuration handling to client-side direct API access
+  - Eliminated dependency on problematic HomebridgePluginUiServer inheritance methods
+  - Implemented minimal server that doesn't attempt to access configuration methods
+  - Used client-side Homebridge API methods (getPluginConfig, updatePluginConfig, savePluginConfig) directly
+  - Added comprehensive error handling with detailed console logging
+  - Implemented verification steps after save operations
+  - Fixed "this.getPluginConfig is not a function" error by bypassing server-side configuration handling
+
+### Improved
+- **Configuration Management**: Enhanced reliability and error handling
+  - Added detailed console logging throughout configuration process
+  - Implemented robust validation for all configuration values
+  - Enhanced schedule processing with proper data structure management
+  - Improved advanced settings handling with correct temperature unit conversions
+  - Added explicit verification of saved configuration
+  - Implemented multiple fallback mechanisms for error recovery
+  - Enhanced status reporting with more informative success/error messages
+
+### Technical
+- **Architecture Redesign**: Fundamental change to configuration handling approach
+  - Simplified server implementation to minimal functionality
+  - Shifted configuration responsibility entirely to client-side code
+  - Eliminated reliance on HomebridgePluginUiServer inheritance for configuration methods
+  - Improved separation of concerns between server and client code
+  - Used direct Homebridge client API methods instead of custom server endpoints
+  - Enhanced error boundaries with detailed console logging for troubleshooting
+  - Added defensive programming throughout the configuration process
+
+## 6.5.1 (2025-04-05)
+
+### Fixed
+- **Complete Configuration Persistence Solution**: Thoroughly fixed issues with reading and writing configuration in the Custom UI
+  - Implemented proper CommonJS syntax in server.js for compatibility with homebridge-ui/package.json settings
+  - Fixed method binding issues by explicitly using .bind(this) for all request handlers
+  - Implemented comprehensive configuration processing with proper type conversions
+  - Added robust schedule data structure management for consistent storage
+  - Enhanced validation for all configuration values before saving
+  - Added verification steps to confirm configuration changes were applied
+  - Implemented detailed console logging throughout the configuration process
+  - Fixed context preservation in server methods to prevent "getPluginConfig is not a function" errors
+  - Added proper deep copying of configuration objects to prevent reference issues
+
+### Improved
+- **Enhanced Configuration Management**: Better handling of configuration structure and values
+  - Added proper unit conversion for temperature settings between Celsius and Fahrenheit
+  - Improved handling of advanced settings with correct storage format
+  - Enhanced schedule template information preservation across edit operations
+  - Added detailed validation for all schedule properties
+  - Implemented better error recovery with default configuration fallbacks
+  - Added timeout protection to prevent UI hanging during API operations
+  - Enhanced status reporting with more informative success/error messages
+  - Improved debug visibility with comprehensive console logging
+  - Fixed edge cases in configuration structure management
+
+### Technical
+- **Better Module Compatibility**: Fixed module system incompatibilities
+  - Aligned server.js implementation with homebridge-ui/package.json "type": "commonjs" setting
+  - Used proper CommonJS require() syntax instead of ES module imports
+  - Maintained correct method inheritance chain for HomebridgePluginUiServer
+  - Implemented proper IIFE pattern for CommonJS server instantiation
+  - Enhanced request handling with focused error management
+  - Added defensive programming throughout the codebase
+  - Improved encapsulation with private helper methods
+  - Created robust error boundaries for critical operations
+
+## 6.3.4 (2025-04-15)
+
+### Fixed
+- **Critical Config Access Solution**: Implemented working server.js with CommonJS format
+  - Resolved persistent "this.getPluginConfig is not a function" error
+  - Switched from ES modules to CommonJS to match official examples
+  - Used direct method calls without async/await for synchronous methods
+  - Implemented proper schedule object cleaning with conditional properties
+  - Added comprehensive error handling with meaningful user feedback
+  - Enhanced logging with operation context for easier troubleshooting
+
+### Technical
+- **Module System**: Reverted to CommonJS for maximum compatibility
+  - Removed ES module syntax that was causing inheritance issues
+  - Used direct method calls without prototype chain complexity
+  - Simplified request handler implementation
+  - Created robust error boundaries that maintain UI functionality
+  - Added defensive configuration structure management
+  - Enhanced schedule data validation for config.json compliance
+## 6.3.3 (2025-04-15)
+
+### Fixed
+- **Custom UI Configuration Management**: Complete solution for configuration read/write functionality
+  - Reimplemented server.js using official Homebridge Plugin UI documentation patterns
+  - Resolved longstanding issues with HomebridgePluginUiServer method inheritance
+  - Fixed schedule persistence with proper data cleaning and type conversion
+  - Added verification step after configuration saves to ensure data integrity
+  - Enhanced error handling with graceful fallbacks to default configuration
+  - Improved console logging for better troubleshooting visibility
+
+### Key Improvements
+- **Method Access**: Used correct inheritance pattern for accessing parent class methods
+  - Ensured proper HomebridgePluginUiServer method availability throughout code execution
+  - Used direct method calls following documentation examples
+  - Simplified request handler implementation with inline functions
+  - Added deep copying of configuration objects to prevent reference issues
+  - Implemented comprehensive data validation for all configuration properties
+  - Added explicit type conversion for proper configuration structure
+
+### Technical
+- **Architecture**: Better adherence to Homebridge Plugin UI Utils architecture
+  - Maintained pure ES module syntax (import/export) matching package.json "type": "module"
+  - Followed exact HomebridgePluginUiServer initialization sequence (super first, ready last)
+  - Used correct IIFE instantiation pattern for ES modules
+  - Improved error boundaries with RequestError for better client feedback
+  - Enhanced schedule data handling with proper schema compliance
+  - Added diagnostic logging with operation context for easier troubleshooting
+## 6.3.2 (2025-04-10)
+
+### Fixed
+- **Configuration Method Access**: Resolved "Cannot access configuration methods" error
+  - Implemented direct prototype method access for HomebridgePluginUiServer methods
+  - Used explicit function binding with .call(this) to ensure proper context
+  - Added inline anonymous functions for request handlers to avoid binding issues
+  - Enhanced error handling throughout the configuration process
+  - Improved schedule data formatting with explicit type conversion
+  - Added detailed logging for better troubleshooting
+  - Ensured consistent configuration format for saved data
+
+### Technical
+- **Method Inheritance Fix**: Used reliable prototype chain access pattern
+  - Accessed methods directly from HomebridgePluginUiServer.prototype
+  - Maintained proper 'this' context with explicit .call(this)
+  - Preserved ES modules syntax for project compatibility
+  - Enhanced error resilience with multiple fallback mechanisms
+  - Added configuration verification after save operations
+  - Improved response formatting with consistent structure
+  - Fixed schedule data processing to ensure correct format
+## 6.3.1 (2025-04-10)
+
+### Fixed
+- **Complete Server.js Rewrite**: Resolved both configuration loading and saving issues
+  - Switched from ES modules to CommonJS for better compatibility with Homebridge
+  - Implemented robust error handling for all API operations
+  - Added comprehensive fallback mechanisms for configuration loading failures
+  - Fixed method inheritance issues causing "Cannot access configuration methods" errors
+  - Improved configuration structure validation and formatting
+  - Enhanced schedule data processing with explicit type conversion
+  - Added detailed logging throughout configuration operations
+  - Implemented verification checks after configuration updates
+
+### Technical
+- **Architecture Change**: Switched to more compatible module system
+  - Replaced ES modules (import/export) with CommonJS (require/module.exports)
+  - Fixed inheritance chain issues with HomebridgePluginUiServer
+  - Enhanced error propagation with consistent response formats
+  - Improved parameter handling and type conversion
+  - Added detailed verification at each step of configuration operations
+  - Implemented simpler and more robust instantiation pattern
+  - Enhanced configuration object validation and processing
+
+## 6.3.0 (2025-04-10)
+
+### Fixed
+- **Custom UI Method Inheritance**: Resolved "this.getPluginConfig is not a function" error
+ - Added comprehensive validation of HomebridgePluginUiServer methods at startup
+ - Implemented cascading fallback mechanisms for accessing parent class methods
+ - Created multiple layers of error recovery to preserve UI functionality
+ - Enhanced error handling with proper RequestError usage
+ - Added explicit method existence checks before each operation
+ - Improved response structure with consistent success/error patterns
+ - Implemented safe default configuration when methods are unavailable
+ - Added detailed debug logging throughout method access attempts
+
+### Technical
+- **API Method Access**: Enhanced method availability with multiple access paths
+ - Added both direct (`this.method()`) and parent (`super.method()`) access attempts
+ - Implemented detailed validation of inheritance chain at initialization
+ - Created dedicated helper methods for common operations
+ - Enhanced configuration processing with strict type enforcement
+ - Added object structure validation before save operations
+ - Improved error propagation with standardized format
+ - Maintained ES modules syntax with proper instantiation pattern
+
+## 6.3.0 (2025-04-10)
+
+### Fixed
+- **Custom UI Configuration Management**: Fixed server.js to properly use HomebridgePluginUiServer methods
+  - Removed all direct file system operations for better security and compatibility
+  - Used built-in `getPluginConfig()` method for configuration loading
+  - Implemented proper `updatePluginConfig()` and `savePluginConfig()` sequence
+  - Added configuration verification after save operations
+  - Enhanced error handling throughout configuration operations
+  - Improved schedule formatting with strict type conversion
+  - Optimized configuration structure management
+
+### Technical
+- **API Usage**: Enhanced adherence to Homebridge Plugin UI Utils best practices
+  - Maintained proper inheritance chain for HomebridgePluginUiServer
+  - Used built-in configuration methods instead of direct API access
+  - Preserved ES modules syntax for better Node.js compatibility
+  - Ensured correct initialization sequence (super first, ready last)
+  - Maintained proper IIFE pattern for server instantiation
+
+## 6.2.0 (2025-04-05)
+
+### Fixed
+- **Critical Configuration Persistence**: Fixed configuration loading and saving in Custom UI
+  - Completely rewrote server.js to properly implement HomebridgePluginUiServer methods
+  - Fixed configuration data processing with proper type conversion
+  - Implemented verification after save operations to confirm changes
+  - Added comprehensive error handling with detailed logging
+  - Fixed schedule data structure to ensure proper format in config.json
+  - Enhanced platform configuration detection with reliable matching
+
+### Technical
+- **Server Implementation**: Better adherence to Homebridge Plugin UI Utils best practices
+  - Used proper initialization sequence (super() first, this.ready() last)
+  - Implemented strong type validation for all configuration values
+  - Added detailed console logging throughout the process
+  - Enhanced error reporting with descriptive messages
+  - Improved configuration data structure handling
+  - Fixed schedule formatting with proper data validation
+## 6.1.35 (2025-04-07)
+
+### Fixed
+- **Custom UI Critical Fix**: Resolved "Cannot read properties of undefined (reading 'call')" error
+  - Removed direct prototype access in favor of simpler method calls
+  - Implemented comprehensive fallback mechanisms for configuration loading
+  - Added request timeout protection to prevent UI hanging
+  - Enhanced error handling with informative user feedback
+  - Created default configuration values when server response fails
+  - Added detailed logging throughout the process for better debugging
+  
+### Improved
+- **Client-Side Robustness**: Enhanced UI handlers with better error recovery
+  - Implemented timeout protection for all server requests
+  - Added default configuration if server response fails
+  - Improved error message specificity for easier troubleshooting
+  - Created UI consistency regardless of server errors
+  
+### Technical
+- **Error Handling**: Comprehensive try/catch blocks throughout the code
+- **Timeout Handling**: Added request timeouts to prevent UI hanging
+- **Fallback Values**: Smart defaults when expected values aren't available
+- **Diagnostic Logging**: Enhanced logging for operation tracing
+- **Configuration Structure**: Ensured consistent configuration format
+## 6.1.34 (2025-04-06)
+
+### Fixed
+- **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
+  - Fixed "this.getPluginConfig is not a function" error by using direct prototype access
+  - Created wrapper functions for parent class methods to ensure proper method binding
+  - Implemented detailed logging for better error tracing
+  - Fixed ES modules compatibility issues with parent class method access
+  - Maintained correct constructor initialization sequence (super first, ready last)
+  - Used the exact IIFE instantiation pattern from documentation
+  
+### Technical
+- **Inheritance Pattern**: Changed to direct prototype access with proper binding
+- **Error Propagation**: Improved error object structure for better debugging
+- **Logging**: Added operation context and timestamps to server logs
+- **Configuration Management**: Ensured proper JSON handling and serialization
+- **Module Pattern**: Refined ES module implementation for better compatibility
+- **UI Integration**: Fixed server response handling to properly update UI components
+- **Instance Creation**: Maintained correct instantiation pattern required by Homebridge
+
+### Details
+The root cause was related to how the HomebridgePluginUiServer methods were being accessed. When using ES modules, explicit parent method access via the prototype chain is required to ensure proper method resolution. This approach guarantees that built-in Homebridge configuration management methods work correctly regardless of execution environment.
+
+## 6.1.33 (2025-04-06)
+
+### Fixed
+- **Custom UI Configuration Fix**: Completely rebuilt server.js following the exact Homebridge Plugin UI documentation
+  - Fixed configuration loading and saving by properly inheriting the HomebridgePluginUiServer methods
+  - Implemented recommended handler patterns from the documentation
+  - Added proper error handling with detailed messages
+  - Enhanced console logging for better troubleshooting
+  - Simplified implementation to focus on core functionality
+  - Followed constructor best practices (super first, ready last)
+  - Used correct method naming conventions for better readability
+  
+### Technical
+- **Method Naming**: Used clear, self-documenting handler method names
+- **Error Handling**: Improved error reporting with consistent structure
+- **Logging**: Added detailed console logging throughout
+- **Implementation Pattern**: Followed documentation examples precisely
+- **Initialization Sequence**: Properly ordered constructor operations
+- **Instance Creation**: Used recommended IIFE pattern for instantiation
+
+## 6.1.32 (2025-04-06)
+
+### Fixed
+- **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
+  - Fixed "getPluginConfig not available on parent prototype" error by using direct prototype access
+  - Implemented multiple fallback mechanisms for configuration access
+  - Added direct prototype method calls with proper binding
+  - Improved error handling with graceful degradation
+  - Enhanced logging with detailed operation status
+  - Simplified server implementation with cleaner class structure
+  - Ensured consistent IIFE pattern for proper server instantiation
+  
+### Technical
+- **Inheritance Pattern**: Changed to direct prototype access with proper binding
+- **Error Propagation**: Improved error object structure for better debugging
+- **Logging**: Added operation context and timestamps to server logs
+- **Configuration Management**: Ensured proper JSON handling and serialization
+- **Module Pattern**: Refined ES module implementation for better compatibility
+- **UI Integration**: Fixed server response handling to properly update UI components
+- **Instance Creation**: Maintained correct instantiation pattern required by Homebridge
+
+### Details
+The root cause was related to how the HomebridgePluginUiServer methods were being accessed. When using ES modules, explicit parent method access via the prototype chain is required to ensure proper method resolution. This approach guarantees that built-in Homebridge configuration management methods work correctly regardless of execution environment.
+
+## 6.1.31 (2025-04-06)
+
+### Fixed
+- **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
+  - Fixed "(intermediate value).getPluginConfig is not a function" error by using super.getPluginConfig() calls
+  - Simplified request handler implementation with direct parent method access
+  - Replaced class method approach with inline handler functions
+  - Improved ES module compatibility with explicit super method calls
+  - Enhanced debugging with more verbose console logging
+  - Added proper error propagation from server to UI
+  - Maintained full configuration handling functionality
+  - Ensured consistent IIFE pattern for proper server instantiation
+  
+### Technical
+- **Inheritance Pattern**: Changed from relying on inherited methods via `this` to explicit `super` calls
+- **Error Propagation**: Improved error object structure for better debugging
+- **Logging**: Added operation context and timestamps to server logs
+- **Configuration Management**: Ensured proper JSON handling and serialization
+- **Module Pattern**: Refined ES module implementation for better compatibility
+- **UI Integration**: Fixed server response handling to properly update UI components
+- **Instance Creation**: Maintained correct instantiation pattern required by Homebridge
+
+### Details
+The root cause was related to how the HomebridgePluginUiServer methods were being accessed. When using ES modules, explicit parent method access via `super` is required to ensure proper method resolution. This approach guarantees that built-in Homebridge configuration management methods work correctly regardless of execution environment.
+## 6.1.29 (2025-04-06)
+
+### Fixed
+- **Custom UI Inheritance Fix**: Completely rebuilt server.js to correctly implement HomebridgePluginUiServer
+  - Fixed "this.getPluginConfig is not a function" error by using super.getPluginConfig() calls
+  - Simplified request handler implementation with direct parent method access
+  - Replaced class method approach with inline handler functions
+  - Improved ES module compatibility with explicit super method calls
+  - Enhanced debugging with more verbose console logging
+  - Added proper error propagation from server to UI
+  - Maintained full configuration handling functionality
+  - Ensured consistent IIFE pattern for proper server instantiation
+  
+### Technical
+- **Inheritance Pattern**: Changed from relying on inherited methods via `this` to explicit `super` calls
+- **Error Propagation**: Improved error object structure for better debugging
+- **Logging**: Added operation context and timestamps to server logs
+- **Configuration Management**: Ensured proper JSON handling and serialization
+- **Module Pattern**: Refined ES module implementation for better compatibility
+- **UI Integration**: Fixed server response handling to properly update UI components
+- **Instance Creation**: Maintained correct instantiation pattern required by Homebridge
+
+### Details
+The root cause was related to how the HomebridgePluginUiServer methods were being accessed. When using ES modules, explicit parent method access via `super` is required to ensure proper method resolution. This approach guarantees that built-in Homebridge configuration management methods work correctly regardless of execution environment.
+
+
+
+## 6.1.28 (2025-04-05)
+### Fixed
+- **Custom UI Configuration Handling**: Completely rebuilt server.js implementation to fix reading/writing config via plugin UI
+  - Fixed ES module import/export pattern to match package.json "type": "module"
+  - Implemented proper inheritance chain with HomebridgePluginUiServer
+  - Corrected initialization sequence (super() first, this.ready() last)
+  - Added robust configuration processing with proper validation
+  - Enhanced error handling with RequestError for better client feedback
+  - Implemented detailed logging throughout configuration operations
+  - Added explicit verification after save operations
+  - Fixed IIFE pattern for ES module server instantiation
+  - Ensured proper schedule formatting for configuration storage
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Configuration Methods Fix**: Resolved critical issue with customUI methods for reading/writing config.json
+  - Fixed server.js implementation to properly extend HomebridgePluginUiServer
+  - Correctly implemented getPluginConfig, updatePluginConfig, and savePluginConfig methods
+  - Ensured proper initialization sequence with super() first and this.ready() at the end
+  - Added robust error handling for configuration operations
+  - Fixed server instantiation to match the pattern of server-minimal.js
+
+### Improved
+- **Server Reliability**: Enhanced server-side implementation for better stability
+  - Simplified request handlers with focused functionality
+  - Added detailed logging throughout configuration process
+  - Implemented proper error reporting for all operations
+  - Enhanced configuration data validation
+  - Added configuration verification after save operations
+
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Complete UI Launch Solution**: Fixed both server and client-side issues causing the spinning cog
+  - Created ultra-minimal server.js implementation focused on maximum reliability
+  - Used ES module syntax consistently throughout the server code
+  - Implemented defensive client-side JavaScript with automatic retries
+  - Added safety wrappers around all Homebridge API methods
+  - Enhanced error handling throughout the codebase
+  - Fixed timing issues with Homebridge API availability
+  - Added detailed logging to help diagnose initialization problems
+
+### Improved
+- **API Communication**: Enhanced reliability of client-server communication
+  - Simplified request handling with focused error management
+  - Added explicit error reporting for configuration operations
+  - Enhanced console logging for better troubleshooting
+  - Improved status reporting throughout the configuration process
+  - Implemented fallback mechanisms for UI notifications
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Critical UI Launch Issue**: Completely rewrote server.js with a minimalist approach 
+  - Fixed "getPluginConfig is not a function" error by simplifying class structure
+  - Used ES module syntax (import/export) to match package.json "type": "module"
+  - Implemented inline request handlers with simplified logic
+  - Added extensive console logging for better debugging
+  - Ensured proper inheritance from HomebridgePluginUiServer
+  - Fixed server instantiation to work with ES modules
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Critical UI Launch Fix**: Completely rewrote server.js implementation to fix custom UI initialization failures
+  - Fixed server module type error by using ES module syntax instead of CommonJS
+  - Changed require() to import statements for proper compatibility with package.json "type": "module"
+  - Fixed initialization sequence to correctly call super() first and this.ready() afterward
+  - Corrected API method usage for configuration management
+  - Added proper error handling with RequestError for detailed user feedback
+  - Updated server instantiation pattern for ES modules
+
+### Improved
+- **Configuration Handling**: Enhanced configuration processing with better validation
+  - Added comprehensive type conversion for all configuration values
+  - Improved schedule structure handling with explicit formatting
+  - Enhanced verification after saving configuration
+  - Added detailed logging throughout configuration operations
+  - Fixed handling of temperature units in schedules
+
+## 6.1.22 (2025-04-04)
+
+### Fixed
+- **Critical UI Launch Fix**: Completely rewrote server.js implementation to fix custom UI initialization failures
+  - Switched from ES modules (import/export) to CommonJS (require) for proper compatibility
+  - Fixed initialization sequence to correctly call super() first and this.ready() afterward
+  - Corrected API method usage for configuration management
+  - Added proper error handling with RequestError for detailed user feedback
+  - Implemented the correct IIFE pattern for server instantiation
+
+### Improved
+- **Configuration Handling**: Enhanced configuration processing with better validation
+  - Added comprehensive type conversion for all configuration values
+  - Improved schedule structure handling with explicit formatting
+  - Enhanced verification after saving configuration
+  - Added detailed logging throughout configuration operations
+  - Fixed handling of temperature units in schedules
+
+### Technical
+- **Robust Error Handling**: Implemented more comprehensive error management
+  - Added custom logging that avoids triggering toast notifications
+  - Enhanced error context with detailed information
+  - Improved error recovery with appropriate status codes
+  - Added verification steps after configuration operations
+  - Better handling of edge cases like missing configuration
+
+##6.1.21
+Key improvements in this version:
+
+Using CommonJS syntax with require() instead of ES modules
+Simplified error handling with proper checks
+Added more robust handling for configuration loading
+Made sure to call super() first in the constructor
+Added explicit check for Array.isArray() before using array methods
+Included proper IIFE pattern at the end
+Added fallback handling for configuration not found
+Simplified the API testing implementation
+Added more detailed logging
+
+This version should resolve the "this.getPluginConfig is not a function" error by ensuring that the server properly extends HomebridgePluginUiServer and follows the expected patterns for Homebridge plugin UI servers.
+
+## 6.1.20 (2025-04-12)
+
+### Fixed
+- **Schedule Persistence**: Targeted fix for schedule data not saving to config.json
+  - Improved schedule object processing before saving to configuration
+  - Added proper type conversion for all schedule properties
+  - Fixed handling of optional properties like 'day' and 'description'
+  - Added deep copying of schedule objects to prevent reference issues
+  - Enhanced schedule verification after saving
+  - Improved console logging for schedule processing operations
+  - Maintained compatibility with existing code structure
+  
+### Technical
+- **Data Processing**: Added targeted schedule object cleaning logic
+- **Type Safety**: Implemented proper type conversion for schedule values
+- **Validation**: Added proper verification of saved configuration
+- **Logging**: Enhanced debugging information for schedule processing
+
+## 6.1.16 (2025-04-12)
+
+### Fixed
+- **UI Server Initialization**: Completely rewrote server.js with minimal implementation
+  - Created stripped-down server implementation following exact Homebridge documentation
+  - Fixed module loading issues causing UI spinner to hang indefinitely
+  - Simplified error handling to prevent initialization failures
+  - Implemented bare minimum handlers for configuration and device testing
+  - Followed canonical pattern from Homebridge Plugin UI Utils examples
+
+### Technical
+- **Server Implementation**: Created minimal working implementation following official examples
+- **Module Format**: Used CommonJS module format for maximum compatibility
+- **Error Handling**: Simplified to prevent initialization failures
+- **Code Structure**: Followed canonical class pattern from documentation
+- **Initialization**: Used proper IIFE pattern for server instantiation
+## 6.1.16 (2025-04-11)
+
+### Fixed
+- **Custom UI Server**: Fixed server.js implementation causing spinning cog UI issue
+  - Changed from ES modules (import/export) to CommonJS (require) for better compatibility
+  - Maintained complete functionality of configuration loading and saving
+  - Fixed module loading issues that caused UI to hang during initialization
+  - Preserved extensive error handling and verification processes
+  - Kept detailed logging for troubleshooting configuration issues
+
+### Technical
+- **Module Format**: Changed server.js module format from ES Modules to CommonJS
+- **Import Style**: Replaced import statements with require() calls
+- **Function Signature**: Maintained all function signatures and implementation details
+- **Initialization**: Preserved IIFE pattern for proper server instantiation
+
+## 6.1.16 (2025-04-11)
+
+### Fixed
+- **Custom UI Server**: Fixed broken server.js implementation
+  - Switched from ES modules to CommonJS for better compatibility
+  - Corrected the instantiation and export pattern to match documentation
+  - Fixed module loading issues that prevented the UI from working
+  - Maintained all functionality while correcting implementation approach
+  - Followed exact patterns from Homebridge Plugin UI Utils documentation
+
+### Technical
+- **Module System**: Changed from ES Modules (import/export) to CommonJS (require/module.exports)
+- **Initialization**: Corrected IIFE pattern for proper server instantiation
+- **Error Handling**: Fixed error reporting format to match Homebridge expectations
+- **API Usage**: Maintained correct HomebridgePluginUiServer method implementation
+## 6.1.16 (2025-04-10)
+
+### Fixed
+- **Configuration Management**: Complete overhaul of config.json read/write functionality
+  - Fixed inconsistent API usage for Homebridge Plugin UI Utils methods
+  - Implemented proper processing of schedules with explicit type conversions
+  - Enhanced validation of configuration data during both load and save operations
+  - Added comprehensive error handling with detailed status updates
+  - Fixed schedule persistence issues with proper data structure management
+  - Improved temperature unit conversion for schedules
+  - Added detailed verification steps after saving configuration
+  - Enhanced console logging throughout configuration operations
+  - Implemented proper handling of advanced configuration settings
+
+### Technical
+- **Schedule Processing**: Added robust data validation for schedules
+  - Implemented deep copy of schedule objects to prevent reference issues
+  - Added proper type conversion for all schedule properties
+  - Corrected handling of optional properties (day, description)
+  - Fixed unit conversion between Celsius and Fahrenheit
+  - Added validation of temperature ranges based on selected unit
+  - Enhanced template schedule information preservation
+  - Added comprehensive logging for schedule processing operations
+
+### Improved
+- **Error Handling**: Enhanced user feedback for configuration operations
+  - Added proper status element updates throughout all operations
+  - Implemented NotificationManager integration for user notifications
+  - Added console logging with context for better debugging
+  - Improved validation error messages with specific details
+  - Added proper timeout handling for long-running operations
+  - Improved API test functionality with better error reporting
+
+## 6.1.15 (2025-04-08)
+
+### Fixed
+- **Server Configuration Handling**: Complete rewrite of `server.js` to correctly implement Homebridge Plugin UI Utils methods
+  - Fixed `getPluginConfig()` method implementation
+  - Ensured proper initialization of UI server with `this.ready()`
+  - Added comprehensive error handling for configuration load/save operations
+  - Improved logging with console-only output to prevent unwanted notifications
+  - Added explicit type checking and data validation for configuration handling
+
+### Technical
+- Updated server-side implementation to follow Plugin UI Utils best practices
+- Improved error handling with `RequestError` for API-level issues
+- Enhanced configuration management with more robust method implementations
+- Added explicit type conversions and validation for configuration data
+
+### Improved
+- Better error reporting during configuration operations
+- More reliable configuration loading and saving
+- Simplified server-side code with clearer separation of concerns
+- Added placeholder device connection test method
+
+## 6.1.13 (2025-04-07)
+
+### Fixed
+- **Configuration Persistence**: Resolved issue where logLevel and schedules settings weren't being saved to config.json
+  - Updated server.js with comprehensive logging and validation for each configuration field
+  - Fixed logLevel property definition in config.schema.json to use proper string enum format
+  - Implemented explicit type conversion to ensure correct data types in saved configuration
+  - Added verification step to confirm configuration values are properly saved
+  - Enhanced schedules array handling with proper structure validation
+  - Improved error handling with detailed error responses
+  - Added extensive debug logging throughout the configuration process
+
+### Technical
+- **Schema Definition**: Updated config.schema.json with proper type definitions and validation rules
+- **API Usage**: Ensured proper use of HomebridgePluginUiServer methods for configuration management
+- **Type Handling**: Added explicit type conversion for all configuration values
+- **Verification**: Added post-save verification step with detailed logging
+- **Schedule Handling**: Implemented robust processing for schedule array items
+## 6.1.12 (2025-04-06)
+
+### Fixed
+- **Configuration Persistence**: Resolved issue where logLevel, temperature unit, and polling interval settings weren't being saved to config.json
+  - Updated server.js to correctly use Homebridge Plugin UI Utils methods for configuration management
+  - Fixed incorrect API usage that was preventing configuration values from being properly stored
+  - Implemented proper error handling using RequestError for more specific error responses
+  - Added detailed logging of configuration values during save operations for better debugging
+  - Ensured complete platform configuration structure is maintained during updates
+
+### Technical
+- **API Usage**: Updated to use the correct HomebridgePluginUiServer methods (getPluginConfig, updatePluginConfig, savePluginConfig)
+- **Verification**: Added saved configuration details to response for verification
+- **Error Handling**: Enhanced with proper RequestError implementation for better client feedback
+- **Debugging**: Improved logging around configuration operations for easier troubleshooting
+
+## 6.1.11 (2025-04-04)
+
+### Fixed
+- **Configuration Loading**: Fixed critical issue with server.js not properly reading configuration parameters at startup
+  - Replaced direct filesystem access with proper Homebridge Plugin UI Utils API methods
+  - Fixed platform identification to consistently use exact platform name
+  - Enhanced error handling with more specific error codes and detailed messages
+  - Improved configuration loading process with better logging
+  - Reorganized server-side code for better maintainability
+
+### Improved
+- **API Usage**: Better adherence to Homebridge Plugin UI Utils best practices
+  - Used `getPluginConfig()` instead of direct file access
+  - Improved error handling and recovery mechanisms
+  - Enhanced logging with more detailed context information
+  - Added better validation of configuration data
+
+## 6.1.9 (2025-04-03)
+
+### Fixed
+- **Configuration Loading**: Added missing /config/load endpoint to server.js
+  - Fixed issue where plugin configuration wasn't being fully loaded
+  - Implemented proper config.json file access with robust error handling
+  - Added platform detection with flexible name matching
+  - Ensured complete configuration is returned to UI
+  - Fixed API token caching issues by properly loading full configuration
+
+
+6.1.8 (2025-04-05)
+Changed
+
+Config File Access: Refactored checkConfigFile function to align with Homebridge Plugin UI Utils guidelines
+
+Now uses homebridge.getPluginConfig(), homebridge.updatePluginConfig(), and homebridge.savePluginConfig() to manage configuration
+Improved error handling with more specific error codes
+Separated config file access logic from platform-specific parsing for better modularity
+
+
+
+Removed
+
+Direct Config File Access: Removed direct access to config.json using Node.js fs module functions
+Case-Insensitive Platform Matching: Removed case-insensitive platform name matching
+
+Fixed
+
+Platform Naming Convention: Ensured consistent naming convention for platform by using the exact name from config.schema.json
+Config Management Synchronization: Improved synchronization and conflict avoidance by using Homebridge-provided methods for config management
+
+## 6.1.6 (2025-05-20)
+
+### Added
+- Robust server-side configuration handling using Plugin UI Utils
+- Comprehensive configuration loading, saving, and validation endpoints
+- Enhanced error handling with structured error responses
+- Flexible platform configuration detection
+
+### Improved
+- Thorough validation for configuration fields
+- Comprehensive checks for API token, temperature units, polling intervals
+- Improved schedule structure validation
+- Detailed error reporting for configuration issues
+
+### Technical
+- Refactored configuration management to follow Homebridge Plugin UI Utils best practices
+- Improved error handling and response structure
+- Added more flexible configuration parsing
+- Enhanced logging and diagnostics for configuration operations
+## 6.1.4 (2025-05-15)
+
+### Fixed
+- **UI Initialization Issue**: Resolved "spinning cog" problem that prevented the config UI from loading
+  - Implemented immediate UI readiness signaling before any initialization
+  - Restructured server initialization sequence with proper async pattern
+  - Added fallback server creation mechanism for resilience
+  - Enhanced platform detection with flexible name matching
+  - Added comprehensive error handling throughout server component
+
+### Architecture Improvements
+- **Server Component**: Refactored server.js with better design patterns
+  - Separated initialization logic from constructor for improved reliability
+  - Created modular code organization with dedicated methods for each responsibility
+  - Implemented proper error boundaries around all operations
+  - Enhanced diagnostics with detailed logging throughout the initialization process
+  - Added graceful degradation with fallback mechanisms
+  
+## 6.1.2 (2025-05-10)
+
+### Critical Fixes
+- **Configuration Loading System**: Complete overhaul of configuration load/save mechanism
+ - Added comprehensive error handling for each step of the loading process
+ - Implemented timeout protection to prevent UI freezing on API failures
+ - Enhanced form field population with field-by-field error handling
+ - Added configuration verification after save operations
+ - Fixed platform detection with flexible name matching
+ - Improved schedule data structure handling and validation
+
+### Added
+- **Enhanced User Feedback**: Fully integrated with centralized notification system
+ - Added contextual error messages with specific error details
+ - Implemented progressive success/failure messaging
+ - Added configuration verification reporting with detailed diagnostics
+ - Improved console logging for better troubleshooting visibility
+ - Added notification options support including auto-hide functionality
+
+### Technical Improvements
+- **Robust Error Boundaries**: Added multi-layer error protection
+ - Implemented try/catch blocks for each major operation
+ - Added specific error handling for API availability issues
+ - Enhanced data validation before configuration updates
+ - Added graceful degradation for partial configuration loading
+ - Improved diagnostics with detailed console logging throughout
+ - Fixed race conditions in configuration processing
+
+### Under the Hood
+- **API Integration**: Better handling of Homebridge Plugin UI Utils
+ - Added Homebridge API availability checking with fallbacks
+ - Improved configuration object structure management
+ - Enhanced schedule data processing with proper unit handling
+ - Fixed potential memory issues with deep object cloning
+ - Added detailed verification steps for configuration changes
+## 6.1.1 (2025-05-05)
+### Fixed
+- **Script Caching Issues**: Implemented automatic cache-busting mechanism for UI scripts
+  - Added version parameter to all script URLs to force fresh loading
+  - Created build-time version injection from package.json
+  - Ensured all UI JavaScript files are reloaded when version changes
+  - Eliminated persistent caching problems affecting user experience
+  - Fixed "Logs Error" messages caused by stale cached scripts
+
+### Added
+- **Build Process Improvements**: Enhanced script processing during build
+  - Added version-scripts.js utility for automatic version stamping
+  - Implemented template-based version injection in HTML files
+  - Created more reliable UI asset processing pipeline
+  - Improved script reference handling for better browser compatibility
+  - Added comprehensive build verification for UI components
+
+### Technical
+- **Script Version Management**: Created a more robust approach to script versioning
+  - Leveraged package.json version for automatic cache invalidation
+  - Enhanced build scripts to process version placeholders
+  - Maintained backward compatibility with existing code
+  - Improved user experience by eliminating stale code execution
+  - Added version tracking for easier debugging
+## 6.1.0 (2025-05-05)
+
+### Build System Improvements
+- **Enhanced Build Process**: Completely overhauled file copying mechanism for UI assets
+  - Implemented proper recursive directory copying for all UI files
+  - Added comprehensive build verification steps to prevent incomplete builds
+  - Fixed JavaScript file copying to ensure all UI scripts are properly included
+  - Improved GitHub Actions workflow with explicit build stages
+  - Added detailed build logging for easier troubleshooting
+
+### Added
+- **Pre-publish Verification**: New script that validates build completeness before publishing
+  - Added critical path checking for required files
+  - Implemented JS file count verification
+  - Added detailed reporting of build artifacts
+  - Enhanced error detection with descriptive messages
+  - Prevents publishing if any critical files are missing
+
+### Technical
+- **Improved Reliability**: Enhanced overall build reliability
+  - Separated TypeScript compilation from UI asset copying
+  - Added explicit directory creation with proper permissions
+  - Enhanced workflow steps with independent verification
+  - Improved error handling during build process
+  - Added detailed logging of copied files for better traceability
+## 6.0.1 (2025-04-30)
+
+### Fixed
+- **Collapsible Sections Functionality**: Completely rewrote the section initialization mechanism
+  - Added robust DOM element verification before manipulation
+  - Implemented both class toggling and explicit style properties
+  - Added proper event propagation control for click handlers
+  - Used element cloning to eliminate event listener conflicts
+  - Added detailed logging for troubleshooting section state
+
+### Enhanced
+- **Initialization Process**: Improved section loading reliability
+  - Implemented delayed re-initialization for DOM readiness
+  - Added per-section error handling with specific error messages
+  - Enhanced section state management with explicit style control
+  - Fixed dropdown indicator rotation animations
+
+### Technical
+- **Code Improvements**: Enhanced codebase stability
+  - Added comprehensive element existence checks
+  - Implemented defensive coding practices throughout
+  - Added runtime logging for initialization sequence
+  - Improved error boundaries around critical functionality
+## 6.0.0 (2025-04-25)
+
+### Complete UI Redesign
+- **Reorganized Tab Structure**: Intuitive tab organization with Manual Schedules, Templates, Warm Hug Options, and Help
+- **Improved Schedule Management**: Enhanced schedule creation, editing, and display with better grouping and visual cues
+- **Consolidated Warm Hug Options**: All Warm Hug parameters moved to dedicated tab with improved explanations
+- **Responsive Design Enhancements**: Better mobile support with improved layouts for smaller screens
+
+### UI Components
+- **Enhanced Form Validation**: More robust validation for time and temperature with unit-aware feedback
+- **Improved Template System**: Better template previews and application with clearer success indicators
+- **Collapsible Sections**: More reliable section expansion/collapse with proper indicator rotation
+- **Confirmation Modal**: Enhanced reliability for schedule removal confirmation
+
+### Technical Improvements
+- **Modular Code Architecture**: Better separation of concerns with focused modules for notifications, scheduling, and UI
+- **Consistent Unit Handling**: Seamless conversion between Celsius and Fahrenheit throughout the interface
+- **Memory Leak Prevention**: Proper event listener cleanup and element management
+- **Defensive Programming**: Better error handling with appropriate user feedback
+- **Enhanced Accessibility**: Improved keyboard navigation and ARIA attributes
+
+### Code Quality
+- **Better Documentation**: Comprehensive JSDoc comments for all functions
+- **Type Safety**: Improved validation for all input/output data
+- **Code Organization**: Logical function grouping and naming conventions
+- **Performance Optimization**: Reduced DOM operations and better state management
+
+## 5.8.0 (2025-04-20)
+
+### Added
+- **Enhanced NotificationManager**: Complete overhaul of the notification system
+  - Added centralized notification management with intelligent filtering
+  - Implemented blocklist/allowlist approach for toast notifications
+  - Added direct status element updates with proper console logging
+  - Created lazy initialization for better startup reliability
+  - Added dynamic management of allowed/blocked notification patterns
+
+### Improved
+- **Notification Consistency**: Standardized all user feedback mechanisms
+  - Replaced direct DOM manipulation with centralized NotificationManager calls
+  - Enhanced status element handling with automatic timeout management
+  - Improved console logging with appropriate severity levels
+  - Added explicit auto-hide functionality for transient notifications
+  - Streamlined notification appearance/disappearance for better UX
+
+### Fixed
+- **Toast Notification Issues**: Comprehensive solution for unwanted toast messages
+  - Expanded blocklist to catch all system-generated notifications
+  - Added status-only mode to prevent toast displays when not needed
+  - Fixed notification race conditions with proper initialization checks
+  - Enhanced error handling in notification system
+  - Implemented message context preservation in status updates
+
+### Technical
+- **Architecture Enhancement**: More robust notification infrastructure
+  - Added module pattern encapsulation for better state management
+  - Created public API with convenience methods for different notification types
+  - Implemented explicit timeout management to prevent memory leaks
+  - Added dynamic notification filtering based on message content
+  - Enhanced error recovery with fallback notification methods
+  - Improved performance by reducing redundant DOM operations
+## 5.7.0 (2025-04-15)
+
+### Fixed
+- **Notification Functionality**: Completely rewrote the notification handling system
+  - Fixed persistent toast notifications across the application
+  - Ensured comprehensive error logging with intelligent filtering
+  - Improved user feedback mechanisms with granular control
+  - Added sophisticated error handling and context preservation
+  - Implemented robust fallback mechanisms for notification display
+
+### Improved
+- **Event Handling**: Enhanced messaging system with advanced features
+  - Used dependency injection for flexible notification configuration
+  - Implemented whitelist and blacklist for toast notifications
+  - Added detailed console logging with context preservation
+  - Improved error tracing and debugging capabilities
+  - Enhanced cross-component communication for status updates
+
+### Technical
+- **Initialization Process**: Restructured UI messaging approach
+  - Added timeout and auto-hide capabilities for different notification types
+  - Implemented cross-browser compatible notification display
+  - Enhanced modularity of notification handling system
+  - Added comprehensive error tracking and reporting
+  - Improved performance by reducing redundant notification calls
+
+## 5.6.0 (2025-04-05)
+
+### Fixed
+- **Collapsible Section Functionality**: Completely rewrote the collapsible section handler
+  - Fixed dropdown indicators not rotating when sections are clicked
+  - Ensured consistent visibility state using both class and style properties
+  - Improved event handling to prevent issues with event propagation
+  - Fixed initialization of section state to ensure all sections start closed
+  - Added comprehensive error handling and logging throughout the process
+
+### Improved
+- **Event Delegation**: Enhanced event handler attachment with proper cleanup
+  - Used element cloning to remove any pre-existing event listeners
+  - Implemented explicit parent-child relationship traversal
+  - Added more detailed debug logging for state changes
+  - Fixed transform animations for dropdown indicators
+
+### Technical
+- **Initialization Process**: Enhanced UI component initialization sequence
+  - Added timeout to ensure DOM is fully processed before attaching handlers
+  - Improved section state tracking with console logs for better debugging
+  - Added verification of DOM element existence before manipulation
+  - Enhanced compatibility with tab navigation system
+  - Implemented both class and inline style manipulation for cross-browser compatibility
+## 5.5.6 (2025-04-02)
+### Fixed
+- **Collapsible Sections**: Complete overhaul of dropdown section initialization
+  - Resolved issues with section expansion and collapse mechanisms
+  - Enhanced event handling to prevent multiple listener bindings
+  - Improved cross-browser compatibility for section toggles
+  - Added comprehensive console logging for better debugging
+
+### Improved
+- **User Interface Interaction**: 
+  - More robust dropdown section behavior
+  - Explicit error checking for section initialization
+  - Added global function exposure for manual section management
+  - Enhanced transition animations for dropdown indicators
+
+### Technical
+- Implemented multi-method visibility toggling
+- Added detailed console diagnostics for section initialization
+- Improved event listener management to prevent memory leaks
+- Created fallback mechanisms for section interaction
+## 5.5.5 (2025-04-01)
 ### Improved
 - **API Rate Limit Handling**: Completely restructured device status polling to avoid rate limit errors
   - Removed redundant immediate status check during device initialization

@@ -2,7 +2,8 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "customUi": true,
-  "footerDisplay": "SleepMe Simple Homebridge Plugin v4.0.3",
+  "noServerLogs": true,
+  "footerDisplay": "SleepMe Simple Homebridge Plugin v6.0.0",
   "customIcon": "icons/sleepmebasic.png",
   "schema": {
     "type": "object",
@@ -35,45 +36,73 @@
         "default": 90,
         "description": "Device status check interval (seconds)"
       },
+      "logLevel": {
+        "title": "Log Level",
+        "type": "string",
+        "enum": ["normal", "debug", "verbose"],
+        "default": "normal",
+        "description": "Controls the detail level of plugin logs"
+      },
       "enableSchedules": {
         "title": "Enable Schedules",
         "type": "boolean",
         "default": false
       },
-"schedules": {
-  "type": "array",
-  "items": {
-    "type": "object",
-    "properties": {
-      "type": {
-        "type": "string",
-        "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"]
+      "schedules": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["Everyday", "Weekdays", "Weekend", "Specific Day", "Warm Hug"]
+            },
+            "time": {
+              "type": "string",
+              "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 13,
+              "maximum": 46
+            },
+            "day": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "description": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["C", "F"]
+            }
+          },
+          "required": ["type", "time", "temperature"]
+        }
       },
-      "time": {
-        "type": "string",
-        "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$"
-      },
-      "temperature": {
-        "type": "number",
-        "minimum": 13,
-        "maximum": 46
-      },
-      "day": {
-        "type": "number",
-        "minimum": 0,
-        "maximum": 6
-      },
-      "description": {
-        "type": "string"
-      },
-      "unit": {
-        "type": "string",
-        "enum": ["C", "F"]
+      "advanced": {
+        "type": "object",
+        "properties": {
+          "warmHugIncrement": {
+            "title": "Warm Hug Temperature Increment",
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 5,
+            "default": 2,
+            "description": "How quickly temperature increases (°C per minute)"
+          },
+          "warmHugDuration": {
+            "title": "Warm Hug Duration",
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 60,
+            "default": 15,
+            "description": "Total duration of the Warm Hug (minutes)"
+          }
+        }
       }
-    },
-    "required": ["type", "time", "temperature"]
-  }
-}
     },
     "required": ["apiToken"]
   }
