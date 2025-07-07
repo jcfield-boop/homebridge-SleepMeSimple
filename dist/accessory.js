@@ -674,6 +674,8 @@ export class SleepMeAccessory {
                     // Notify polling manager that device is now active
                     if (this.platform.pollingManager) {
                         this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                        // Trigger immediate poll if needed (uses smart joining logic)
+                        this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
                     }
                 }
                 else {
@@ -878,6 +880,8 @@ export class SleepMeAccessory {
                     // Notify polling manager that device is now active for more frequent polling
                     if (this.platform.pollingManager) {
                         this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                        // Trigger immediate poll if needed (uses smart joining logic)
+                        this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
                     }
                 }
                 else {
@@ -912,6 +916,8 @@ export class SleepMeAccessory {
             // Notify polling manager that device is active (either newly on or temperature changed)
             if (this.platform.pollingManager) {
                 this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                // Trigger immediate poll if needed (uses smart joining logic)
+                this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
             }
         });
     }
@@ -1047,6 +1053,8 @@ export class SleepMeAccessory {
             if (this.platform.pollingManager) {
                 if (this.isPowered) {
                     this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+                    // Trigger immediate poll if needed (uses smart joining logic)
+                    this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
                 }
             }
             // Status will be updated by centralized polling manager

@@ -837,6 +837,8 @@ private async setPowerState(turnOn: boolean, epoch: number, source: string, temp
         // Notify polling manager that device is now active
         if (this.platform.pollingManager) {
           this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+          // Trigger immediate poll if needed (uses smart joining logic)
+          this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
         }
       } else {
         throw new Error('Failed to turn on device');
@@ -1085,6 +1087,8 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
         // Notify polling manager that device is now active for more frequent polling
         if (this.platform.pollingManager) {
           this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+          // Trigger immediate poll if needed (uses smart joining logic)
+          this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
         }
       } else {
         throw new Error(`Failed to turn on device with temperature ${newTemp}°C`);
@@ -1122,6 +1126,8 @@ private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<vo
     // Notify polling manager that device is active (either newly on or temperature changed)
     if (this.platform.pollingManager) {
       this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+      // Trigger immediate poll if needed (uses smart joining logic)
+      this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
     }
   });
 }
@@ -1281,6 +1287,8 @@ private async handleTargetTemperatureSetImpl(newTemp: number, previousTemp: numb
     if (this.platform.pollingManager) {
       if (this.isPowered) {
         this.platform.pollingManager.notifyDeviceActive(this.deviceId);
+        // Trigger immediate poll if needed (uses smart joining logic)
+        this.platform.pollingManager.triggerDevicePollIfNeeded(this.deviceId);
       }
     }
     

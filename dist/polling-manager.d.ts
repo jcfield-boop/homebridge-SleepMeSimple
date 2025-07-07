@@ -20,10 +20,14 @@ export declare class PollingManager {
     private readonly pollingInterval;
     private devices;
     private pollingTimer?;
+    private activePollingTimer?;
     private pollingActive;
     private currentPollCycle;
     private activeDevices;
     private deviceActivityTimestamps;
+    private readonly ACTIVE_DEVICE_POLL_INTERVAL;
+    private readonly NORMAL_POLL_INTERVAL;
+    private nextActivePolls;
     constructor(api: SleepMeApi, logger: Logger, pollingInterval?: number);
     /**
      * Register a device for centralized polling
@@ -51,10 +55,29 @@ export declare class PollingManager {
      */
     private stopPolling;
     /**
+     * Start aggressive polling for active devices (10 seconds)
+     */
+    private startActiveDevicePolling;
+    /**
+     * Stop aggressive polling for active devices
+     */
+    private stopActiveDevicePolling;
+    /**
      * Validate cached devices are still accessible without consuming fresh API calls
      * Returns devices that respond successfully to cached status requests
      */
     validateCachedDevices(deviceIds: string[]): Promise<string[]>;
+    /**
+     * Poll only active devices aggressively (every 15 seconds)
+     * This provides near real-time updates for devices that are heating/cooling
+     */
+    private pollActiveDevices;
+    /**
+     * Poll a single active device
+     * @param deviceId Device to poll
+     * @param counters Optional counters object for tracking success/error counts
+     */
+    private pollSingleActiveDevice;
     /**
      * Poll all registered devices in a single batch
      * This is the core optimization - 1 API call per device instead of 2+
@@ -70,6 +93,19 @@ export declare class PollingManager {
      * Trigger an immediate poll for all devices
      */
     triggerImmediatePoll(): void;
+    /**
+     * Check if a user interaction for an active device should trigger immediate poll
+     * or can wait for the next scheduled poll (within 3 seconds)
+     * @param deviceId Device that had user interaction
+     * @returns true if should poll immediately, false if can wait for scheduled poll
+     */
+    shouldTriggerImmediatePoll(deviceId: string): boolean;
+    /**
+     * Trigger immediate poll for a specific active device if needed
+     * Uses smart joining logic to avoid duplicate polls
+     * @param deviceId Device to poll
+     */
+    triggerDevicePollIfNeeded(deviceId: string): void;
     /**
      * Get polling statistics
      */

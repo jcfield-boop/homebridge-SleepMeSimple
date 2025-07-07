@@ -19,15 +19,25 @@ export interface PollableDevice {
 export class PollingManager {
   private devices: Map<string, PollableDevice> = new Map();
   private pollingTimer?: NodeJS.Timeout;
+  private activePollingTimer?: NodeJS.Timeout;
   private pollingActive = false;
   private currentPollCycle = 0;
   private activeDevices: Set<string> = new Set(); // Track which devices are currently active
   private deviceActivityTimestamps: Map<string, number> = new Map(); // Track when devices became active
   
+  // Aggressive polling for active devices
+  // 15 seconds provides good responsiveness while staying under rate limits
+  // 4 requests/minute = 1 request every 15 seconds per device (perfect fit)
+  private readonly ACTIVE_DEVICE_POLL_INTERVAL = 15000; // 15 seconds for active devices
+  private readonly NORMAL_POLL_INTERVAL = 120000; // 2 minutes for inactive devices
+  
+  // Poll timing coordination
+  private nextActivePolls: Map<string, number> = new Map(); // Track next scheduled poll for each active device
+  
   constructor(
     private readonly api: SleepMeApi,
     private readonly logger: Logger,
-    private readonly pollingInterval: number = 60000 // Default 60s
+    private readonly pollingInterval: number = 60000 // Default 60s for normal polling
   ) {}
 
   /**
@@ -51,7 +61,12 @@ export class PollingManager {
     if (!this.activeDevices.has(deviceId)) {
       this.activeDevices.add(deviceId);
       this.deviceActivityTimestamps.set(deviceId, Date.now());
-      this.logger.debug(`Device ${deviceId} marked as active - will poll more frequently`);
+      this.logger.info(`Device ${deviceId} marked as active - starting aggressive 15s polling`);
+      
+      // Start aggressive polling if this is the first active device
+      if (this.activeDevices.size === 1) {
+        this.startActiveDevicePolling();
+      }
     }
   }
   
@@ -62,7 +77,13 @@ export class PollingManager {
     if (this.activeDevices.has(deviceId)) {
       this.activeDevices.delete(deviceId);
       this.deviceActivityTimestamps.delete(deviceId);
-      this.logger.debug(`Device ${deviceId} marked as inactive - returning to normal polling`);
+      this.nextActivePolls.delete(deviceId);
+      this.logger.info(`Device ${deviceId} marked as inactive - returning to normal polling`);
+      
+      // Stop aggressive polling if no active devices remain
+      if (this.activeDevices.size === 0) {
+        this.stopActiveDevicePolling();
+      }
     }
   }
 
@@ -73,6 +94,7 @@ export class PollingManager {
     this.devices.delete(deviceId);
     this.activeDevices.delete(deviceId);
     this.deviceActivityTimestamps.delete(deviceId);
+    this.nextActivePolls.delete(deviceId);
     this.logger.debug(`Unregistered device ${deviceId} from centralized polling`);
     
     // Stop polling if no devices remain
@@ -90,10 +112,8 @@ export class PollingManager {
     this.pollingActive = true;
     this.logger.info(`Starting centralized polling for ${this.devices.size} devices every ${this.pollingInterval/1000}s`);
     
-    // Initial poll after much longer delay to avoid startup rate limiting  
-    // Based on token bucket findings: need 5+ minute gaps between background calls
-    // Reduced from 7 minutes to 8 minutes for even more conservative approach
-    setTimeout(() => this.pollAllDevices(), 480000); // 8 minutes after discovery
+    // Start polling after initial device status fetches complete to avoid rate limiting collision
+    setTimeout(() => this.pollAllDevices(), 5000); // 5 seconds after discovery
     
     // Set up regular polling
     this.pollingTimer = setInterval(() => {
@@ -109,8 +129,37 @@ export class PollingManager {
       clearInterval(this.pollingTimer);
       this.pollingTimer = undefined;
     }
+    this.stopActiveDevicePolling();
     this.pollingActive = false;
     this.logger.info('Stopped centralized polling');
+  }
+  
+  /**
+   * Start aggressive polling for active devices (10 seconds)
+   */
+  private startActiveDevicePolling(): void {
+    if (this.activePollingTimer) return; // Already running
+    
+    this.logger.info(`Starting aggressive polling for active devices every ${this.ACTIVE_DEVICE_POLL_INTERVAL/1000}s`);
+    
+    // Start immediately for active devices
+    setTimeout(() => this.pollActiveDevices(), 1000);
+    
+    // Set up regular aggressive polling
+    this.activePollingTimer = setInterval(() => {
+      this.pollActiveDevices();
+    }, this.ACTIVE_DEVICE_POLL_INTERVAL);
+  }
+  
+  /**
+   * Stop aggressive polling for active devices
+   */
+  private stopActiveDevicePolling(): void {
+    if (this.activePollingTimer) {
+      clearInterval(this.activePollingTimer);
+      this.activePollingTimer = undefined;
+      this.logger.info('Stopped aggressive polling for active devices');
+    }
   }
 
   /**
@@ -137,12 +186,85 @@ export class PollingManager {
       
       // Small delay between validation checks
       if (deviceIds.length > 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
     
     this.logger.info(`${validDevices.length}/${deviceIds.length} cached devices validated`);
     return validDevices;
+  }
+
+  /**
+   * Poll only active devices aggressively (every 15 seconds)
+   * This provides near real-time updates for devices that are heating/cooling
+   */
+  private async pollActiveDevices(): Promise<void> {
+    if (this.activeDevices.size === 0) return;
+    
+    this.logger.verbose(`Aggressive poll for ${this.activeDevices.size} active devices`);
+    
+    const startTime = Date.now();
+    const counters = { successCount: 0, errorCount: 0 };
+    
+    // Update next poll times for all active devices
+    const nextPollTime = Date.now() + this.ACTIVE_DEVICE_POLL_INTERVAL;
+    
+    // Poll only active devices with forced fresh calls
+    for (const deviceId of this.activeDevices) {
+      // Update next poll time for this device
+      this.nextActivePolls.set(deviceId, nextPollTime);
+      
+      await this.pollSingleActiveDevice(deviceId, counters);
+      
+      // Small delay between active device polls
+      if (this.activeDevices.size > 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    const duration = Date.now() - startTime;
+    if (counters.successCount > 0 || counters.errorCount > 0) {
+      this.logger.info(`Aggressive poll completed: ${counters.successCount} success, ${counters.errorCount} errors (${duration}ms)`);
+    }
+  }
+  
+  /**
+   * Poll a single active device
+   * @param deviceId Device to poll
+   * @param counters Optional counters object for tracking success/error counts
+   */
+  private async pollSingleActiveDevice(deviceId: string, counters?: { successCount: number; errorCount: number }): Promise<void> {
+    const device = this.devices.get(deviceId);
+    if (!device) return;
+    
+    try {
+      // Always force fresh for active devices to get real-time status
+      const status = await this.api.getDeviceStatus(deviceId, true);
+      
+      if (status) {
+        device.onStatusUpdate(status);
+        if (counters) counters.successCount++;
+        
+        // Check if device is still actually active
+        const isStillActive = status.powerState === 'on' && 
+                             (status.thermalStatus === 'active' || 
+                              status.thermalStatus === 'heating' || 
+                              status.thermalStatus === 'cooling');
+        
+        if (!isStillActive) {
+          this.logger.info(`Device ${deviceId} no longer active, switching to normal polling`);
+          this.notifyDeviceInactive(deviceId);
+        }
+      } else {
+        this.logger.verbose(`Skipped aggressive poll for device ${deviceId} (rate limiting)`);
+      }
+      
+    } catch (error) {
+      if (counters) counters.errorCount++;
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      device.onError(errorObj);
+      this.logger.error(`Aggressive poll error for device ${deviceId}: ${errorObj.message}`);
+    }
   }
 
   /**
@@ -170,17 +292,14 @@ export class PollingManager {
       try {
         const isActiveDevice = this.activeDevices.has(deviceId);
         
-        // Active devices get more frequent fresh calls for progress monitoring
-        // Inactive devices use cached data more often to preserve API rate limits
-        let shouldForceFresh = false;
-        
+        // Skip active devices - they're being polled aggressively on separate timer
         if (isActiveDevice) {
-          // Active devices: force fresh every 3rd cycle (more frequent monitoring)
-          shouldForceFresh = (this.currentPollCycle % 3 === 0);
-        } else {
-          // Inactive devices: force fresh every 10th cycle (preserve rate limits)
-          shouldForceFresh = (this.currentPollCycle % 10 === 0);
+          this.logger.verbose(`Skipping device ${deviceId} in normal poll cycle (active device polling separately)`);
+          continue;
         }
+        
+        // Inactive devices: force fresh every 2nd cycle for external change detection
+        const shouldForceFresh = (this.currentPollCycle % 2 === 0);
         
         const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
         
@@ -216,7 +335,7 @@ export class PollingManager {
         
         // Small delay between devices to be gentle on the API
         if (this.devices.size > 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
         
       } catch (error) {
@@ -244,7 +363,7 @@ export class PollingManager {
     
     for (const [deviceId, timestamp] of this.deviceActivityTimestamps) {
       if (now - timestamp > ACTIVE_TIMEOUT) {
-        this.logger.debug(`Device ${deviceId} has been active for over 30 minutes, returning to normal polling`);
+        this.logger.info(`Device ${deviceId} has been active for over 30 minutes, returning to normal polling`);
         this.notifyDeviceInactive(deviceId);
       }
     }
@@ -257,6 +376,52 @@ export class PollingManager {
     if (this.devices.size > 0) {
       this.logger.debug('Triggering immediate poll for all devices');
       this.pollAllDevices();
+    }
+  }
+  
+  /**
+   * Check if a user interaction for an active device should trigger immediate poll
+   * or can wait for the next scheduled poll (within 3 seconds)
+   * @param deviceId Device that had user interaction
+   * @returns true if should poll immediately, false if can wait for scheduled poll
+   */
+  public shouldTriggerImmediatePoll(deviceId: string): boolean {
+    if (!this.activeDevices.has(deviceId)) {
+      // Device not in aggressive polling mode, trigger immediate poll
+      return true;
+    }
+    
+    const nextPoll = this.nextActivePolls.get(deviceId);
+    if (!nextPoll) {
+      // No scheduled poll, trigger immediate
+      return true;
+    }
+    
+    const timeUntilNextPoll = nextPoll - Date.now();
+    const JOIN_THRESHOLD = 3000; // 3 seconds - if next poll is within 3s, wait for it
+    
+    if (timeUntilNextPoll <= JOIN_THRESHOLD && timeUntilNextPoll > 0) {
+      this.logger.debug(`User action for ${deviceId} will join with scheduled poll in ${Math.round(timeUntilNextPoll/1000)}s`);
+      return false; // Wait for scheduled poll
+    }
+    
+    // Next poll is too far away or in the past, trigger immediate
+    this.logger.debug(`User action for ${deviceId} triggering immediate poll (next scheduled in ${Math.round(timeUntilNextPoll/1000)}s)`);
+    return true;
+  }
+  
+  /**
+   * Trigger immediate poll for a specific active device if needed
+   * Uses smart joining logic to avoid duplicate polls
+   * @param deviceId Device to poll
+   */
+  public triggerDevicePollIfNeeded(deviceId: string): void {
+    if (this.shouldTriggerImmediatePoll(deviceId)) {
+      // Update next poll time to prevent immediate subsequent polls
+      this.nextActivePolls.set(deviceId, Date.now() + this.ACTIVE_DEVICE_POLL_INTERVAL);
+      
+      // Trigger immediate poll for this device
+      this.pollSingleActiveDevice(deviceId);
     }
   }
 
@@ -277,9 +442,11 @@ export class PollingManager {
    */
   public cleanup(): void {
     this.stopPolling();
+    this.stopActiveDevicePolling();
     this.devices.clear();
     this.activeDevices.clear();
     this.deviceActivityTimestamps.clear();
+    this.nextActivePolls.clear();
     this.logger.info('Polling manager cleaned up');
   }
   /**

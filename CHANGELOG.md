@@ -1,4 +1,36 @@
 # Changelog
+## 6.12.2 (2025-01-07)
+
+### Performance Improvements
+- **Aggressive polling for active devices**: Active devices (heating/cooling) now poll every 15 seconds instead of 3 minutes
+  - Perfect API utilization: 15s interval matches 4 requests/minute rate limit exactly
+  - Dramatically improved responsiveness for temperature monitoring and user interactions
+  - Inactive devices continue efficient 2-minute polling to preserve API capacity
+- **Smart user interaction joining**: User actions intelligently coordinate with scheduled polls
+  - If scheduled poll is within 3 seconds, user action waits to "join" rather than duplicate
+  - If poll is far away, triggers immediate poll and resets timer
+  - Eliminates redundant API calls while maintaining immediate responsiveness
+- **Dual polling system**: Separate optimized timers for active vs inactive devices
+  - Active device timer: 15-second aggressive polling for real-time updates
+  - Normal device timer: 2-minute standard polling for external change detection
+  - Automatic switching based on device thermal status (active/heating/cooling vs standby/off)
+
+### Technical Details
+- Added `ACTIVE_DEVICE_POLL_INTERVAL` (15s) and poll timing coordination maps
+- Enhanced `triggerDevicePollIfNeeded()` with smart joining logic (3s threshold)
+- Implemented `pollActiveDevices()` and `pollSingleActiveDevice()` methods
+- Updated accessory to use smart poll coordination after user actions
+- Rate limiting protection via API client's existing priority system
+
+### Benefits
+- 🚀 **12x Faster Active Device Updates**: 15 seconds vs 3 minutes for active devices
+- 🧠 **Smart API Usage**: Eliminates duplicate polls when user actions coincide with scheduled polls
+- ⚡ **Immediate Responsiveness**: User actions trigger polls instantly when needed
+- 🛡️ **Rate Limit Safety**: Perfect API utilization without exceeding limits
+- 🔄 **Optimal Resource Usage**: Active devices get frequent updates, inactive devices remain efficient
+
+**Result**: Near real-time monitoring for active devices while maintaining excellent API efficiency!
+
 ## 6.12.1 (2025-01-02)
 
 ### Bug Fixes
