@@ -6,7 +6,7 @@
  */
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { SleepMeSimplePlatform } from './platform.js';
-import { SleepMeApi } from './api/sleepme-api.js';
+import { SleepMeApi, RequestContext } from './api/sleepme-api.js';
 import { ThermalStatus, PowerState, DeviceStatus } from './api/types.js';
 import { PollableDevice } from './polling-manager.js';
 import { 
@@ -1528,7 +1528,12 @@ private async fetchInitialStatus(): Promise<void> {
     this.platform.log.debug(`Fetching initial status for ${this.deviceId}`);
     
     // First try cached data to avoid immediate rate limiting
-    const status = await this.apiClient.getDeviceStatus(this.deviceId, false); // Try cached first
+    const context = {
+      source: 'startup' as const,
+      urgency: 'background' as const,
+      operation: 'status' as const
+    };
+    const status = await this.apiClient.getDeviceStatus(this.deviceId, context, false); // Try cached first
     
     if (status) {
       this.platform.log.info(`Got initial cached status for ${this.deviceId}: power=${status.powerState}, temp=${status.currentTemperature}°C`);
@@ -1537,7 +1542,12 @@ private async fetchInitialStatus(): Promise<void> {
       // No cached data available, try fresh call immediately
       this.platform.log.debug(`No cached status, trying fresh call immediately...`);
       try {
-        const freshStatus = await this.apiClient.getDeviceStatus(this.deviceId, true);
+        const freshContext = {
+          source: 'startup' as const,
+          urgency: 'routine' as const,
+          operation: 'status' as const
+        };
+        const freshStatus = await this.apiClient.getDeviceStatus(this.deviceId, freshContext, true);
         if (freshStatus) {
           this.platform.log.info(`Got initial fresh status for ${this.deviceId}: power=${freshStatus.powerState}, temp=${freshStatus.currentTemperature}°C`);
           this.onStatusUpdate(freshStatus);

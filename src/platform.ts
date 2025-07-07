@@ -20,9 +20,7 @@ import {
   DEFAULT_POLLING_INTERVAL, 
   LogLevel,
   InterfaceMode,
-  DEFAULT_INTERFACE_MODE,
-  DEFAULT_SHOW_INDIVIDUAL_SCHEDULES,
-  DEFAULT_ENABLE_WARM_HUG
+  DEFAULT_INTERFACE_MODE
 } from './settings.js';
 import { ScheduleManager, TemperatureSchedule } from './schedule.js';
 import { PollingManager } from './polling-manager.js';
@@ -189,13 +187,11 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     this.homebridgeApi.on('didFinishLaunching', () => {
       // Only attempt to discover devices if the plugin is properly configured
       if (this.isConfigured) {
-        // Delay device discovery to prevent immediate API calls on startup
-        setTimeout(async () => {
-          this.log.info('Homebridge finished launching, starting device discovery');
-          
-          // Wait for device discovery to complete
-          await this.discoverDevices();
-          
+        // Start device discovery immediately  
+        this.log.info('Homebridge finished launching, starting device discovery');
+        
+        // Immediately start device discovery - no delay needed with improved rate limiting
+        this.discoverDevices().then(async () => {
           // Set up schedules AFTER devices are discovered
           if (config.enableSchedules && this.api && this._scheduleManager) {
             // Extract device IDs from discovered accessories
@@ -233,8 +229,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
               this.log.warn('No devices found to apply schedules to');
             }
           }
-          
-        }, 60000); // 1 minute delay before starting discovery (reasonable startup delay)
+        });
         
         // Set up periodic discovery to catch new or changed devices
         if (!this.disableAutoDiscovery) {
@@ -423,10 +418,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       for (let i = 0; i < devices.length; i++) {
         const device = devices[i];
         
-        // Add delay between devices to respect rate limits (reduced from 45s due to improved token bucket)
+        // No delay needed with improved rate limiting - initialize devices immediately
         if (i > 0) {
-          this.log.info(`Waiting 10s before initializing next device...`);
-          await new Promise(resolve => setTimeout(resolve, 10000));
+          this.log.debug(`Initializing next device immediately...`);
         }
               
         // Skip devices with missing IDs

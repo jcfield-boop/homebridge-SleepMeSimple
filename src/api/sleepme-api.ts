@@ -7,9 +7,12 @@ import {
   MAX_REQUESTS_PER_MINUTE,
   MIN_REQUEST_INTERVAL,
   DEFAULT_CACHE_VALIDITY_MS,
+  CACHE_USER_ACTIVE,
+  CACHE_DEVICE_ACTIVE,
+  CACHE_NORMAL,
+  CACHE_IDLE,
+  CACHE_RECOVERY,
   MAX_RETRIES,
-  INITIAL_BACKOFF_MS,
-  MAX_BACKOFF_MS,
   BACKGROUND_REQUEST_THRESHOLD,
   RequestPriority
 } from '../settings.js';
@@ -22,6 +25,17 @@ import {
   Logger
 } from './types.js';
 import { TokenBucket } from '../token-bucket.js';
+
+/**
+ * Context for API requests to enable intelligent priority determination
+ */
+export interface RequestContext {
+  source: 'user' | 'polling' | 'startup' | 'discovery' | 'system';
+  urgency: 'immediate' | 'routine' | 'background' | 'maintenance';
+  deviceActive?: boolean; // Whether device is actively heating/cooling
+  userTriggered?: boolean; // Whether this was directly triggered by user action
+  operation?: 'status' | 'control' | 'discovery' | 'validation';
+}
 
 /**
  * Interface for a cached device status entry
@@ -82,6 +96,10 @@ export class SleepMeApi {
   // Device status cache
   private deviceStatusCache: Map<string, DeviceStatusCache> = new Map();
   
+  // User activity tracking for context-aware caching
+  private lastUserActivity = 0;
+  private userActiveDevices: Set<string> = new Set();
+  
   // API statistics for monitoring
   private stats: ApiStats = {
     totalRequests: 0,
@@ -126,6 +144,50 @@ export class SleepMeApi {
     setInterval(() => this.cleanupStaleRequests(), 60000); // Clean up queue every minute
     
     this.logger.info('SleepMe API client initialized');
+  }
+  
+  /**
+   * Determine the appropriate priority for a request based on context
+   * This replaces simple boolean flags with context-aware priority assignment
+   */
+  private determinePriority(context: RequestContext): RequestPriority {
+    // User-triggered control actions are always CRITICAL
+    if (context.source === 'user' && context.operation === 'control') {
+      return RequestPriority.CRITICAL;
+    }
+    
+    // User-triggered status requests (immediate user feedback) are HIGH
+    if (context.source === 'user' && context.urgency === 'immediate') {
+      return RequestPriority.HIGH;
+    }
+    
+    // Active device routine polling gets NORMAL priority for responsiveness
+    if (context.source === 'polling' && context.deviceActive && context.urgency === 'routine') {
+      return RequestPriority.NORMAL;
+    }
+    
+    // Startup operations that aren't user-triggered should be LOW to avoid competing with user actions
+    if (context.source === 'startup' || context.source === 'discovery') {
+      return context.userTriggered ? RequestPriority.HIGH : RequestPriority.LOW;
+    }
+    
+    // Background polling for inactive devices is LOW priority
+    if (context.source === 'polling' && !context.deviceActive) {
+      return RequestPriority.LOW;
+    }
+    
+    // Regular polling falls back to NORMAL
+    if (context.source === 'polling') {
+      return RequestPriority.NORMAL;
+    }
+    
+    // System maintenance and validation operations are LOW
+    if (context.urgency === 'maintenance' || context.operation === 'validation') {
+      return RequestPriority.LOW;
+    }
+    
+    // Default to NORMAL for anything else
+    return RequestPriority.NORMAL;
   }
   
   /**
@@ -220,6 +282,55 @@ export class SleepMeApi {
   }
   
   /**
+   * Get context-aware cache validity period based on device state and user activity
+   * @param cachedStatus Cached device status
+   * @returns Cache validity period in milliseconds
+   */
+  private getContextAwareCacheValidity(cachedStatus: DeviceStatusCache): number {
+    const now = Date.now();
+    
+    // Check if device is actively heating/cooling (needs frequent updates)
+    const isDeviceActive = cachedStatus.status.powerState === PowerState.ON && 
+                          (cachedStatus.status.thermalStatus === ThermalStatus.ACTIVE ||
+                           cachedStatus.status.thermalStatus === ThermalStatus.HEATING ||
+                           cachedStatus.status.thermalStatus === ThermalStatus.COOLING);
+    
+    // Check if user has been active recently (5 minutes)
+    const isUserActive = (now - this.lastUserActivity) < 300000;
+    
+    // Check if we're in rate limit recovery mode
+    const isRateLimited = this.rateLimitBackoffUntil > now;
+    
+    // Return appropriate cache validity based on context
+    if (isRateLimited) {
+      return CACHE_RECOVERY; // Longer cache during rate limit recovery
+    } else if (isUserActive) {
+      return CACHE_USER_ACTIVE; // Short cache when user is active
+    } else if (isDeviceActive) {
+      return CACHE_DEVICE_ACTIVE; // Medium cache for active devices
+    } else if ((now - this.lastUserActivity) > 1800000) { // 30 minutes idle
+      return CACHE_IDLE; // Longer cache when idle
+    } else {
+      return CACHE_NORMAL; // Default cache period
+    }
+  }
+  
+  /**
+   * Track user activity for context-aware caching
+   * @param deviceId Device ID that user interacted with
+   */
+  public trackUserActivity(deviceId?: string): void {
+    this.lastUserActivity = Date.now();
+    if (deviceId) {
+      this.userActiveDevices.add(deviceId);
+      // Remove from active set after 10 minutes
+      setTimeout(() => {
+        this.userActiveDevices.delete(deviceId);
+      }, 600000);
+    }
+  }
+  
+  /**
    * Clean up stale requests from all queues
    */
   private cleanupStaleRequests(): void {
@@ -229,7 +340,6 @@ export class SleepMeApi {
     let cleanedCount = 0;
     
     const cleanupQueue = (queue: QueuedRequest[], queueName: string): void => {
-      const initialLength = queue.length;
       
       for (let i = queue.length - 1; i >= 0; i--) {
         const request = queue[i];
@@ -290,7 +400,7 @@ export class SleepMeApi {
       const response = await this.makeRequest<Device[] | { devices: Device[] }>({
         method: 'GET',
         url: '/devices',
-        priority: RequestPriority.HIGH, // Device discovery is a high priority operation
+        priority: RequestPriority.LOW, // Device discovery should not compete with user actions
         operationType: 'getDevices'
       });
       
@@ -323,50 +433,65 @@ export class SleepMeApi {
   }
 
  /**
- * Get status for a specific device with trust-based caching
+ * Get status for a specific device with context-aware priority and caching
  * @param deviceId Device identifier
- * @param forceFresh Whether to force a fresh status update
+ * @param context Request context for intelligent priority determination
+ * @param forceFresh Whether to force a fresh status update (legacy parameter, prefer using context)
  * @returns Device status or null if error
  */
-public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<DeviceStatus | null> {
+public async getDeviceStatus(
+  deviceId: string, 
+  context?: RequestContext | boolean, 
+  forceFresh?: boolean
+): Promise<DeviceStatus | null> {
   if (!deviceId) {
     this.logger.error('Missing device ID in getDeviceStatus');
     return null;
   }
   
+  // Handle backward compatibility: if context is boolean, treat as forceFresh
+  let requestContext: RequestContext;
+  let shouldForceFresh: boolean;
+  
+  if (typeof context === 'boolean') {
+    // Legacy call: getDeviceStatus(deviceId, forceFresh)
+    shouldForceFresh = context;
+    requestContext = {
+      source: 'system',
+      urgency: shouldForceFresh ? 'routine' : 'background',
+      operation: 'status'
+    };
+  } else if (context) {
+    // New context-based call
+    requestContext = context;
+    shouldForceFresh = forceFresh || (context.urgency === 'immediate');
+  } else {
+    // Default context
+    requestContext = {
+      source: 'system',
+      urgency: 'background',
+      operation: 'status'
+    };
+    shouldForceFresh = forceFresh || false;
+  }
+  
   try {
     // Check cache first if not forcing fresh data
-    if (!forceFresh) {
+    if (!shouldForceFresh) {
       const cachedStatus = this.deviceStatusCache.get(deviceId);
       const now = Date.now();
       
-      // Use cache with dynamic validity based on confidence and source
-      // High confidence cache (from PATCH responses) can be used longer
+      // Use cache with dynamic validity based on confidence, source, and context
       if (cachedStatus) {
-        let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
+        let validityPeriod = this.getContextAwareCacheValidity(cachedStatus);
         
-        // Adjust validity period based on confidence, source, and device state
-        // More aggressive caching for routine polling efficiency, but shorter for active devices
+        // Further adjust based on confidence and source
         if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
-          // Check if device is actively heating/cooling (needs more frequent updates)
-          const isDeviceActive = cachedStatus.status.powerState === PowerState.ON && 
-                                (cachedStatus.status.thermalStatus === ThermalStatus.ACTIVE ||
-                                 cachedStatus.status.thermalStatus === ThermalStatus.HEATING ||
-                                 cachedStatus.status.thermalStatus === ThermalStatus.COOLING);
-          
-          if (isDeviceActive) {
-            // Active devices need fresher data for temperature tracking
-            validityPeriod = cachedStatus.source === 'patch' ? 
-                            DEFAULT_CACHE_VALIDITY_MS * 2 : // Shorter validity for active PATCH responses
-                            DEFAULT_CACHE_VALIDITY_MS * 1.5;  // Shorter validity for active GET
-          } else {
-            // Inactive devices can use longer cache periods
-            validityPeriod = cachedStatus.source === 'patch' ? 
-                            DEFAULT_CACHE_VALIDITY_MS * 4 : // Longer validity for inactive PATCH responses
-                            DEFAULT_CACHE_VALIDITY_MS * 3;  // Extended validity for inactive GET
-          }
+          // High confidence data can use slightly longer periods
+          validityPeriod = Math.min(validityPeriod * 1.2, CACHE_IDLE);
         } else if (cachedStatus.isOptimistic) {
-          validityPeriod = DEFAULT_CACHE_VALIDITY_MS; // Normal validity for optimistic updates
+          // Optimistic updates use shorter periods for validation
+          validityPeriod = Math.min(validityPeriod * 0.8, CACHE_USER_ACTIVE);
         }
         
         if (now - cachedStatus.timestamp < validityPeriod) {
@@ -394,17 +519,18 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
     // At this point, we need fresh data
     this.logger.debug(`Fetching status for device ${deviceId}...`);
     
-const priority = forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL;
+    // Use context-aware priority determination
+    const priority = this.determinePriority(requestContext);
 
-this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
+    this.logger.verbose(`Using ${priority} priority for device status request (context: ${requestContext.source}/${requestContext.urgency})`);
 
-const response = await this.makeRequest<Record<string, unknown>>({
-  method: 'GET',
-  url: `/devices/${deviceId}`,
-  priority: priority,
-  deviceId,
-  operationType: 'getDeviceStatus'
-});
+    const response = await this.makeRequest<Record<string, unknown>>({
+      method: 'GET',
+      url: `/devices/${deviceId}`,
+      priority: priority,
+      deviceId,
+      operationType: 'getDeviceStatus'
+    });
     
     if (!response) {
       this.logger.error(`Empty response for device ${deviceId}`);
@@ -439,6 +565,9 @@ const response = await this.makeRequest<Record<string, unknown>>({
  */
 private async controlDevice(deviceId: string, action: 'on' | 'off' | 'temperature', temperature?: number): Promise<boolean> {
   try {
+    // Track user activity for context-aware caching
+    this.trackUserActivity(deviceId);
+    
     // Cancel any pending requests for this device
     this.cancelAllDeviceRequests(deviceId);
     
@@ -746,6 +875,16 @@ private parseDeviceStatus(response: Record<string, unknown>): DeviceStatus {
   // Extract firmware version and other details
   const firmwareVersion = this.extractNestedValue(response, 'about.firmware_version') || 
                         this.extractNestedValue(response, 'firmware_version');
+  
+  // Enhanced debug logging for firmware version parsing
+  this.logger.debug(`Firmware extraction debug:`);
+  this.logger.debug(`  - about.firmware_version: ${this.extractNestedValue(response, 'about.firmware_version')}`);
+  this.logger.debug(`  - firmware_version: ${this.extractNestedValue(response, 'firmware_version')}`);
+  this.logger.debug(`  - has 'about' object: ${response.about !== undefined}`);
+  if (response.about) {
+    this.logger.debug(`  - about object keys: ${Object.keys(response.about as Record<string, unknown>).join(', ')}`);
+  }
+  this.logger.debug(`  - final firmwareVersion: ${firmwareVersion}`);
   
   if (firmwareVersion) {
     status.firmwareVersion = String(firmwareVersion);

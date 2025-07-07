@@ -19,10 +19,10 @@ export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 
 /**
  * Default polling interval in seconds
- * Based on empirical testing: 7 tokens max, 1 token per 15s = ~4 requests/minute sustainable
- * Conservative but reasonable for actual token bucket limits
+ * Reduced to better utilize available API capacity (4 requests/minute sustainable)
+ * With context-aware caching, we can poll more frequently without hitting rate limits
  */
-export const DEFAULT_POLLING_INTERVAL = 300; // 5 minutes - conservative but based on real limits
+export const DEFAULT_POLLING_INTERVAL = 120; // 2 minutes - better balance of responsiveness and efficiency
 
 /**
  * Minimum allowed temperature in Celsius
@@ -60,11 +60,20 @@ export const MAX_REQUESTS_PER_MINUTE = 4; // Reality: token bucket with ~4/min s
 export const BACKGROUND_REQUEST_THRESHOLD = 0.8; // NEW: Add this constant
 
 /**
- * Default cache validity period in milliseconds
- * Very long cache period due to severe API rate limiting issues
- * Better to show stale cached data than trigger 429 errors
+ * Cache validity periods for different contexts (in milliseconds)
+ * Optimized for available API capacity (4 requests/minute sustainable)
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 1800000; // 30 minutes - extremely aggressive caching
+export const CACHE_USER_ACTIVE = 60000;      // 1 minute when user is actively interacting
+export const CACHE_DEVICE_ACTIVE = 90000;    // 1.5 minutes for heating/cooling devices
+export const CACHE_NORMAL = 180000;          // 3 minutes normal operation
+export const CACHE_IDLE = 300000;           // 5 minutes when system is idle
+export const CACHE_RECOVERY = 600000;       // 10 minutes during rate limit recovery
+
+/**
+ * Default cache validity period in milliseconds
+ * Reduced to 3 minutes to better utilize available API capacity
+ */
+export const DEFAULT_CACHE_VALIDITY_MS = CACHE_NORMAL; // 3 minutes - balanced for responsiveness
 
 /**
  * Maximum number of retries for API requests 
@@ -87,13 +96,8 @@ export const MAX_BACKOFF_MS = 300000; // 5 minutes
  * Post-user-action quiet period in milliseconds
  * Reduced to allow quicker status verification after user actions
  */
-export const USER_ACTION_QUIET_PERIOD_MS = 30000; // CHANGED: Reduced from 60000ms
+export const USER_ACTION_QUIET_PERIOD_MS = 15000; // CHANGED: Reduced to 15s for faster external detection
 
-/**
- * Command debounce delay in milliseconds
- * Prevents rapid-fire duplicate commands from users
- */
-export const COMMAND_DEBOUNCE_DELAY_MS = 500; // CHANGED: Reduced from 800ms
 
 /**
  * Logging levels

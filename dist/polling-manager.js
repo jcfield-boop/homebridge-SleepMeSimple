@@ -142,7 +142,12 @@ export class PollingManager {
         for (const deviceId of deviceIds) {
             try {
                 // Use cached status check only - no fresh API calls during startup validation
-                const status = await this.api.getDeviceStatus(deviceId, false);
+                const context = {
+                    source: 'startup',
+                    urgency: 'maintenance',
+                    operation: 'validation'
+                };
+                const status = await this.api.getDeviceStatus(deviceId, context, false);
                 if (status) {
                     validDevices.push(deviceId);
                     this.logger.verbose(`Cached device ${deviceId} validated successfully`);
@@ -199,8 +204,14 @@ export class PollingManager {
         if (!device)
             return;
         try {
-            // Always force fresh for active devices to get real-time status
-            const status = await this.api.getDeviceStatus(deviceId, true);
+            // Active device polling with appropriate context
+            const context = {
+                source: 'polling',
+                urgency: 'routine',
+                deviceActive: true,
+                operation: 'status'
+            };
+            const status = await this.api.getDeviceStatus(deviceId, context, true);
             if (status) {
                 device.onStatusUpdate(status);
                 if (counters)
@@ -255,7 +266,13 @@ export class PollingManager {
                 }
                 // Inactive devices: force fresh every 2nd cycle for external change detection
                 const shouldForceFresh = (this.currentPollCycle % 2 === 0);
-                const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
+                const context = {
+                    source: 'polling',
+                    urgency: 'background',
+                    deviceActive: false,
+                    operation: 'status'
+                };
+                const status = await this.api.getDeviceStatus(deviceId, context, shouldForceFresh);
                 if (status) {
                     device.onStatusUpdate(status);
                     successCount++;

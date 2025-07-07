@@ -1,5 +1,15 @@
 import { Device, DeviceStatus, ApiStats, Logger } from './types.js';
 /**
+ * Context for API requests to enable intelligent priority determination
+ */
+export interface RequestContext {
+    source: 'user' | 'polling' | 'startup' | 'discovery' | 'system';
+    urgency: 'immediate' | 'routine' | 'background' | 'maintenance';
+    deviceActive?: boolean;
+    userTriggered?: boolean;
+    operation?: 'status' | 'control' | 'discovery' | 'validation';
+}
+/**
  * SleepMe API Client
  * Handles API communication with rate limiting and robust error handling
  */
@@ -28,6 +38,11 @@ export declare class SleepMeApi {
      * @param logger Logging utility
      */
     constructor(apiToken: string, logger: Logger);
+    /**
+     * Determine the appropriate priority for a request based on context
+     * This replaces simple boolean flags with context-aware priority assignment
+     */
+    private determinePriority;
     /**
      * Get API statistics including token bucket status
      * @returns Current API statistics
@@ -69,12 +84,13 @@ export declare class SleepMeApi {
      */
     getDevices(): Promise<Device[]>;
     /**
-    * Get status for a specific device with trust-based caching
+    * Get status for a specific device with context-aware priority and caching
     * @param deviceId Device identifier
-    * @param forceFresh Whether to force a fresh status update
+    * @param context Request context for intelligent priority determination
+    * @param forceFresh Whether to force a fresh status update (legacy parameter, prefer using context)
     * @returns Device status or null if error
     */
-    getDeviceStatus(deviceId: string, forceFresh?: boolean): Promise<DeviceStatus | null>;
+    getDeviceStatus(deviceId: string, context?: RequestContext | boolean, forceFresh?: boolean): Promise<DeviceStatus | null>;
     /**
    * Unified device control method
    * @param deviceId Device identifier

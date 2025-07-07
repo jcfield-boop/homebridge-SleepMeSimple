@@ -1,4 +1,43 @@
 # Changelog
+## 6.12.3 (2025-01-07)
+
+### Priority Assignment Refactoring
+- **Context-Aware Priority System**: Replaced simple boolean flags with intelligent request prioritization
+  - Added `RequestContext` interface to enable context-aware priority determination
+  - Background polling for inactive devices now uses LOW priority instead of inappropriate HIGH priority
+  - Active device polling uses NORMAL priority for better responsiveness without bypassing rate limits
+  - Discovery operations now use LOW priority to avoid competing with user actions
+  - Startup operations distinguish between user-triggered (HIGH) vs system-initiated (LOW) requests
+- **Fixed Rate Limiting Issues**: Eliminated 429 errors during background polling with proper priority assignment
+  - Aggressive polling was inappropriately using HIGH priority, bypassing rate limit protections
+  - Background operations now respect rate limits while maintaining responsive user interactions
+  - Context-aware system considers request source, urgency, device state, and operation type
+
+### Technical Implementation
+- **New RequestContext Interface**: Provides structured context for intelligent priority determination
+  - `source`: 'user' | 'polling' | 'startup' | 'discovery' | 'system'
+  - `urgency`: 'immediate' | 'routine' | 'background' | 'maintenance'
+  - `deviceActive`: Boolean indicating if device is actively heating/cooling
+  - `userTriggered`: Boolean indicating user-initiated vs system-initiated operations
+  - `operation`: 'status' | 'control' | 'discovery' | 'validation'
+- **Enhanced determinePriority() Method**: Context-aware logic replaces simple forceFresh boolean
+  - User control actions remain CRITICAL priority for immediate responsiveness
+  - User status requests use HIGH priority for immediate feedback
+  - Active device routine polling gets NORMAL priority for good responsiveness
+  - Background polling for inactive devices uses LOW priority
+  - Discovery operations default to LOW priority unless user-triggered
+- **Backward Compatibility**: Maintained existing API signatures while adding context-aware variants
+  - `getDeviceStatus()` accepts both new RequestContext and legacy boolean parameters
+  - All existing call sites updated to use appropriate context objects
+  - No breaking changes to public API interface
+
+### Benefits
+- 🛡️ **Eliminated Rate Limiting**: Background polling no longer inappropriately bypasses rate limits
+- 🎯 **Smarter Prioritization**: Context-aware system assigns priorities based on actual request importance
+- ⚡ **Maintained Responsiveness**: User interactions remain immediate while background operations respect limits
+- 🔄 **Better Resource Usage**: API capacity allocated appropriately based on request context
+- 📊 **Consistent Behavior**: Eliminates unpredictable rate limiting from background operations
+
 ## 6.12.2 (2025-01-07)
 
 ### Performance Improvements

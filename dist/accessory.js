@@ -1240,7 +1240,12 @@ export class SleepMeAccessory {
         try {
             this.platform.log.debug(`Fetching initial status for ${this.deviceId}`);
             // First try cached data to avoid immediate rate limiting
-            const status = await this.apiClient.getDeviceStatus(this.deviceId, false); // Try cached first
+            const context = {
+                source: 'startup',
+                urgency: 'background',
+                operation: 'status'
+            };
+            const status = await this.apiClient.getDeviceStatus(this.deviceId, context, false); // Try cached first
             if (status) {
                 this.platform.log.info(`Got initial cached status for ${this.deviceId}: power=${status.powerState}, temp=${status.currentTemperature}°C`);
                 this.onStatusUpdate(status);
@@ -1249,7 +1254,12 @@ export class SleepMeAccessory {
                 // No cached data available, try fresh call immediately
                 this.platform.log.debug(`No cached status, trying fresh call immediately...`);
                 try {
-                    const freshStatus = await this.apiClient.getDeviceStatus(this.deviceId, true);
+                    const freshContext = {
+                        source: 'startup',
+                        urgency: 'routine',
+                        operation: 'status'
+                    };
+                    const freshStatus = await this.apiClient.getDeviceStatus(this.deviceId, freshContext, true);
                     if (freshStatus) {
                         this.platform.log.info(`Got initial fresh status for ${this.deviceId}: power=${freshStatus.powerState}, temp=${freshStatus.currentTemperature}°C`);
                         this.onStatusUpdate(freshStatus);

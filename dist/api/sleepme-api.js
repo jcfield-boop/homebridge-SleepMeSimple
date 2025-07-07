@@ -70,6 +70,42 @@ export class SleepMeApi {
         this.logger.info('SleepMe API client initialized');
     }
     /**
+     * Determine the appropriate priority for a request based on context
+     * This replaces simple boolean flags with context-aware priority assignment
+     */
+    determinePriority(context) {
+        // User-triggered control actions are always CRITICAL
+        if (context.source === 'user' && context.operation === 'control') {
+            return RequestPriority.CRITICAL;
+        }
+        // User-triggered status requests (immediate user feedback) are HIGH
+        if (context.source === 'user' && context.urgency === 'immediate') {
+            return RequestPriority.HIGH;
+        }
+        // Active device routine polling gets NORMAL priority for responsiveness
+        if (context.source === 'polling' && context.deviceActive && context.urgency === 'routine') {
+            return RequestPriority.NORMAL;
+        }
+        // Startup operations that aren't user-triggered should be LOW to avoid competing with user actions
+        if (context.source === 'startup' || context.source === 'discovery') {
+            return context.userTriggered ? RequestPriority.HIGH : RequestPriority.LOW;
+        }
+        // Background polling for inactive devices is LOW priority
+        if (context.source === 'polling' && !context.deviceActive) {
+            return RequestPriority.LOW;
+        }
+        // Regular polling falls back to NORMAL
+        if (context.source === 'polling') {
+            return RequestPriority.NORMAL;
+        }
+        // System maintenance and validation operations are LOW
+        if (context.urgency === 'maintenance' || context.operation === 'validation') {
+            return RequestPriority.LOW;
+        }
+        // Default to NORMAL for anything else
+        return RequestPriority.NORMAL;
+    }
+    /**
      * Get API statistics including token bucket status
      * @returns Current API statistics
      */
@@ -257,7 +293,7 @@ export class SleepMeApi {
             const response = await this.makeRequest({
                 method: 'GET',
                 url: '/devices',
-                priority: RequestPriority.HIGH,
+                priority: RequestPriority.LOW,
                 operationType: 'getDevices'
             });
             // Handle different API response formats
@@ -289,19 +325,46 @@ export class SleepMeApi {
         }
     }
     /**
-    * Get status for a specific device with trust-based caching
+    * Get status for a specific device with context-aware priority and caching
     * @param deviceId Device identifier
-    * @param forceFresh Whether to force a fresh status update
+    * @param context Request context for intelligent priority determination
+    * @param forceFresh Whether to force a fresh status update (legacy parameter, prefer using context)
     * @returns Device status or null if error
     */
-    async getDeviceStatus(deviceId, forceFresh = false) {
+    async getDeviceStatus(deviceId, context, forceFresh) {
         if (!deviceId) {
             this.logger.error('Missing device ID in getDeviceStatus');
             return null;
         }
+        // Handle backward compatibility: if context is boolean, treat as forceFresh
+        let requestContext;
+        let shouldForceFresh;
+        if (typeof context === 'boolean') {
+            // Legacy call: getDeviceStatus(deviceId, forceFresh)
+            shouldForceFresh = context;
+            requestContext = {
+                source: 'system',
+                urgency: shouldForceFresh ? 'routine' : 'background',
+                operation: 'status'
+            };
+        }
+        else if (context) {
+            // New context-based call
+            requestContext = context;
+            shouldForceFresh = forceFresh || (context.urgency === 'immediate');
+        }
+        else {
+            // Default context
+            requestContext = {
+                source: 'system',
+                urgency: 'background',
+                operation: 'status'
+            };
+            shouldForceFresh = forceFresh || false;
+        }
         try {
             // Check cache first if not forcing fresh data
-            if (!forceFresh) {
+            if (!shouldForceFresh) {
                 const cachedStatus = this.deviceStatusCache.get(deviceId);
                 const now = Date.now();
                 // Use cache with dynamic validity based on confidence, source, and context
@@ -335,8 +398,9 @@ export class SleepMeApi {
             }
             // At this point, we need fresh data
             this.logger.debug(`Fetching status for device ${deviceId}...`);
-            const priority = forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL;
-            this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
+            // Use context-aware priority determination
+            const priority = this.determinePriority(requestContext);
+            this.logger.verbose(`Using ${priority} priority for device status request (context: ${requestContext.source}/${requestContext.urgency})`);
             const response = await this.makeRequest({
                 method: 'GET',
                 url: `/devices/${deviceId}`,

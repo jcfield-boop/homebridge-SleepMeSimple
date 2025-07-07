@@ -2,7 +2,7 @@
  * Centralized polling manager to optimize API usage
  * Reduces N individual polls to 1 batch poll per cycle
  */
-import { SleepMeApi } from './api/sleepme-api.js';
+import { SleepMeApi, RequestContext } from './api/sleepme-api.js';
 import { Logger } from './api/types.js';
 
 export interface PollableDevice {
@@ -173,7 +173,12 @@ export class PollingManager {
     for (const deviceId of deviceIds) {
       try {
         // Use cached status check only - no fresh API calls during startup validation
-        const status = await this.api.getDeviceStatus(deviceId, false);
+        const context = {
+          source: 'startup' as const,
+          urgency: 'maintenance' as const,
+          operation: 'validation' as const
+        };
+        const status = await this.api.getDeviceStatus(deviceId, context, false);
         if (status) {
           validDevices.push(deviceId);
           this.logger.verbose(`Cached device ${deviceId} validated successfully`);
@@ -238,8 +243,14 @@ export class PollingManager {
     if (!device) return;
     
     try {
-      // Always force fresh for active devices to get real-time status
-      const status = await this.api.getDeviceStatus(deviceId, true);
+      // Active device polling with appropriate context
+      const context = {
+        source: 'polling' as const,
+        urgency: 'routine' as const,
+        deviceActive: true,
+        operation: 'status' as const
+      };
+      const status = await this.api.getDeviceStatus(deviceId, context, true);
       
       if (status) {
         device.onStatusUpdate(status);
@@ -301,7 +312,14 @@ export class PollingManager {
         // Inactive devices: force fresh every 2nd cycle for external change detection
         const shouldForceFresh = (this.currentPollCycle % 2 === 0);
         
-        const status = await this.api.getDeviceStatus(deviceId, shouldForceFresh);
+        const context = {
+          source: 'polling' as const,
+          urgency: 'background' as const,
+          deviceActive: false,
+          operation: 'status' as const
+        };
+        
+        const status = await this.api.getDeviceStatus(deviceId, context, shouldForceFresh);
         
         if (status) {
           device.onStatusUpdate(status);
