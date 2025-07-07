@@ -1,4 +1,14 @@
 # Changelog
+## 6.12.4 (2025-01-07)
+
+### Package Metadata Enhancement
+- **Enhanced Package.json for Modern Homebridge UX**: Added required metadata fields for Homebridge v1.10.0 and UI v4.78.1
+  - Added `repository` field with proper GitHub URL for changelog integration
+  - Added `bugs` field for issue tracking integration
+  - Added `homepage` field for better plugin discovery
+  - Ensures proper changelog display in new Homebridge UX interface
+  - Resolves "Release notes are only shown when updating to the latest version" requirement
+
 ## 6.12.3 (2025-01-07)
 
 ### Priority Assignment Refactoring

@@ -1,10 +1,18 @@
 {
   "name": "homebridge-sleepme-simple",
   "displayName": "SleepMe Simple",
-  "version": "6.12.3",
+  "version": "6.12.4",
   "type": "module",
   "description": "Simplified HomeKit control for SleepMe devices (ChiliPad, OOLER, Dock Pro)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/jamesfield/homebridge-SleepMeSimple.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jamesfield/homebridge-SleepMeSimple/issues"
+  },
+  "homepage": "https://github.com/jamesfield/homebridge-SleepMeSimple#readme",
   "files": [
     "dist",
     "config.schema.json",
