@@ -1,6 +1,6 @@
 # Changelog
 
-## 7.0.2 (2025-07-08)
+## 7.0.1 (2025-07-08)
 
 ### Fixed
 - **ES Module Support**: Updated changelog script to work with ES modules configuration

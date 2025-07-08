@@ -679,8 +679,19 @@ private async processQueue(): Promise<void> {
         continue;
       }
       
-      // Check if we've hit the rate limit
-      if (this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
+      // Get the next request from prioritized queues first
+      const request = this.getNextRequest();
+      
+      if (!request) {
+        break; // No requests to process
+      }
+
+      // CRITICAL and HIGH priority requests can bypass rate limits
+      const canBypassRateLimit = request.priority === RequestPriority.CRITICAL || 
+                                request.priority === RequestPriority.HIGH;
+      
+      // Check if we've hit the rate limit (only for non-bypassing requests)
+      if (!canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
         const resetTime = this.minuteStartTime + 60000;
         const waitTime = resetTime - now;
         
@@ -696,13 +707,6 @@ private async processQueue(): Promise<void> {
         // Wait for rate limit reset with a single timer
         await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
         continue;
-      }
-
-      // Get the next request from prioritized queues
-      const request = this.getNextRequest();
-      
-      if (!request) {
-        break; // No requests to process
       }
       
       // Mark the request as executing
@@ -720,8 +724,11 @@ private async processQueue(): Promise<void> {
           Authorization: `Bearer ${this.apiToken}`
         };
         
+        const bypassMessage = canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE ? 
+          ' (bypassing rate limit)' : '';
+        
         this.logger.verbose(
-          `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`
+          `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]${bypassMessage}`
         );
         
         const startTime = now;
