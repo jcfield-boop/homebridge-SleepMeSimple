@@ -136,6 +136,21 @@ export class SleepMeApi {
   }
   
   /**
+   * Create a simple hash of device ID for consistent jitter
+   * @param deviceId Device identifier
+   * @returns Hash value for jitter calculation
+   */
+  private hashDeviceId(deviceId: string): number {
+    let hash = 0;
+    for (let i = 0; i < deviceId.length; i++) {
+      const char = deviceId.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+  }
+
+  /**
    * Clean up expired cache entries
    */
   private cleanupCache(): void {
@@ -230,7 +245,13 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
           validityPeriod = DEFAULT_CACHE_VALIDITY_MS / 2; // Shorter validity for optimistic updates
         }
         
-        if (now - cachedStatus.timestamp < validityPeriod) {
+        // Add jitter to prevent thundering herd when multiple devices have synchronized cache expiration
+        // Use device ID as seed for consistent but distributed jitter per device
+        const deviceHash = this.hashDeviceId(deviceId);
+        const jitterPercent = (deviceHash % 21) - 10; // ±10% jitter (-10% to +10%)
+        const jitteredValidityPeriod = validityPeriod + (validityPeriod * jitterPercent / 100);
+        
+        if (now - cachedStatus.timestamp < jitteredValidityPeriod) {
           const ageSeconds = Math.round((now - cachedStatus.timestamp) / 1000);
           const confidenceInfo = cachedStatus.confidence 
             ? ` (${cachedStatus.confidence} confidence)` 
@@ -239,7 +260,8 @@ public async getDeviceStatus(deviceId: string, forceFresh = false): Promise<Devi
           const verifiedFlag = cachedStatus.verified ? ' (verified)' : '';
           
           this.logger.verbose(
-            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo}${verifiedFlag})`
+            `Using cached status for device ${deviceId} (${ageSeconds}s old${optimisticFlag}${confidenceInfo}${verifiedFlag}) ` +
+            `[jitter: ${jitterPercent}%]`
           );
           
           return cachedStatus.status;

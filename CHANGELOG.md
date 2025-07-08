@@ -1,5 +1,23 @@
 # Changelog
 
+## 7.0.4 (2025-07-08)
+
+### Fixed
+- **Rate Limiting Thundering Herd**: Resolved 429 rate limit errors caused by synchronized cache expiration
+  - Added cache jitter (±10%) to prevent multiple devices from making simultaneous API requests
+  - Implemented device-specific hash-based jitter for consistent but distributed cache expiration
+  - Prevents "thundering herd" problem when multiple devices have synchronized 18-minute cache cycles
+
+### Improved
+- **Cache Management**: Enhanced cache expiration timing for better API rate limit compliance
+- **Logging**: Added jitter percentage to verbose cache logs for better debugging
+- **API Reliability**: Significantly reduced rate limit errors in multi-device installations
+
+### Technical
+- **Root Cause Analysis**: Identified that trust-based caching created synchronized cache expiration
+- **Mathematical Solution**: Applied consistent hash-based jitter to spread requests across time
+- **Preserved Benefits**: Maintained trust-based caching performance while fixing rate limiting
+
 ## 7.0.3 (2025-07-08)
 
 ### Fixed

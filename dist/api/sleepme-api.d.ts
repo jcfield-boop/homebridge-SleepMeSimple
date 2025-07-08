@@ -34,6 +34,12 @@ export declare class SleepMeApi {
      */
     getStats(): ApiStats;
     /**
+     * Create a simple hash of device ID for consistent jitter
+     * @param deviceId Device identifier
+     * @returns Hash value for jitter calculation
+     */
+    private hashDeviceId;
+    /**
      * Clean up expired cache entries
      */
     private cleanupCache;
