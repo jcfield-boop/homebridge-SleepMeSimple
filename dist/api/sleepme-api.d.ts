@@ -122,6 +122,7 @@ export declare class SleepMeApi {
     private hasQueuedRequests;
     /**
      * Check and reset rate limit counter using discrete minute windows
+     * Enhanced to handle API timing mismatches
      */
     private checkRateLimit;
     /**

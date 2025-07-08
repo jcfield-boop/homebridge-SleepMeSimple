@@ -10,6 +10,7 @@
 
 ### Improved
 - **Cache Management**: Enhanced cache expiration timing for better API rate limit compliance
+- **Rate Limiting Robustness**: Improved handling of API timing mismatches between client and server
 - **Logging**: Added jitter percentage to verbose cache logs for better debugging
 - **API Reliability**: Significantly reduced rate limit errors in multi-device installations
 

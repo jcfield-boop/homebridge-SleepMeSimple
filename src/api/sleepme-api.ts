@@ -780,25 +780,27 @@ private async processQueue(): Promise<void> {
         this.stats.lastError = axiosError;
         
         // Handle rate limiting (HTTP 429)
-// In the error handling part of processQueue method
-if (axiosError.response?.status === 429) {
-  // For rate limit errors, wait until the next minute boundary
-  const now = Date.now();
-  const currentMinute = Math.floor(now / 60000) * 60000;
-  const nextMinute = currentMinute + 60000;
-  
-  // Add a small buffer (2 seconds) to ensure we're safely in the next minute
-  const waitTime = (nextMinute - now) + 2000;
-  
-  this.rateLimitBackoffUntil = now + waitTime;
-  
-  this.logger.warn(
-    `Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime/1000)}s`
-  );
-  
-  // Requeue the request
-  this.requeueRequest(request);
-}
+        if (axiosError.response?.status === 429) {
+          // For rate limit errors, wait until the next minute boundary
+          const now = Date.now();
+          const currentMinute = Math.floor(now / 60000) * 60000;
+          const nextMinute = currentMinute + 60000;
+          
+          // Add a small buffer (2 seconds) to ensure we're safely in the next minute
+          const waitTime = (nextMinute - now) + 2000;
+          
+          this.rateLimitBackoffUntil = now + waitTime;
+          
+          // Reset our internal counter to prevent double-counting
+          this.requestsThisMinute = 0;
+          
+          this.logger.warn(
+            `Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime/1000)}s`
+          );
+          
+          // Requeue the request
+          this.requeueRequest(request);
+        }
         else {
           // For other errors, check retry logic by priority
           this.consecutiveErrors++;
@@ -848,6 +850,7 @@ private hasQueuedRequests(): boolean {
 }
 /**
  * Check and reset rate limit counter using discrete minute windows
+ * Enhanced to handle API timing mismatches
  */
 private checkRateLimit(): void {
   const now = Date.now();
@@ -857,11 +860,19 @@ private checkRateLimit(): void {
   
   // If we've moved to a new discrete minute, reset counter
   if (currentMinute > this.minuteStartTime) {
-    this.requestsThisMinute = 0;
-    this.minuteStartTime = currentMinute;
-    this.rateExceededLogged = false;
-    
-    this.logger.debug(`Resetting rate limit counter (new discrete minute: ${new Date(currentMinute).toISOString()})`);
+    // Only reset if we're not in a backoff period
+    // This prevents resetting the counter when the API is still enforcing rate limits
+    if (this.rateLimitBackoffUntil <= now) {
+      this.requestsThisMinute = 0;
+      this.minuteStartTime = currentMinute;
+      this.rateExceededLogged = false;
+      
+      this.logger.debug(`Resetting rate limit counter (new discrete minute: ${new Date(currentMinute).toISOString()})`);
+    } else {
+      // We're in a new minute but still in backoff - log this condition
+      const backoffRemaining = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
+      this.logger.debug(`New discrete minute but still in backoff for ${backoffRemaining}s (API timing mismatch)`);
+    }
   }
 }
 /**
