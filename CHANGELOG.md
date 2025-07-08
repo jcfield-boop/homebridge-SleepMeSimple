@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.0.2 (2025-07-08)
+
+### Fixed
+- **ES Module Support**: Updated changelog script to work with ES modules configuration
+- **Automation Scripts**: Fixed Node.js module compatibility issues in helper scripts
+
+### Improved
+- **Release Process**: Enhanced automated release workflow with better ES module compatibility
+- **Developer Experience**: Streamlined version bumping and changelog management
+
 ## 7.0.0 (2025-07-08)
 
 ### Fixed
