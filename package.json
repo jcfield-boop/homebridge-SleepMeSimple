@@ -7,8 +7,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jcfield-boop/homebridge-SleepMeSimple.git"
+    "url": "git+https://github.com/jcfield-boop/homebridge-SleepMeSimple.git"
   },
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/jcfield-boop"
+    }
+  ],
   "bugs": {
     "url": "https://github.com/jcfield-boop/homebridge-SleepMeSimple/issues"
   },
@@ -62,5 +68,12 @@
     "pluginAlias": "SleepMeSimple",
     "pluginType": "platform",
     "customUi": true
-  }
+  },
+  "author": "jcfield-boop",
+  "contributors": [
+    {
+      "name": "jcfield-boop",
+      "url": "https://github.com/jcfield-boop"
+    }
+  ]
 }

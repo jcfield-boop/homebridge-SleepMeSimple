@@ -1,4 +1,29 @@
 # Changelog
+
+## 6.12.10 (2025-07-08)
+
+### Fixed
+- **Homebridge UI Integration**: Added repository information and fixed file references for proper changelog display in Homebridge UI
+- **Package Metadata**: Added funding field and improved GitHub integration for better plugin discovery
+- **Configuration Schema**: Updated footer version to match current release
+
+### Improved  
+- **Repository Links**: Proper GitHub repository URL format for API compatibility
+- **File References**: Corrected case-sensitive file names (README.MD, license.md)
+- **Documentation Access**: CHANGELOG.md and README.MD now included in published package
+
+## 6.12.9 (2025-07-08)
+
+### Fixed
+- **Merge Conflicts**: Resolved git merge conflicts from previous development session
+- **Build System**: Restored clean build process after conflict resolution
+- **Rate Limiting**: Preserved all rate limiting improvements from previous versions
+
+### Technical
+- **Repository State**: Clean git working tree with all rate limiting optimizations intact
+- **Compilation**: Successfully building TypeScript without errors
+- **Code Quality**: Linting passes with only minor warnings
+
 ## 6.9.0 (2025-04-25)
 
 ### Changed
