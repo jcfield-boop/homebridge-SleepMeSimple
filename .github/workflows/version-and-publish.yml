@@ -79,8 +79,77 @@ jobs:
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+    - name: Get new version
+      id: get_version
+      run: |
+        NEW_VERSION=$(node -p "require('./package.json').version")
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+
+    - name: Extract release notes from changelog
+      id: extract_notes
+      run: |
+        # Extract release notes for the new version from CHANGELOG.md
+        python3 << 'EOF'
+        import re
+        import sys
+        import json
+        
+        version = "${{ steps.get_version.outputs.version }}"
+        
+        try:
+            with open('CHANGELOG.md', 'r') as f:
+                content = f.read()
+            
+            # Find the section for this version
+            pattern = rf'^## {re.escape(version)} \([^)]+\)$(.*?)^## '
+            match = re.search(pattern, content, re.MULTILINE | re.DOTALL)
+            
+            if match:
+                release_notes = match.group(1).strip()
+                
+                # Clean up the notes - remove excessive newlines
+                release_notes = re.sub(r'\n{3,}', '\n\n', release_notes)
+                
+                # Add installation instructions
+                release_notes += f"\n\n## Installation\n```bash\nnpm install homebridge-sleepme-simple@{version}\n```"
+                
+                # Save to file for GitHub Actions
+                with open('release_notes.md', 'w') as f:
+                    f.write(release_notes)
+                
+                print(f"✅ Found release notes for version {version}")
+            else:
+                # Fallback release notes
+                fallback_notes = f"""## Release {version}
+        
+        This release includes bug fixes and improvements.
+        
+        ## Installation
+        ```bash
+        npm install homebridge-sleepme-simple@{version}
+        ```
+        
+        For detailed changes, please see the [full changelog](https://github.com/jcfield-boop/homebridge-SleepMeSimple/blob/main/CHANGELOG.md)."""
+                
+                with open('release_notes.md', 'w') as f:
+                    f.write(fallback_notes)
+                
+                print(f"⚠️  No specific notes found for version {version}, using fallback")
+        
+        except Exception as e:
+            print(f"❌ Error processing changelog: {e}")
+            sys.exit(1)
+        EOF
+
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        generate_release_notes: true
-        tag_name: v${{ github.ref_name }}
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: "v${{ steps.get_version.outputs.version }} - Release"
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
