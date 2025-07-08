@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.0.3 (2025-07-08)
+
+### Fixed
+- **Version Consistency**: Patch release to ensure correct version propagation across npm registry
+- **Package Publishing**: Resolved version mismatch in installed package version
+
+### Technical
+- **Manual Release Process**: Used direct git tagging and push to ensure proper version synchronization
+- **Build Verification**: Confirmed all build artifacts are correctly updated with new version
+
 ## 7.0.2 (2025-07-08)
 
 ### Added
