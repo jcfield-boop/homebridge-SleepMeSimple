@@ -1,5 +1,23 @@
 # Changelog
 
+## 7.0.5 (2025-07-08)
+
+### Fixed
+- **Rate Limiting Timing**: Resolved immediate 429 errors on startup caused by API timing mismatches
+  - Enhanced checkRateLimit() to prevent premature counter resets during active backoff periods
+  - Improved 429 error handling to reset internal counter and prevent double-counting
+  - Added debug logging for API timing mismatches to aid troubleshooting
+
+### Improved
+- **Rate Limiting Robustness**: Better handling of discrepancies between client and server rate limit windows
+- **Startup Reliability**: Eliminates immediate rate limit errors when plugin starts
+- **Debugging**: Enhanced logging to track timing mismatches and backoff periods
+
+### Technical
+- **API Timing Alignment**: Respects server-side rate limiting timing rather than assuming perfect clock alignment
+- **Backoff Logic**: Prevents rate limit counter resets during active backoff periods
+- **Error Recovery**: Improved 429 error handling with proper request requeuing
+
 ## 7.0.4 (2025-07-08)
 
 ### Fixed
