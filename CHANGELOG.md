@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.12.11 (2025-07-08)
+
+### Fixed
+- **Homebridge UI Release Notes**: Fixed repository URL format for proper GitHub API compatibility
+- **Package Metadata**: Added funding field, author, and contributors information for better plugin discovery
+- **CHANGELOG Format**: Updated changelog with missing version entries for proper release notes display
+
+### Improved
+- **GitHub Integration**: Repository URL now uses proper git+ format required by npm and GitHub API
+- **Plugin Discovery**: Enhanced metadata fields for better integration with Homebridge UI
+- **Documentation**: Complete changelog now included in published package
+
 ## 6.12.10 (2025-07-08)
 
 ### Fixed
