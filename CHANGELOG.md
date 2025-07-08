@@ -1,5 +1,24 @@
 # Changelog
 
+## 7.0.2 (2025-07-08)
+
+### Added
+- **Developer Documentation**: Created comprehensive CLAUDE.md file for future development
+  - Documented development commands (build, lint, watch)
+  - Explained sophisticated API client architecture with rate limiting and trust-based caching
+  - Detailed HomeKit integration patterns and simplified thermostat interface
+  - Comprehensive overview of temperature scheduling system and "Warm Hug" feature
+
+### Improved
+- **Development Experience**: Enhanced future maintainability with detailed architectural documentation
+- **API Client Understanding**: Documented prioritized request queue system and discrete minute-based rate limiting
+- **Code Navigation**: Added clear guidance for common development workflows and patterns
+
+### Technical
+- **Documentation Coverage**: Complete architectural overview for Claude Code usage
+- **Build Process**: Documented TypeScript configuration and ES module setup
+- **Rate Limiting**: Explained sophisticated API management and trust-based caching approach
+
 ## 7.0.1 (2025-07-08)
 
 ### Fixed
