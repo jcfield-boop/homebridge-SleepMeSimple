@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.12.13 (2025-07-08)
+
+### Fixed
+- **CHANGELOG Format**: Corrected changelog structure to properly start with latest version
+- **NPM Package Refresh**: Published new version to ensure Homebridge UI gets updated changelog
+- **Cache Busting**: Force refresh of package metadata in npm registry
+
+### Improved
+- **Release Notes Display**: Ensures Homebridge UI shows proper version history starting with 6.12.13
+
 ## 6.12.12 (2025-07-08)
 
 ### Fixed
