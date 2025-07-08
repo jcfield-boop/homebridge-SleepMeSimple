@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.0.0 (2025-07-08)
+
+### Fixed
+- **Complete Cache-Busting Solution**: Major version bump to force npm registry and Homebridge UI cache refresh
+- **Changelog Display**: Ensures Homebridge UI displays the correct latest version instead of cached 6.1.0
+- **Release Notes Integration**: Final fix for proper release notes display in Homebridge UI
+
+### Breaking Changes
+- **Version Jump**: Bumped to v7.0.0 to force complete cache invalidation across all systems
+- **Note**: No actual breaking changes in functionality - only version number change for cache busting
+
 ## 6.12.13 (2025-07-08)
 
 ### Fixed

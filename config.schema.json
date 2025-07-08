@@ -3,7 +3,7 @@
   "pluginType": "platform",
   "customUi": true,
   "noServerLogs": true,
-  "footerDisplay": "SleepMe Simple Homebridge Plugin v6.12.13",
+  "footerDisplay": "SleepMe Simple Homebridge Plugin v7.0.0",
   "customIcon": "icons/sleepmebasic.png",
   "schema": {
     "type": "object",
