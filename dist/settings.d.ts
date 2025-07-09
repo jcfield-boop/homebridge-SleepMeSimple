@@ -84,3 +84,23 @@ export declare enum RequestPriority {
     NORMAL = "normal",
     LOW = "low"
 }
+/**
+ * HomeKit interface modes
+ */
+export declare enum InterfaceMode {
+    SWITCH = "switch",
+    THERMOSTAT = "thermostat",
+    HYBRID = "hybrid"
+}
+/**
+ * Default interface mode - hybrid provides best user experience
+ */
+export declare const DEFAULT_INTERFACE_MODE = InterfaceMode.HYBRID;
+/**
+ * Enable individual schedule switches by default
+ */
+export declare const DEFAULT_SHOW_INDIVIDUAL_SCHEDULES = true;
+/**
+ * Enable warm hug feature by default
+ */
+export declare const DEFAULT_ENABLE_WARM_HUG = true;

@@ -16,9 +16,12 @@ export declare class SleepMeAccessory {
     private readonly platform;
     private readonly accessory;
     private readonly api;
-    private thermostatService;
-    private waterLevelService?;
     private informationService;
+    private thermostatService?;
+    private switchService?;
+    private temperatureSensorService?;
+    private waterLevelService?;
+    private interfaceMode;
     private currentTemperature;
     private targetTemperature;
     private isPowered;
@@ -44,9 +47,25 @@ export declare class SleepMeAccessory {
      */
     private setupInformationService;
     /**
-     * Set up the thermostat service with simplified controls (only OFF and AUTO)
+     * Setup interface based on configured mode
      */
-    private setupThermostatService;
+    private setupInterface;
+    /**
+     * Clean up existing services to avoid conflicts
+     */
+    private cleanupExistingServices;
+    /**
+     * Setup simple switch interface
+     */
+    private setupSwitchInterface;
+    /**
+     * Setup hybrid interface (power switch + temperature control)
+     */
+    private setupHybridInterface;
+    /**
+     * Setup traditional thermostat interface
+     */
+    private setupThermostatInterface;
     /**
      * Handle target temperature changes from HomeKit
      */
@@ -71,6 +90,26 @@ export declare class SleepMeAccessory {
      * Get target heating/cooling state (AUTO when on, OFF when off)
      */
     private getTargetHeatingCoolingState;
+    /**
+     * Power toggle handler for switch interface
+     */
+    private handlePowerToggle;
+    /**
+     * Update all services based on current interface mode
+     */
+    private updateAllServices;
+    /**
+     * Update switch interface services
+     */
+    private updateSwitchServices;
+    /**
+     * Update hybrid interface services
+     */
+    private updateHybridServices;
+    /**
+     * Update thermostat interface services
+     */
+    private updateThermostatServices;
     /**
      * Update heating/cooling state characteristics in HomeKit
      */
