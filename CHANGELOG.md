@@ -1,5 +1,31 @@
 # Changelog
 
+## 7.0.6 (2025-07-09)
+
+### Added
+- **Interface Mode Configuration**: Restored the powerful `interfaceMode` setting with three options:
+  - **"hybrid"** (Default): Power switch + temperature sensor + thermostat control - all synchronized
+  - **"switch"**: Simple power switch + temperature sensor for basic control
+  - **"thermostat"**: Traditional thermostat interface with OFF/AUTO states only
+
+### Fixed
+- **HomeKit Synchronization Issue**: Resolved the synchronization problem between switch and thermostat controls
+  - Previously, the switch accessory and thermostat accessory were not synchronized
+  - Switch changes would not reflect in the thermostat and vice versa
+  - The hybrid interface mode provides both controls that stay perfectly synchronized
+
+### Improved
+- **HomeKit Automation Support**: The hybrid mode provides the best of both worlds
+  - Simple switch for basic on/off control
+  - Advanced thermostat for temperature adjustments and HomeKit automation
+  - All controls stay synchronized, eliminating confusion and automation issues
+
+### Technical
+- **Restored Interface System**: Brought back the sophisticated interface system from v6.11.0
+  - Supports three distinct interface modes for different use cases
+  - Hybrid mode solves common HomeKit automation rate limiting issues
+  - Centralized service updating ensures all interfaces stay synchronized
+
 ## 7.0.5 (2025-07-08)
 
 ### Fixed

@@ -14,7 +14,7 @@ import {
 import { SleepMeApi } from './api/sleepme-api.js';
 import { SleepMeAccessory } from './accessory.js';
 import { Logger as CustomLogger } from './api/types.js';
-import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
+import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel, InterfaceMode } from './settings.js';
 import { ScheduleManager, TemperatureSchedule } from './schedule.js';
 
 /**

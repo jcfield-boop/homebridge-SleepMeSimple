@@ -101,3 +101,27 @@ export enum RequestPriority {
   NORMAL = 'normal',     // Regular status updates
   LOW = 'low'            // Background operations
 }
+
+/**
+ * HomeKit interface modes
+ */
+export enum InterfaceMode {
+  SWITCH = 'switch',         // Simple power switch + temperature sensor
+  THERMOSTAT = 'thermostat', // Traditional thermostat interface  
+  HYBRID = 'hybrid'          // Power switch + temperature control + schedules
+}
+
+/**
+ * Default interface mode - hybrid provides best user experience
+ */
+export const DEFAULT_INTERFACE_MODE = InterfaceMode.HYBRID;
+
+/**
+ * Enable individual schedule switches by default
+ */
+export const DEFAULT_SHOW_INDIVIDUAL_SCHEDULES = true;
+
+/**
+ * Enable warm hug feature by default
+ */
+export const DEFAULT_ENABLE_WARM_HUG = true;

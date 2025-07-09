@@ -12,7 +12,9 @@ import {
   MIN_TEMPERATURE_C, 
   MAX_TEMPERATURE_C, 
   COMMAND_DEBOUNCE_DELAY_MS,
-  USER_ACTION_QUIET_PERIOD_MS 
+  USER_ACTION_QUIET_PERIOD_MS,
+  InterfaceMode,
+  DEFAULT_INTERFACE_MODE 
 } from './settings.js';
 
 /**
@@ -51,10 +53,17 @@ function debounce<T extends (...args: any[]) => any>(
  * with only AUTO and OFF (standby) modes
  */
 export class SleepMeAccessory {
-  // HomeKit services
-  private thermostatService: Service;
-  private waterLevelService?: Service;
+  // Core HomeKit services
   private informationService: Service;
+  
+  // Interface services (depends on mode)
+  private thermostatService?: Service;
+  private switchService?: Service;
+  private temperatureSensorService?: Service;
+  private waterLevelService?: Service;
+  
+  // Interface configuration
+  private interfaceMode: InterfaceMode;
   
   // Device state
   private currentTemperature = 21;
@@ -97,13 +106,16 @@ export class SleepMeAccessory {
       throw new Error(`Accessory missing device ID: ${this.displayName}`);
     }
     
+    // Determine interface mode
+    this.interfaceMode = this.platform.config.interfaceMode || DEFAULT_INTERFACE_MODE;
+    
     // Create debounced handlers
     this.debouncedTemperatureSet = debounce(this.setTemperature.bind(this), COMMAND_DEBOUNCE_DELAY_MS);
     this.debouncedPowerSet = debounce(this.setPowerState.bind(this), COMMAND_DEBOUNCE_DELAY_MS);
     
     // Setup HomeKit services
     this.informationService = this.setupInformationService();
-    this.thermostatService = this.setupThermostatService();
+    this.setupInterface();
     
     // Initialize the device by fetching status after a delay
     setTimeout(() => this.refreshDeviceStatus(true), 15000);
@@ -134,23 +146,118 @@ export class SleepMeAccessory {
   }
   
   /**
-   * Set up the thermostat service with simplified controls (only OFF and AUTO)
+   * Setup interface based on configured mode
    */
-  private setupThermostatService(): Service {
-    // Remove any existing services first for clean setup
-    const existingService = this.accessory.getService(this.platform.Service.Thermostat);
-    if (existingService) {
-      this.accessory.removeService(existingService);
-    }
+  private setupInterface(): void {
+    this.platform.log.info(`Setting up ${this.interfaceMode} interface for ${this.displayName}`);
     
-    // Create new thermostat service
-    const service = this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
+    // Clean up any existing services first
+    this.cleanupExistingServices();
+    
+    switch (this.interfaceMode) {
+      case InterfaceMode.SWITCH:
+        this.setupSwitchInterface();
+        break;
+      case InterfaceMode.THERMOSTAT:
+        this.setupThermostatInterface();
+        break;
+      case InterfaceMode.HYBRID:
+      default:
+        this.setupHybridInterface();
+        break;
+    }
+  }
+  
+  /**
+   * Clean up existing services to avoid conflicts
+   */
+  private cleanupExistingServices(): void {
+    const servicesToRemove = [
+      this.platform.Service.TemperatureSensor,
+      this.platform.Service.Switch,
+      this.platform.Service.Thermostat
+    ];
+    
+    servicesToRemove.forEach(serviceType => {
+      const existingService = this.accessory.getService(serviceType);
+      if (existingService) {
+        this.platform.log.info(`Removing existing ${serviceType.name} service`);
+        this.accessory.removeService(existingService);
+      }
+    });
+  }
+  
+  /**
+   * Setup simple switch interface
+   */
+  private setupSwitchInterface(): void {
+    // Power switch for simple ON/OFF
+    this.switchService = this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Power`);
+    
+    this.switchService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onGet(() => this.isPowered)
+      .onSet(this.handlePowerToggle.bind(this));
+    
+    // Temperature sensor for monitoring
+    this.temperatureSensorService = this.accessory.addService(
+      this.platform.Service.TemperatureSensor, 
+      `${this.displayName} Temperature`
+    );
+    
+    this.temperatureSensorService
+      .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C - 5,
+        maxValue: MAX_TEMPERATURE_C + 5,
+        minStep: 0.1
+      })
+      .onGet(() => this.currentTemperature);
+  }
+  
+  /**
+   * Setup hybrid interface (power switch + temperature control)
+   */
+  private setupHybridInterface(): void {
+    // 1. Power Switch - for simple ON/OFF control
+    this.switchService = this.accessory.addService(this.platform.Service.Switch, `${this.displayName} Power`);
+    
+    this.switchService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onGet(() => this.isPowered)
+      .onSet(this.handlePowerToggle.bind(this));
+    
+    // 2. Temperature sensor for monitoring current temperature
+    this.temperatureSensorService = this.accessory.addService(
+      this.platform.Service.TemperatureSensor, 
+      `${this.displayName} Temperature`
+    );
+    
+    this.temperatureSensorService
+      .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .setProps({
+        minValue: MIN_TEMPERATURE_C - 5,
+        maxValue: MAX_TEMPERATURE_C + 5,
+        minStep: 0.1
+      })
+      .onGet(() => this.currentTemperature);
+    
+    // 3. Thermostat for temperature control
+    this.setupThermostatInterface();
+  }
+  
+  /**
+   * Setup traditional thermostat interface
+   */
+  private setupThermostatInterface(): void {
+    // Create thermostat service
+    this.thermostatService = this.accessory.addService(this.platform.Service.Thermostat, this.displayName);
     
     // Configure basic characteristics
-    service.setCharacteristic(this.platform.Characteristic.Name, this.displayName);
+    this.thermostatService.setCharacteristic(this.platform.Characteristic.Name, this.displayName);
     
     // Set up current temperature
-    service
+    this.thermostatService
       .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .setProps({
         minValue: MIN_TEMPERATURE_C - 5,
@@ -160,7 +267,7 @@ export class SleepMeAccessory {
       .onGet(() => this.currentTemperature);
     
     // Set up target temperature
-    service
+    this.thermostatService
       .getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .setProps({
         minValue: MIN_TEMPERATURE_C,
@@ -171,12 +278,12 @@ export class SleepMeAccessory {
       .onSet(this.handleTargetTemperatureSet.bind(this));
     
     // Current heating/cooling state
-    service
+    this.thermostatService
       .getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
       .onGet(() => this.getCurrentHeatingCoolingState());
     
     // Target heating/cooling state - IMPORTANT: ONLY OFF AND AUTO options
-    const targetStateChar = service
+    const targetStateChar = this.thermostatService
       .getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState);
     
     // This is the key change - limit valid values to just OFF and AUTO
@@ -192,11 +299,9 @@ export class SleepMeAccessory {
       .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
     
     // Set display units (Celsius)
-    service
+    this.thermostatService
       .getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .setValue(this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS);
-    
-    return service;
   }
   
   /**
@@ -219,7 +324,7 @@ export class SleepMeAccessory {
     // Turn on device if it's currently off
     if (!this.isPowered) {
       this.isPowered = true;
-      this.updateHeatingCoolingStates();
+      this.updateAllServices();
     }
     
     // Use debounced temperature setter to avoid rapid API calls
@@ -235,7 +340,7 @@ export class SleepMeAccessory {
         const success = await this.api.turnDeviceOn(this.deviceId, temperature);
         if (success) {
           this.isPowered = true;
-          this.updateHeatingCoolingStates();
+          this.updateAllServices();
         }
       } else {
         await this.api.setTemperature(this.deviceId, temperature);
@@ -262,7 +367,7 @@ export class SleepMeAccessory {
     
     // Update state immediately
     this.isPowered = shouldPowerOn;
-    this.updateHeatingCoolingStates();
+    this.updateAllServices();
     
     // Use debounced setter to avoid rapid API calls
     this.debouncedPowerSet(shouldPowerOn);
@@ -313,9 +418,106 @@ export class SleepMeAccessory {
   }
   
   /**
+   * Power toggle handler for switch interface
+   */
+  private async handlePowerToggle(value: CharacteristicValue): Promise<void> {
+    const shouldTurnOn = value as boolean;
+    this.lastUserActionTime = Date.now();
+    
+    this.platform.log.info(`Power toggle: ${shouldTurnOn ? 'ON' : 'OFF'} for ${this.deviceId}`);
+    
+    // Skip if no real change
+    if (shouldTurnOn === this.isPowered) {
+      return;
+    }
+    
+    // Update state immediately for responsiveness
+    this.isPowered = shouldTurnOn;
+    this.updateAllServices();
+    
+    // Use debounced setter to avoid rapid API calls
+    this.debouncedPowerSet(shouldTurnOn);
+  }
+  
+  /**
+   * Update all services based on current interface mode
+   */
+  private updateAllServices(): void {
+    switch (this.interfaceMode) {
+      case InterfaceMode.SWITCH:
+        this.updateSwitchServices();
+        break;
+      case InterfaceMode.THERMOSTAT:
+        this.updateThermostatServices();
+        break;
+      case InterfaceMode.HYBRID:
+      default:
+        this.updateHybridServices();
+        break;
+    }
+  }
+  
+  /**
+   * Update switch interface services
+   */
+  private updateSwitchServices(): void {
+    if (this.switchService) {
+      this.switchService.updateCharacteristic(this.platform.Characteristic.On, this.isPowered);
+    }
+    if (this.temperatureSensorService) {
+      this.temperatureSensorService.updateCharacteristic(
+        this.platform.Characteristic.CurrentTemperature, 
+        this.currentTemperature
+      );
+    }
+  }
+  
+  /**
+   * Update hybrid interface services
+   */
+  private updateHybridServices(): void {
+    // Update power switch
+    if (this.switchService) {
+      this.switchService.updateCharacteristic(this.platform.Characteristic.On, this.isPowered);
+    }
+    
+    // Update temperature sensor
+    if (this.temperatureSensorService) {
+      this.temperatureSensorService.updateCharacteristic(
+        this.platform.Characteristic.CurrentTemperature, 
+        this.currentTemperature
+      );
+    }
+    
+    // Update thermostat service
+    this.updateThermostatServices();
+  }
+  
+  /**
+   * Update thermostat interface services
+   */
+  private updateThermostatServices(): void {
+    if (this.thermostatService) {
+      this.thermostatService.updateCharacteristic(
+        this.platform.Characteristic.CurrentTemperature, 
+        this.currentTemperature
+      );
+      this.thermostatService.updateCharacteristic(
+        this.platform.Characteristic.TargetTemperature, 
+        this.targetTemperature
+      );
+      this.updateHeatingCoolingStates();
+    }
+  }
+
+  /**
    * Update heating/cooling state characteristics in HomeKit
    */
   private updateHeatingCoolingStates(): void {
+    if (!this.thermostatService) {
+      return;
+    }
+    
     const currentState = this.getCurrentHeatingCoolingState();
     const targetState = this.getTargetHeatingCoolingState();
     
@@ -452,10 +654,6 @@ export class SleepMeAccessory {
       // Update current temperature
       if (status.currentTemperature !== this.currentTemperature) {
         this.currentTemperature = status.currentTemperature;
-        this.thermostatService.updateCharacteristic(
-          this.platform.Characteristic.CurrentTemperature,
-          this.currentTemperature
-        );
         
         // Update schedule manager with current temperature
         if (this.platform.scheduleManager) {
@@ -469,10 +667,6 @@ export class SleepMeAccessory {
       // Update target temperature
       if (status.targetTemperature !== this.targetTemperature) {
         this.targetTemperature = status.targetTemperature;
-        this.thermostatService.updateCharacteristic(
-          this.platform.Characteristic.TargetTemperature,
-          this.targetTemperature
-        );
       }
       
       // Update power state
@@ -482,7 +676,6 @@ export class SleepMeAccessory {
       
       if (this.isPowered !== newPowerState) {
         this.isPowered = newPowerState;
-        this.updateHeatingCoolingStates();
       }
       
       // Update water level if available
@@ -492,6 +685,9 @@ export class SleepMeAccessory {
         this.isWaterLow = !!status.isWaterLow;
         this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
       }
+      
+      // Update all HomeKit services based on interface mode
+      this.updateAllServices();
     } catch (error) {
       this.failedUpdateAttempts++;
       this.platform.log.error(`Status refresh error: ${error}`);

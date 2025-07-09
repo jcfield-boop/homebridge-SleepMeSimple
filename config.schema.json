@@ -43,6 +43,18 @@
         "default": "normal",
         "description": "Controls the detail level of plugin logs"
       },
+      "interfaceMode": {
+        "title": "HomeKit Interface Mode",
+        "type": "string",
+        "enum": ["hybrid", "switch", "thermostat"],
+        "default": "hybrid",
+        "description": "Choose how devices appear in HomeKit",
+        "enumNames": [
+          "Hybrid (Recommended) - Power switch + temperature control + schedules",
+          "Switch - Simple power switch + temperature sensor", 
+          "Thermostat - Traditional thermostat interface"
+        ]
+      },
       "enableSchedules": {
         "title": "Enable Schedules",
         "type": "boolean",

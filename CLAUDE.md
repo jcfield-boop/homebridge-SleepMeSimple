@@ -18,6 +18,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run prepublishOnly` - Automatically runs build before publishing
 - `npm run check-publish` - Validate package before publishing
 - `npm run version` - Runs build when version is bumped
+- `npm publish` - Publish to npm registry (requires authentication)
+- `npm version patch|minor|major` - Bump version and create git tag
 
 ## Architecture Overview
 
@@ -66,11 +68,25 @@ The SleepMe API client is particularly sophisticated:
 
 ### HomeKit Integration
 
-The plugin presents each SleepMe device as a thermostat service with:
-- Target temperature control (13-46°C range)
-- Current temperature reading
-- Power state (OFF/AUTO only)
+The plugin supports three interface modes:
+
+**Hybrid Mode (Default)**:
+- Power Switch service for simple on/off control
+- Temperature Sensor service for current temperature monitoring
+- Thermostat service for advanced temperature control and HomeKit automation
 - Water level indicator (using Battery service)
+- All services stay synchronized to eliminate confusion
+
+**Switch Mode**:
+- Power Switch service for simple on/off control
+- Temperature Sensor service for current temperature monitoring
+- Water level indicator (using Battery service)
+
+**Thermostat Mode**:
+- Thermostat service with simplified OFF/AUTO states (legacy mode)
+- Water level indicator (using Battery service)
+
+The hybrid mode solves common HomeKit automation issues by providing both simple and advanced controls that stay perfectly synchronized.
 
 ### Configuration and Scheduling
 

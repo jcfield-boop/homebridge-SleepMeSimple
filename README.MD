@@ -39,12 +39,26 @@ SleepMe Simple addresses these problems through:
 
 ## HomeKit Integration
 
-The plugin presents each SleepMe device in HomeKit with:
+The plugin supports three interface modes to fit different use cases:
 
-1. **Temperature Control**: Simple slider for direct temperature adjustment
-2. **Power Control**: Easy on/off switching with quick feedback
-3. **Temperature Sensor**: Shows the current bed temperature
-4. **Water Level Indicator**: Uses the Battery service to show water level status
+### Interface Modes
+
+**Hybrid Mode (Default & Recommended)**
+- **Power Switch**: Simple on/off control that stays synchronized
+- **Temperature Sensor**: Shows the current bed temperature
+- **Thermostat**: Advanced temperature control with HomeKit automation support
+- **Water Level Indicator**: Uses the Battery service to show water level status
+
+**Switch Mode**
+- **Power Switch**: Simple on/off control
+- **Temperature Sensor**: Shows the current bed temperature
+- **Water Level Indicator**: Uses the Battery service to show water level status
+
+**Thermostat Mode**
+- **Thermostat**: Traditional thermostat interface with OFF/AUTO states
+- **Water Level Indicator**: Uses the Battery service to show water level status
+
+The **Hybrid Mode** solves the common synchronization issues between power controls and temperature settings by providing both a simple switch and advanced thermostat control that stay perfectly synchronized.
 
 ## Advanced Technical Features
 
@@ -76,6 +90,7 @@ Configure through the Homebridge UI or manually in your `config.json`:
       "unit": "C",
       "pollingInterval": 90,
       "logLevel": "normal",
+      "interfaceMode": "hybrid",
       "enableSchedules": true
     }
   ]
@@ -88,7 +103,14 @@ Configure through the Homebridge UI or manually in your `config.json`:
 - **unit**: Temperature unit, "C" for Celsius or "F" for Fahrenheit (default: "C")
 - **pollingInterval**: How frequently to check device status in seconds (default: 90, minimum: 60)
 - **logLevel**: Log detail level - "normal", "debug", or "verbose"
+- **interfaceMode**: HomeKit interface mode - "hybrid", "switch", or "thermostat" (default: "hybrid")
 - **enableSchedules**: Enable temperature scheduling features (default: false)
+
+#### Interface Mode Details
+
+- **"hybrid"** (Recommended): Provides both a power switch and thermostat control that stay synchronized, solving common automation issues
+- **"switch"**: Simple switch and temperature sensor for basic control
+- **"thermostat"**: Traditional thermostat interface with OFF/AUTO states only
 
 ## Using the UI Configuration
 
