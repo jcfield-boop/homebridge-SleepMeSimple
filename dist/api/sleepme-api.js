@@ -53,13 +53,18 @@ export class SleepMeApi {
             this.logger.error('Invalid API token provided');
             throw new Error('Invalid API token provided');
         }
-        // Create a startup delay to prevent immediate requests
+        // Startup will be marked complete by the platform after initial discovery
         this.startupComplete = new Promise(resolve => {
-            setTimeout(() => {
-                this.logger.debug('Initial startup delay complete');
-                this.startupFinished = true;
-                resolve();
-            }, 5000); // 5 second startup delay
+            // The platform will call markStartupComplete() when ready
+            const checkStartup = () => {
+                if (this.startupFinished) {
+                    resolve();
+                }
+                else {
+                    setTimeout(checkStartup, 100);
+                }
+            };
+            checkStartup();
         });
         // Start the queue processor
         this.processQueue();
@@ -73,6 +78,14 @@ export class SleepMeApi {
      */
     getStats() {
         return { ...this.stats };
+    }
+    /**
+     * Mark startup as complete (called by platform when initial discovery is done)
+     * This allows the platform to control when startup is considered finished
+     */
+    markStartupComplete() {
+        this.startupFinished = true;
+        this.logger.debug('Startup marked as complete by platform');
     }
     /**
      * Create a simple hash of device ID for consistent jitter
@@ -112,10 +125,13 @@ export class SleepMeApi {
     async getDevices() {
         try {
             this.logger.debug('Fetching devices...');
+            // Use NORMAL priority during startup to avoid rate limits, HIGH for user-initiated discovery
+            const priority = this.startupFinished ? RequestPriority.HIGH : RequestPriority.NORMAL;
+            this.logger.verbose(`Using ${priority} priority for device discovery (startup: ${!this.startupFinished})`);
             const response = await this.makeRequest({
                 method: 'GET',
                 url: '/devices',
-                priority: RequestPriority.HIGH,
+                priority: priority,
                 operationType: 'getDevices'
             });
             // Handle different API response formats

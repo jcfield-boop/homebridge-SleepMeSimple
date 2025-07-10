@@ -34,6 +34,11 @@ export declare class SleepMeApi {
      */
     getStats(): ApiStats;
     /**
+     * Mark startup as complete (called by platform when initial discovery is done)
+     * This allows the platform to control when startup is considered finished
+     */
+    markStartupComplete(): void;
+    /**
      * Create a simple hash of device ID for consistent jitter
      * @param deviceId Device identifier
      * @returns Hash value for jitter calculation

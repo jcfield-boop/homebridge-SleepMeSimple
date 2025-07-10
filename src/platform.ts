@@ -41,6 +41,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   public readonly logLevel!: LogLevel;
   public readonly pollingInterval: number;
   public readonly temperatureUnit: string = 'C';
+  private startupDelay = 45000; // Default 45 seconds
   
   // Map to track active accessory instances for proper cleanup
   private readonly accessoryInstances: Map<string, SleepMeAccessory> = new Map();
@@ -115,6 +116,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
         duration: (config.advanced?.warmHugDuration as number) || 10
       };
       
+      // Get startup delay configuration (default to 45 seconds for rate limit management)
+      this.startupDelay = ((config.advanced?.startupDelay as number) || 45) * 1000;
+      
       // Initialize schedule manager if enabled
       if (config.enableSchedules && this.api) {
         // Create the schedule manager but don't set schedules yet
@@ -132,11 +136,18 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       // Only attempt to discover devices if the plugin is properly configured
       if (this.isConfigured) {
         // Delay device discovery to prevent immediate API calls on startup
+        this.log.info(`Delaying device discovery for ${this.startupDelay / 1000}s to avoid rate limits`);
         setTimeout(async () => {
+          this.log.info('Initial startup delay complete');
           this.log.info('Homebridge finished launching, starting device discovery');
           
           // Wait for device discovery to complete
           await this.discoverDevices();
+          
+          // Mark API startup as complete after initial discovery
+          if (this.api) {
+            this.api.markStartupComplete();
+          }
           
           // Set up schedules AFTER devices are discovered
           if (config.enableSchedules && this.api && this._scheduleManager) {
@@ -197,7 +208,7 @@ if (Array.isArray(config.schedules) && config.schedules.length > 0) {
             }
           }
           
-        }, 30000); // 30 second delay before starting discovery
+        }, this.startupDelay); // Configurable delay before starting discovery
         
         // Set up periodic discovery to catch new or changed devices
         // Check once per day is sufficient
