@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.0.9 (2025-07-10)
+
+### Added
+- **Configurable Startup Delay**: Added advanced configuration option to customize startup delay
+  - New `startupDelay` setting in advanced configuration (default: 45 seconds)
+  - Helps avoid rate limiting during rapid development cycles
+  - Particularly useful for developers doing frequent plugin updates
+
+### Improved
+- **Smart Priority Management**: Enhanced API request prioritization during startup
+  - Device discovery now uses NORMAL priority during startup to reduce rate limit conflicts
+  - User-initiated actions maintain HIGH priority for immediate responsiveness
+  - Better coordination between platform startup and API client timing
+
+### Fixed
+- **Rate Limiting**: Improved startup rate limit management
+  - Reduced likelihood of 429 errors during plugin startup
+  - Better handling when multiple SleepMe integrations are active
+  - Enhanced logging to distinguish startup vs. runtime priority usage
+
 ## 7.0.8 (2025-07-10)
 
 ### Fixed

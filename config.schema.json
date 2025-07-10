@@ -97,6 +97,14 @@
       "advanced": {
         "type": "object",
         "properties": {
+          "startupDelay": {
+            "title": "Startup Delay",
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 300,
+            "default": 45,
+            "description": "Delay before device discovery starts (seconds). Useful for avoiding rate limits during rapid development cycles."
+          },
           "warmHugIncrement": {
             "title": "Warm Hug Temperature Increment",
             "type": "number",
