@@ -106,6 +106,15 @@ Configure through the Homebridge UI or manually in your `config.json`:
 - **interfaceMode**: HomeKit interface mode - "hybrid", "switch", or "thermostat" (default: "hybrid")
 - **enableSchedules**: Enable temperature scheduling features (default: false)
 
+#### Advanced Configuration Options
+
+For developers or users experiencing rate limiting issues during rapid plugin updates, additional configuration options are available:
+
+- **startupDelay**: Delay before device discovery starts in seconds (default: 45, range: 5-300)
+  - Useful for avoiding rate limits during rapid development cycles
+  - Located in the "Advanced" section of the configuration UI
+  - Higher values reduce startup rate limiting but delay initial device discovery
+
 #### Interface Mode Details
 
 - **"hybrid"** (Recommended): Provides both a power switch and thermostat control that stay synchronized, solving common automation issues
@@ -207,6 +216,7 @@ These templates are designed to work with your body's natural temperature regula
 If you see rate limit warnings in your logs:
 - Increase the `pollingInterval` value (90-120 seconds recommended)
 - For logs with "Rate limit exceeded" errors, the plugin will automatically back off and retry
+- If experiencing rate limiting during plugin startup/restart, consider increasing the `startupDelay` value in advanced configuration
 
 ### Unresponsive Controls
 
