@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.0.8 (2025-07-10)
+
+### Fixed
+- **Temperature Validation**: Fixed HomeKit warnings for extreme temperature values
+  - SleepMe devices report 999°C when in schedule mode, which exceeds HomeKit's 46°C limit
+  - Added temperature validation to prevent HomeKit characteristic warnings
+  - Extreme values (≥999°C) now fall back to reasonable defaults for HomeKit display
+  - Logging added to indicate when device is in schedule mode
+
 ## 7.0.6 (2025-07-09)
 
 ### Added

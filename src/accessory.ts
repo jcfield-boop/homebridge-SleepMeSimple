@@ -48,6 +48,20 @@ function debounce<T extends (...args: any[]) => any>(
 }
 
 /**
+ * Validates and clamps temperature to HomeKit acceptable range
+ * SleepMe devices sometimes report extreme values like 999°C for schedule mode
+ */
+function validateTemperature(temperature: number, fallback = 21): number {
+  // Handle special case where 999°C indicates schedule mode
+  if (temperature >= 999) {
+    return fallback;
+  }
+  
+  // Clamp to HomeKit acceptable range
+  return Math.max(MIN_TEMPERATURE_C, Math.min(MAX_TEMPERATURE_C, temperature));
+}
+
+/**
  * SleepMe Accessory
  * Provides a simplified HomeKit interface for SleepMe devices
  * with only AUTO and OFF (standby) modes
@@ -498,13 +512,17 @@ export class SleepMeAccessory {
    */
   private updateThermostatServices(): void {
     if (this.thermostatService) {
+      // Validate temperatures before updating HomeKit characteristics
+      const validCurrentTemp = validateTemperature(this.currentTemperature, 21);
+      const validTargetTemp = validateTemperature(this.targetTemperature, 21);
+      
       this.thermostatService.updateCharacteristic(
         this.platform.Characteristic.CurrentTemperature, 
-        this.currentTemperature
+        validCurrentTemp
       );
       this.thermostatService.updateCharacteristic(
         this.platform.Characteristic.TargetTemperature, 
-        this.targetTemperature
+        validTargetTemp
       );
       this.updateHeatingCoolingStates();
     }
@@ -664,9 +682,17 @@ export class SleepMeAccessory {
         }
       }
       
-      // Update target temperature
+      // Update target temperature with validation
       if (status.targetTemperature !== this.targetTemperature) {
-        this.targetTemperature = status.targetTemperature;
+        const rawTargetTemp = status.targetTemperature;
+        const validatedTargetTemp = validateTemperature(rawTargetTemp, this.targetTemperature);
+        
+        // Log when we receive extreme values (likely schedule mode)
+        if (rawTargetTemp >= 999) {
+          this.platform.log.debug(`Device ${this.deviceId} in schedule mode (Target=${rawTargetTemp}°C), using ${validatedTargetTemp}°C for HomeKit`);
+        }
+        
+        this.targetTemperature = validatedTargetTemp;
       }
       
       // Update power state
