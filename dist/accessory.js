@@ -93,8 +93,8 @@ export class SleepMeAccessory {
         // Setup HomeKit services
         this.informationService = this.setupInformationService();
         this.setupInterface();
-        // Initialize the device by fetching status after a delay
-        setTimeout(() => this.refreshDeviceStatus(true), 15000);
+        // Initialize the device by fetching status after a short delay
+        setTimeout(() => this.refreshDeviceStatus(true), 2000);
         // Setup regular polling
         this.setupStatusPolling();
         this.platform.log.info(`Initialized ${this.displayName} (ID: ${this.deviceId})`);
@@ -411,10 +411,10 @@ export class SleepMeAccessory {
      */
     updateThermostatServices() {
         if (this.thermostatService) {
-            // Validate temperatures before updating HomeKit characteristics
-            const validCurrentTemp = validateTemperature(this.currentTemperature, 21);
-            const validTargetTemp = validateTemperature(this.targetTemperature, 21);
-            this.thermostatService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, validCurrentTemp);
+            // Current temperature should never be validated - pass through as-is
+            this.thermostatService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.currentTemperature);
+            // Only validate target temperature (for schedule mode with 999°C values)
+            const validTargetTemp = validateTemperature(this.targetTemperature, this.targetTemperature);
             this.thermostatService.updateCharacteristic(this.platform.Characteristic.TargetTemperature, validTargetTemp);
             this.updateHeatingCoolingStates();
         }
@@ -516,6 +516,7 @@ export class SleepMeAccessory {
             }
             // Update current temperature
             if (status.currentTemperature !== this.currentTemperature) {
+                this.platform.log.debug(`Temperature update: ${this.currentTemperature}°C → ${status.currentTemperature}°C`);
                 this.currentTemperature = status.currentTemperature;
                 // Update schedule manager with current temperature
                 if (this.platform.scheduleManager) {
@@ -530,6 +531,9 @@ export class SleepMeAccessory {
                 if (rawTargetTemp >= 999) {
                     this.platform.log.debug(`Device ${this.deviceId} in schedule mode (Target=${rawTargetTemp}°C), using ${validatedTargetTemp}°C for HomeKit`);
                 }
+                else if (rawTargetTemp !== validatedTargetTemp) {
+                    this.platform.log.debug(`Target temperature validated: ${rawTargetTemp}°C → ${validatedTargetTemp}°C`);
+                }
                 this.targetTemperature = validatedTargetTemp;
             }
             // Update power state
@@ -537,6 +541,7 @@ export class SleepMeAccessory {
                 (status.thermalStatus !== ThermalStatus.STANDBY &&
                     status.thermalStatus !== ThermalStatus.OFF);
             if (this.isPowered !== newPowerState) {
+                this.platform.log.debug(`Power state update: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
                 this.isPowered = newPowerState;
             }
             // Update water level if available

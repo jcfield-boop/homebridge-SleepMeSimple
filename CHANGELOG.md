@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.0.10 (2025-07-11)
+
+### Fixed
+- **HomeKit Static Values Issue**: Fixed HomeKit showing static values instead of live device data
+  - Removed temperature validation from current temperature readings (only validate target temperature for schedule mode)
+  - Current temperature now passes through unchanged from API to HomeKit
+  - Reduced initialization delay from 15 seconds to 2 seconds for faster status updates
+  - Enhanced logging for temperature updates, power state changes, and validation events
+
+### Improved
+- **Faster Device Status Loading**: Device status now loads within 2 seconds instead of 15 seconds after startup
+- **Better Diagnostics**: Added detailed logging to track temperature transitions and power state changes
+- **Temperature Validation**: Only extreme values (≥999°C from native app's "warm wake up" mode) are now validated
+
 ## 7.0.9 (2025-07-10)
 
 ### Added

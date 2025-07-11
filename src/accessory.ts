@@ -131,8 +131,8 @@ export class SleepMeAccessory {
     this.informationService = this.setupInformationService();
     this.setupInterface();
     
-    // Initialize the device by fetching status after a delay
-    setTimeout(() => this.refreshDeviceStatus(true), 15000);
+    // Initialize the device by fetching status after a short delay
+    setTimeout(() => this.refreshDeviceStatus(true), 2000);
     
     // Setup regular polling
     this.setupStatusPolling();
@@ -512,14 +512,14 @@ export class SleepMeAccessory {
    */
   private updateThermostatServices(): void {
     if (this.thermostatService) {
-      // Validate temperatures before updating HomeKit characteristics
-      const validCurrentTemp = validateTemperature(this.currentTemperature, 21);
-      const validTargetTemp = validateTemperature(this.targetTemperature, 21);
-      
+      // Current temperature should never be validated - pass through as-is
       this.thermostatService.updateCharacteristic(
         this.platform.Characteristic.CurrentTemperature, 
-        validCurrentTemp
+        this.currentTemperature
       );
+      
+      // Only validate target temperature (for schedule mode with 999°C values)
+      const validTargetTemp = validateTemperature(this.targetTemperature, this.targetTemperature);
       this.thermostatService.updateCharacteristic(
         this.platform.Characteristic.TargetTemperature, 
         validTargetTemp
@@ -671,6 +671,7 @@ export class SleepMeAccessory {
       
       // Update current temperature
       if (status.currentTemperature !== this.currentTemperature) {
+        this.platform.log.debug(`Temperature update: ${this.currentTemperature}°C → ${status.currentTemperature}°C`);
         this.currentTemperature = status.currentTemperature;
         
         // Update schedule manager with current temperature
@@ -690,6 +691,8 @@ export class SleepMeAccessory {
         // Log when we receive extreme values (likely schedule mode)
         if (rawTargetTemp >= 999) {
           this.platform.log.debug(`Device ${this.deviceId} in schedule mode (Target=${rawTargetTemp}°C), using ${validatedTargetTemp}°C for HomeKit`);
+        } else if (rawTargetTemp !== validatedTargetTemp) {
+          this.platform.log.debug(`Target temperature validated: ${rawTargetTemp}°C → ${validatedTargetTemp}°C`);
         }
         
         this.targetTemperature = validatedTargetTemp;
@@ -701,6 +704,7 @@ export class SleepMeAccessory {
                             status.thermalStatus !== ThermalStatus.OFF);
       
       if (this.isPowered !== newPowerState) {
+        this.platform.log.debug(`Power state update: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
         this.isPowered = newPowerState;
       }
       
