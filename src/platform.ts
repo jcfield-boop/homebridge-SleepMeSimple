@@ -141,13 +141,14 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           this.log.info('Initial startup delay complete');
           this.log.info('Homebridge finished launching, starting device discovery');
           
-          // Wait for device discovery to complete
-          await this.discoverDevices();
-          
-          // Mark API startup as complete after initial discovery
+          // Mark API startup as complete immediately after startup delay
+          // This prevents deadlock where discovery waits for startup completion
           if (this.api) {
             this.api.markStartupComplete();
           }
+          
+          // Now perform device discovery with proper priority handling
+          await this.discoverDevices();
           
           // Set up schedules AFTER devices are discovered
           if (config.enableSchedules && this.api && this._scheduleManager) {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.0.11 (2025-07-11)
+
+### Fixed
+- **Startup Deadlock**: Fixed critical deadlock preventing device discovery and API requests
+  - Device discovery was waiting for startup completion, but startup completion was waiting for discovery
+  - Resolved by marking startup complete immediately after startup delay, before discovery begins
+  - Fixes HomeKit unresponsiveness and missing device status updates introduced in recent releases
+
+### Technical
+- **Queue Processing**: Restored proper API request queue processing during startup
+- **Priority Handling**: Fixed startup priority coordination that was causing infinite wait states
+- **Device Discovery**: Restored reliable device discovery and status polling
+
 ## 7.0.10 (2025-07-11)
 
 ### Fixed
