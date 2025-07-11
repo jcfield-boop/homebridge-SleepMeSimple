@@ -49,15 +49,15 @@ function debounce<T extends (...args: any[]) => any>(
 
 /**
  * Validates and clamps temperature to HomeKit acceptable range
- * SleepMe devices sometimes report extreme values like 999°C for schedule mode
+ * Any temperature above HomeKit's maximum (46°C) is clamped to the maximum
  */
 function validateTemperature(temperature: number, fallback = 21): number {
-  // Handle special case where 999°C indicates schedule mode
-  if (temperature >= 999) {
+  // For invalid/NaN temperatures, use fallback
+  if (isNaN(temperature)) {
     return fallback;
   }
   
-  // Clamp to HomeKit acceptable range
+  // Simply clamp to HomeKit acceptable range - any temp >46°C becomes 46°C
   return Math.max(MIN_TEMPERATURE_C, Math.min(MAX_TEMPERATURE_C, temperature));
 }
 
@@ -688,11 +688,13 @@ export class SleepMeAccessory {
         const rawTargetTemp = status.targetTemperature;
         const validatedTargetTemp = validateTemperature(rawTargetTemp, this.targetTemperature);
         
-        // Log when we receive extreme values (likely schedule mode)
-        if (rawTargetTemp >= 999) {
-          this.platform.log.debug(`Device ${this.deviceId} in schedule mode (Target=${rawTargetTemp}°C), using ${validatedTargetTemp}°C for HomeKit`);
-        } else if (rawTargetTemp !== validatedTargetTemp) {
-          this.platform.log.debug(`Target temperature validated: ${rawTargetTemp}°C → ${validatedTargetTemp}°C`);
+        // Log when temperature is clamped to HomeKit limits
+        if (rawTargetTemp !== validatedTargetTemp) {
+          if (rawTargetTemp >= 999) {
+            this.platform.log.debug(`Device ${this.deviceId} in schedule mode (Target=${rawTargetTemp}°C), clamped to HomeKit max ${validatedTargetTemp}°C`);
+          } else {
+            this.platform.log.debug(`Target temperature clamped: ${rawTargetTemp}°C → ${validatedTargetTemp}°C`);
+          }
         }
         
         this.targetTemperature = validatedTargetTemp;

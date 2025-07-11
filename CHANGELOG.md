@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.0.12 (2025-07-11)
+
+### Improved
+- **Elegant Temperature Mapping**: Simplified temperature validation for schedule mode
+  - Any temperature above HomeKit's maximum (46°C) is now clamped to 46°C
+  - Schedule mode (999°C) and other high temperatures display as maximum heat setting
+  - Removes special case handling in favor of natural boundary enforcement
+  - More intuitive: "High" setting in native app shows as maximum in HomeKit
+
+### Technical
+- **Simplified Logic**: Replaced complex 999°C special case with elegant clamping
+- **Future-Proof**: Handles any extreme temperature values automatically
+- **Better UX**: HomeKit slider shows maximum position for high/schedule modes
+
 ## 7.0.11 (2025-07-11)
 
 ### Fixed
