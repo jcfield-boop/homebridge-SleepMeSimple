@@ -653,6 +653,8 @@ export class SleepMeApi {
                         this.logger.warn(`Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
                         // Requeue the request
                         this.requeueRequest(request);
+                        // Don't remove the request from queue - it was requeued
+                        continue;
                     }
                     else {
                         // For other errors, check retry logic by priority
@@ -666,6 +668,8 @@ export class SleepMeApi {
                         if (request.retryCount < maxRetries) {
                             this.logger.warn(`Request failed (${axiosError.message}), retry ${request.retryCount + 1}/${maxRetries}`);
                             this.requeueRequest(request);
+                            // Don't remove the request from queue - it was requeued
+                            continue;
                         }
                         else {
                             // Max retries exceeded
@@ -675,7 +679,7 @@ export class SleepMeApi {
                     }
                 }
                 finally {
-                    // Remove request from appropriate queue
+                    // Remove request from appropriate queue only if not requeued
                     this.removeRequest(request);
                 }
             }

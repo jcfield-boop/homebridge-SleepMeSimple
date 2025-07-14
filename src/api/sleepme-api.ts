@@ -818,6 +818,8 @@ private async processQueue(): Promise<void> {
           
           // Requeue the request
           this.requeueRequest(request);
+          // Don't remove the request from queue - it was requeued
+          continue;
         }
         else {
           // For other errors, check retry logic by priority
@@ -835,6 +837,8 @@ private async processQueue(): Promise<void> {
               `Request failed (${axiosError.message}), retry ${request.retryCount + 1}/${maxRetries}`
             );
             this.requeueRequest(request);
+            // Don't remove the request from queue - it was requeued
+            continue;
           } else {
             // Max retries exceeded
             this.logger.error(
@@ -844,7 +848,7 @@ private async processQueue(): Promise<void> {
           }
         }
       } finally {
-        // Remove request from appropriate queue
+        // Remove request from appropriate queue only if not requeued
         this.removeRequest(request);
       }
     }
