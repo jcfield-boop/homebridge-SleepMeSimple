@@ -14,6 +14,10 @@ export interface EmpiricalRateLimiterConfig {
   safetyMargin: number;
   // Critical request bypass
   allowCriticalBypass: boolean;
+  // Startup grace period in milliseconds
+  startupGracePeriod: number;
+  // Allow HIGH priority bypass during startup
+  allowHighPriorityStartupBypass: boolean;
 }
 
 export interface RequestMetrics {
@@ -31,6 +35,7 @@ export class EmpiricalRateLimiter {
   private requestsThisMinute: number = 0;
   private lastRateLimitTime: number = 0;
   private adaptiveBackoffUntil: number = 0;
+  private startupTime: number;
 
   constructor(config: Partial<EmpiricalRateLimiterConfig> = {}) {
     this.config = {
@@ -38,10 +43,13 @@ export class EmpiricalRateLimiter {
       useFixedWindow: true,
       safetyMargin: 0.25, // 25% safety margin
       allowCriticalBypass: true,
+      startupGracePeriod: 120000, // 2 minutes
+      allowHighPriorityStartupBypass: true,
       ...config
     };
 
     this.currentMinuteStart = this.getCurrentMinuteStart();
+    this.startupTime = Date.now();
   }
 
   /**
@@ -57,11 +65,19 @@ export class EmpiricalRateLimiter {
     // Update minute window if needed
     this.updateMinuteWindow(now);
     
+    // Check if we're in startup grace period
+    const inStartupGracePeriod = (now - this.startupTime) < this.config.startupGracePeriod;
+    
     // Check if we're in adaptive backoff period
     if (this.adaptiveBackoffUntil > now) {
       // Critical requests can bypass adaptive backoff
       if (priority === RequestPriority.CRITICAL && this.config.allowCriticalBypass) {
         return { allowed: true, waitTime: 0, reason: 'Critical bypass during backoff' };
+      }
+      
+      // HIGH priority requests can bypass backoff during startup grace period
+      if (priority === RequestPriority.HIGH && inStartupGracePeriod && this.config.allowHighPriorityStartupBypass) {
+        return { allowed: true, waitTime: 0, reason: 'HIGH priority startup grace period bypass' };
       }
       
       const waitTime = this.adaptiveBackoffUntil - now;
@@ -73,7 +89,12 @@ export class EmpiricalRateLimiter {
     }
 
     // Calculate effective limit with safety margin
-    const effectiveLimit = Math.floor(this.config.maxRequestsPerMinute * (1 - this.config.safetyMargin));
+    let effectiveLimit = Math.floor(this.config.maxRequestsPerMinute * (1 - this.config.safetyMargin));
+    
+    // During startup grace period, be more lenient with HIGH priority requests
+    if (inStartupGracePeriod && priority === RequestPriority.HIGH && this.config.allowHighPriorityStartupBypass) {
+      effectiveLimit = Math.max(effectiveLimit, this.config.maxRequestsPerMinute - 1); // Allow up to max-1 during startup
+    }
     
     // Critical requests can bypass normal rate limits
     if (priority === RequestPriority.CRITICAL && this.config.allowCriticalBypass) {
@@ -92,14 +113,18 @@ export class EmpiricalRateLimiter {
     // Normal rate limiting
     if (this.requestsThisMinute >= effectiveLimit) {
       const waitTime = this.timeUntilNextMinute();
+      const gracePeriodInfo = inStartupGracePeriod ? ' (startup grace period active)' : '';
       return { 
         allowed: false, 
         waitTime, 
-        reason: `Rate limit reached (${this.requestsThisMinute}/${effectiveLimit})` 
+        reason: `Rate limit reached (${this.requestsThisMinute}/${effectiveLimit})${gracePeriodInfo}` 
       };
     }
 
-    return { allowed: true, waitTime: 0 };
+    const bypassReason = inStartupGracePeriod && priority === RequestPriority.HIGH ? 
+      'Startup grace period - HIGH priority' : undefined;
+    
+    return { allowed: true, waitTime: 0, reason: bypassReason };
   }
 
   /**
@@ -219,6 +244,8 @@ export class EmpiricalRateLimiter {
     backoffTimeRemaining: number;
     recentRateLimitErrors: number;
     averageResponseTime: number;
+    startupGracePeriodActive: boolean;
+    startupGracePeriodRemaining: number;
   } {
     const now = Date.now();
     const recentRequests = this.requestHistory.filter(r => r.timestamp > now - 60000);
@@ -226,6 +253,10 @@ export class EmpiricalRateLimiter {
     const avgResponseTime = recentRequests.length > 0 
       ? recentRequests.reduce((sum, r) => sum + r.responseTime, 0) / recentRequests.length 
       : 0;
+    
+    const startupGracePeriodActive = (now - this.startupTime) < this.config.startupGracePeriod;
+    const startupGracePeriodRemaining = startupGracePeriodActive ? 
+      this.config.startupGracePeriod - (now - this.startupTime) : 0;
 
     return {
       requestsThisMinute: this.requestsThisMinute,
@@ -233,7 +264,9 @@ export class EmpiricalRateLimiter {
       adaptiveBackoffActive: this.adaptiveBackoffUntil > now,
       backoffTimeRemaining: Math.max(0, this.adaptiveBackoffUntil - now),
       recentRateLimitErrors: rateLimitErrors,
-      averageResponseTime: avgResponseTime
+      averageResponseTime: avgResponseTime,
+      startupGracePeriodActive,
+      startupGracePeriodRemaining
     };
   }
 
@@ -243,6 +276,11 @@ export class EmpiricalRateLimiter {
   public getRecommendations(): string[] {
     const stats = this.getStats();
     const recommendations: string[] = [];
+
+    if (stats.startupGracePeriodActive) {
+      recommendations.push(`Startup grace period active - ${Math.ceil(stats.startupGracePeriodRemaining / 1000)}s remaining`);
+      recommendations.push('HIGH priority requests have enhanced rate limit bypass during startup');
+    }
 
     if (stats.recentRateLimitErrors > 0) {
       recommendations.push('Recent rate limit errors detected - consider increasing request intervals');

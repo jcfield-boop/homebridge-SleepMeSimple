@@ -1,5 +1,26 @@
 # Changelog
 
+## 7.0.17 (2025-07-17)
+
+### Critical Fix
+- **Startup Rate Limiting Issues**: Fixed HIGH priority device status requests hitting rate limits during startup
+  - Added 2-minute startup grace period with enhanced HIGH priority request handling
+  - Implemented 5-second delay between device discovery and status requests
+  - Enhanced fallback logic to use cached data when rate limited during startup
+  - Improved error handling with detailed logging for rate limit scenarios
+
+### Enhanced Features
+- **Startup Grace Period**: HIGH priority requests can bypass rate limits during first 2 minutes
+- **Intelligent Fallback**: Rate-limited requests fall back to cached data (up to 30 minutes old)
+- **Improved Sequencing**: Staggered startup requests to prevent rapid consecutive API calls
+- **Enhanced Monitoring**: Added startup grace period tracking to rate limiter statistics
+
+### Technical
+- **EmpiricalRateLimiter Improvements**: Added startup time tracking and grace period logic
+- **Better Error Handling**: Enhanced 429 error handling with cached data fallback
+- **Startup Optimization**: Improved startup sequence to minimize rate limit conflicts
+- **Enhanced Logging**: Better visibility into startup rate limiting behavior
+
 ## 7.0.16 (2025-07-17)
 
 ### Major Enhancement

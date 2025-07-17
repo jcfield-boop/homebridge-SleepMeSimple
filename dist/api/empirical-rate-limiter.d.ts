@@ -8,6 +8,8 @@ export interface EmpiricalRateLimiterConfig {
     useFixedWindow: boolean;
     safetyMargin: number;
     allowCriticalBypass: boolean;
+    startupGracePeriod: number;
+    allowHighPriorityStartupBypass: boolean;
 }
 export interface RequestMetrics {
     timestamp: number;
@@ -23,6 +25,7 @@ export declare class EmpiricalRateLimiter {
     private requestsThisMinute;
     private lastRateLimitTime;
     private adaptiveBackoffUntil;
+    private startupTime;
     constructor(config?: Partial<EmpiricalRateLimiterConfig>);
     /**
      * Check if a request should be allowed
@@ -66,6 +69,8 @@ export declare class EmpiricalRateLimiter {
         backoffTimeRemaining: number;
         recentRateLimitErrors: number;
         averageResponseTime: number;
+        startupGracePeriodActive: boolean;
+        startupGracePeriodRemaining: number;
     };
     /**
      * Get recommendations for optimizing request patterns

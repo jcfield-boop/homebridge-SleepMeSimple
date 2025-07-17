@@ -109,6 +109,9 @@ export class SleepMeSimplePlatform {
                     }
                     // Now perform device discovery with proper priority handling
                     await this.discoverDevices();
+                    // Add delay between discovery and status requests to avoid rate limiting
+                    this.log.info('Waiting 5s before initial device status requests to avoid rate limits...');
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                     // Mark initial discovery as complete to allow HIGH priority for subsequent discoveries
                     if (this.api) {
                         this.api.markInitialDiscoveryComplete();

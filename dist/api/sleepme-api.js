@@ -275,6 +275,27 @@ export class SleepMeApi {
         }
         catch (error) {
             this.handleApiError(`getDeviceStatus(${deviceId})`, error);
+            // Enhanced fallback logic for rate limiting errors
+            const axiosError = error;
+            if (axiosError?.response?.status === 429) {
+                // If rate limited, try to return cached data if available
+                const cachedEntry = this.deviceStatusCache.get(deviceId);
+                if (cachedEntry) {
+                    const ageSeconds = Math.round((Date.now() - cachedEntry.timestamp) / 1000);
+                    const ageMinutes = Math.round(ageSeconds / 60);
+                    // Use cached data if it's not too old (up to 30 minutes for rate limit scenarios)
+                    if (ageSeconds < 1800) { // 30 minutes
+                        this.logger.warn(`Rate limited (429) for device ${deviceId}, using cached data (${ageMinutes}m old)`);
+                        return cachedEntry.status;
+                    }
+                    else {
+                        this.logger.warn(`Rate limited (429) for device ${deviceId}, cached data too old (${ageMinutes}m), returning null`);
+                    }
+                }
+                else {
+                    this.logger.warn(`Rate limited (429) for device ${deviceId}, no cached data available`);
+                }
+            }
             return null;
         }
     }
