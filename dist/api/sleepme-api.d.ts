@@ -22,6 +22,7 @@ export declare class SleepMeApi {
     private stats;
     private readonly startupComplete;
     private startupFinished;
+    private initialDiscoveryComplete;
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token
@@ -38,6 +39,11 @@ export declare class SleepMeApi {
      * This allows the platform to control when startup is considered finished
      */
     markStartupComplete(): void;
+    /**
+     * Mark initial discovery as complete (called by platform after first device discovery)
+     * This ensures device discovery uses NORMAL priority during initial startup
+     */
+    markInitialDiscoveryComplete(): void;
     /**
      * Create a simple hash of device ID for consistent jitter
      * @param deviceId Device identifier

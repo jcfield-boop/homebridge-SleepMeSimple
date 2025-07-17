@@ -93,6 +93,7 @@ export class SleepMeApi {
   // Initial startup delay 
   private readonly startupComplete: Promise<void>;
   private startupFinished = false;
+  private initialDiscoveryComplete = false;
   
   /**
    * Create a new SleepMe API client
@@ -149,6 +150,15 @@ export class SleepMeApi {
   }
   
   /**
+   * Mark initial discovery as complete (called by platform after first device discovery)
+   * This ensures device discovery uses NORMAL priority during initial startup
+   */
+  public markInitialDiscoveryComplete(): void {
+    this.initialDiscoveryComplete = true;
+    this.logger.debug('Initial discovery marked as complete');
+  }
+  
+  /**
    * Create a simple hash of device ID for consistent jitter
    * @param deviceId Device identifier
    * @returns Hash value for jitter calculation
@@ -190,10 +200,10 @@ export class SleepMeApi {
     try {
       this.logger.debug('Fetching devices...');
       
-      // Use NORMAL priority during startup to avoid rate limits, HIGH for user-initiated discovery
-      const priority = this.startupFinished ? RequestPriority.HIGH : RequestPriority.NORMAL;
+      // Use NORMAL priority during initial startup to avoid rate limits, HIGH for subsequent discovery
+      const priority = this.initialDiscoveryComplete ? RequestPriority.HIGH : RequestPriority.NORMAL;
       
-      this.logger.verbose(`Using ${priority} priority for device discovery (startup: ${!this.startupFinished})`);
+      this.logger.verbose(`Using ${priority} priority for device discovery (initialDiscovery: ${this.initialDiscoveryComplete})`);
       
       const response = await this.makeRequest<Device[] | { devices: Device[] }>({
         method: 'GET',
@@ -727,9 +737,8 @@ private async processQueue(): Promise<void> {
       }
 
       // CRITICAL requests can bypass rate limits completely
-      // HIGH priority requests can bypass if we're not severely over the limit
-      const canBypassRateLimit = request.priority === RequestPriority.CRITICAL || 
-                                (request.priority === RequestPriority.HIGH && this.requestsThisMinute < MAX_REQUESTS_PER_MINUTE * 1.5);
+      // HIGH priority requests can bypass only if we have room in the rate limit
+      const canBypassRateLimit = request.priority === RequestPriority.CRITICAL;
       
       // Check if we've hit the rate limit (only for non-bypassing requests)
       if (!canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {

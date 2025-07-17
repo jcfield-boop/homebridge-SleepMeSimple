@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.0.15 (2025-07-17)
+
+### Fixed
+- **Startup Rate Limiting**: Fixed rate limiting issues during initial device discovery
+  - Device discovery now uses NORMAL priority during startup to avoid hitting rate limits
+  - Removed HIGH priority bypass for device discovery during initial startup
+  - Only CRITICAL requests (user-initiated power/temperature changes) can bypass rate limits
+  - Fixes startup failures with 429 errors that prevented device discovery
+
+### Technical
+- **Discovery Priority**: Added separate tracking for initial discovery completion
+- **Conservative Bypass**: Removed HIGH priority rate limit bypass to prevent startup issues
+- **Better Startup Flow**: Initial device discovery always uses NORMAL priority
+
 ## 7.0.14 (2025-07-17)
 
 ### Fixed

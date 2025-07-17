@@ -40,6 +40,7 @@ export class SleepMeApi {
     // Initial startup delay 
     startupComplete;
     startupFinished = false;
+    initialDiscoveryComplete = false;
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token
@@ -88,6 +89,14 @@ export class SleepMeApi {
         this.logger.debug('Startup marked as complete by platform');
     }
     /**
+     * Mark initial discovery as complete (called by platform after first device discovery)
+     * This ensures device discovery uses NORMAL priority during initial startup
+     */
+    markInitialDiscoveryComplete() {
+        this.initialDiscoveryComplete = true;
+        this.logger.debug('Initial discovery marked as complete');
+    }
+    /**
      * Create a simple hash of device ID for consistent jitter
      * @param deviceId Device identifier
      * @returns Hash value for jitter calculation
@@ -125,9 +134,9 @@ export class SleepMeApi {
     async getDevices() {
         try {
             this.logger.debug('Fetching devices...');
-            // Use NORMAL priority during startup to avoid rate limits, HIGH for user-initiated discovery
-            const priority = this.startupFinished ? RequestPriority.HIGH : RequestPriority.NORMAL;
-            this.logger.verbose(`Using ${priority} priority for device discovery (startup: ${!this.startupFinished})`);
+            // Use NORMAL priority during initial startup to avoid rate limits, HIGH for subsequent discovery
+            const priority = this.initialDiscoveryComplete ? RequestPriority.HIGH : RequestPriority.NORMAL;
+            this.logger.verbose(`Using ${priority} priority for device discovery (initialDiscovery: ${this.initialDiscoveryComplete})`);
             const response = await this.makeRequest({
                 method: 'GET',
                 url: '/devices',
@@ -588,9 +597,9 @@ export class SleepMeApi {
                 if (!request) {
                     break; // No requests to process
                 }
-                // CRITICAL and HIGH priority requests can bypass rate limits
-                const canBypassRateLimit = request.priority === RequestPriority.CRITICAL ||
-                    request.priority === RequestPriority.HIGH;
+                // CRITICAL requests can bypass rate limits completely
+                // HIGH priority requests can bypass only if we have room in the rate limit
+                const canBypassRateLimit = request.priority === RequestPriority.CRITICAL;
                 // Check if we've hit the rate limit (only for non-bypassing requests)
                 if (!canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
                     const resetTime = this.minuteStartTime + 60000;
@@ -609,8 +618,10 @@ export class SleepMeApi {
                 request.executing = true;
                 request.lastAttempt = now;
                 try {
-                    // Update rate limiting counters
-                    this.requestsThisMinute++;
+                    // Update rate limiting counters (but don't count CRITICAL requests against our limit)
+                    if (request.priority !== RequestPriority.CRITICAL) {
+                        this.requestsThisMinute++;
+                    }
                     this.lastRequestTime = now;
                     // Add auth token to request
                     request.config.headers = {
@@ -641,16 +652,23 @@ export class SleepMeApi {
                     this.stats.lastError = axiosError;
                     // Handle rate limiting (HTTP 429)
                     if (axiosError.response?.status === 429) {
-                        // For rate limit errors, wait until the next minute boundary
-                        const now = Date.now();
-                        const currentMinute = Math.floor(now / 60000) * 60000;
-                        const nextMinute = currentMinute + 60000;
-                        // Add a small buffer (2 seconds) to ensure we're safely in the next minute
-                        const waitTime = (nextMinute - now) + 2000;
-                        this.rateLimitBackoffUntil = now + waitTime;
+                        // For CRITICAL requests, implement shorter backoff (they're more urgent)
+                        if (request.priority === RequestPriority.CRITICAL) {
+                            const shortBackoff = 5000; // 5 seconds for critical requests
+                            this.rateLimitBackoffUntil = now + shortBackoff;
+                            this.logger.warn(`Rate limit exceeded (429) for CRITICAL request. Short backoff: ${Math.ceil(shortBackoff / 1000)}s`);
+                        }
+                        else {
+                            // For other requests, wait until the next minute boundary
+                            const currentMinute = Math.floor(now / 60000) * 60000;
+                            const nextMinute = currentMinute + 60000;
+                            // Add a small buffer (2 seconds) to ensure we're safely in the next minute
+                            const waitTime = (nextMinute - now) + 2000;
+                            this.rateLimitBackoffUntil = now + waitTime;
+                            this.logger.warn(`Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
+                        }
                         // Reset our internal counter to prevent double-counting
                         this.requestsThisMinute = 0;
-                        this.logger.warn(`Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
                         // Requeue the request
                         this.requeueRequest(request);
                         // Don't remove the request from queue - it was requeued

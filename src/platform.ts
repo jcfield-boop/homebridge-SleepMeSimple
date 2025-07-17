@@ -150,6 +150,11 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
           // Now perform device discovery with proper priority handling
           await this.discoverDevices();
           
+          // Mark initial discovery as complete to allow HIGH priority for subsequent discoveries
+          if (this.api) {
+            this.api.markInitialDiscoveryComplete();
+          }
+          
           // Set up schedules AFTER devices are discovered
           if (config.enableSchedules && this.api && this._scheduleManager) {
             // Extract device IDs from discovered accessories
