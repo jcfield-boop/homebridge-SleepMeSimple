@@ -21,6 +21,8 @@ import {
   Logger
 } from './types.js';
 import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
+import { UltraConservativeRateLimiter } from './ultra-conservative-rate-limiter.js';
+import { EmpiricalTokenBucketLimiter } from './empirical-token-bucket-limiter.js';
 
 /**
  * Interface for a cached device status entry
@@ -75,8 +77,14 @@ export class SleepMeApi {
   private consecutiveErrors = 0;
   private rateExceededLogged = false;  // Flag to prevent redundant log messages
   
-  // Empirical rate limiter
+  // Legacy empirical rate limiter (kept for monitoring)
   private empiricalRateLimiter: EmpiricalRateLimiter;
+  
+  // Ultra-conservative rate limiter (fallback)
+  private ultraConservativeRateLimiter: UltraConservativeRateLimiter;
+  
+  // Primary rate limiter - empirical token bucket (based on comprehensive testing)
+  private tokenBucketLimiter: EmpiricalTokenBucketLimiter;
   
   // Request ID counter
   private requestIdCounter = 0;
@@ -134,14 +142,36 @@ export class SleepMeApi {
     // Set up cache cleanup interval
     setInterval(() => this.cleanupCache(), 300000); // Clean up cache every 5 minutes
     
-    // Initialize empirical rate limiter
+    // Initialize legacy empirical rate limiter (kept for monitoring)
     this.empiricalRateLimiter = new EmpiricalRateLimiter({
       maxRequestsPerMinute: MAX_REQUESTS_PER_MINUTE,
       allowCriticalBypass: true,
       safetyMargin: 0.25 // 25% safety margin
     });
     
-    this.logger.info('SleepMe API client initialized with empirical rate limiting');
+    // Initialize ultra-conservative rate limiter (fallback)
+    this.ultraConservativeRateLimiter = new UltraConservativeRateLimiter({
+      bucketCapacity: 2, // Ultra-conservative: 2 tokens based on testing
+      refillIntervalMs: 45000, // 45 seconds based on observed recovery patterns
+      maxBurstSize: 2,
+      allowCriticalBypass: true,
+      emergencyBackoffMs: 120000, // 2 minutes
+      startupGracePeriodMs: 180000 // 3 minutes
+    });
+    
+    // Initialize PRIMARY rate limiter - empirical token bucket (based on comprehensive testing)
+    this.tokenBucketLimiter = new EmpiricalTokenBucketLimiter({
+      bucketCapacity: 8,              // 20% safety margin from observed 10 tokens
+      refillRatePerSecond: 1/20,      // 1 token per 20 seconds (conservative)
+      minRecoveryTimeMs: 10000,       // 10 seconds minimum recovery
+      safetyMargin: 0.2,              // 20% safety margin
+      allowCriticalBypass: true,
+      criticalBypassLimit: 3,         // Max 3 critical bypasses per minute
+      adaptiveBackoffMultiplier: 1.5, // 50% increase per consecutive failure
+      maxAdaptiveBackoffMs: 300000    // 5 minutes max backoff
+    });
+    
+    this.logger.info('SleepMe API client initialized with empirical token bucket rate limiting');
   }
   
   /**
@@ -163,6 +193,36 @@ export class SleepMeApi {
     return {
       stats: this.empiricalRateLimiter.getStats(),
       recommendations: this.empiricalRateLimiter.getRecommendations()
+    };
+  }
+
+  /**
+   * Get ultra-conservative rate limiter statistics and recommendations
+   * @returns Current rate limiter status and recommendations
+   */
+  public getUltraConservativeStats(): {
+    status: ReturnType<UltraConservativeRateLimiter['getStatus']>;
+    recommendations: string[];
+  } {
+    return {
+      status: this.ultraConservativeRateLimiter.getStatus(),
+      recommendations: this.ultraConservativeRateLimiter.getRecommendations()
+    };
+  }
+
+  /**
+   * Get primary token bucket rate limiter statistics and recommendations
+   * @returns Current rate limiter status and detailed statistics
+   */
+  public getTokenBucketStats(): {
+    status: ReturnType<EmpiricalTokenBucketLimiter['getStatus']>;
+    detailedStats: ReturnType<EmpiricalTokenBucketLimiter['getDetailedStats']>;
+    recommendations: string[];
+  } {
+    return {
+      status: this.tokenBucketLimiter.getStatus(),
+      detailedStats: this.tokenBucketLimiter.getDetailedStats(),
+      recommendations: this.tokenBucketLimiter.getRecommendations()
     };
   }
   
@@ -770,21 +830,22 @@ private async processQueue(): Promise<void> {
         break; // No requests to process
       }
 
-      // Use empirical rate limiter to check if request should be allowed
-      const rateLimitCheck = this.empiricalRateLimiter.shouldAllowRequest(request.priority);
+      // Use empirical token bucket rate limiter (primary) to check if request should be allowed
+      const rateLimitCheck = this.tokenBucketLimiter.shouldAllowRequest(request.priority);
       
       if (!rateLimitCheck.allowed) {
         // Only log this once, not repeatedly
         if (!this.rateExceededLogged) {
-          const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTime / 1000);
+          const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
           this.logger.info(
-            `Empirical rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`
+            `Token bucket rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s (${rateLimitCheck.tokensRemaining} tokens)`
           );
+          this.logger.debug(`Rate limiter recommendation: ${rateLimitCheck.recommendation}`);
           this.rateExceededLogged = true;
         }
         
         // Wait for the recommended time
-        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime));
+        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTimeMs));
         continue;
       }
       
@@ -824,8 +885,10 @@ private async processQueue(): Promise<void> {
         const responseTime = Date.now() - startTime;
         this.updateAverageResponseTime(responseTime);
         
-        // Record successful request in empirical rate limiter
+        // Record successful request in all rate limiters
         this.empiricalRateLimiter.recordRequest(request.priority, true, responseTime, false);
+        this.ultraConservativeRateLimiter.recordRequest(request.priority, true, false);
+        this.tokenBucketLimiter.recordRequest(request.priority, true, false);
         
         // Resolve the promise with the data
         request.resolve(response.data);
@@ -846,11 +909,13 @@ private async processQueue(): Promise<void> {
         if (axiosError.response?.status === 429) {
           const responseTime = Date.now() - startTime;
           
-          // Record rate limit in empirical rate limiter
+          // Record rate limit in all rate limiters
           this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, true);
+          this.ultraConservativeRateLimiter.recordRequest(request.priority, false, true);
+          this.tokenBucketLimiter.recordRequest(request.priority, false, true);
           
           this.logger.warn(
-            `Rate limit exceeded (429) for ${request.priority} request. Empirical rate limiter will handle backoff.`
+            `Rate limit exceeded (429) for ${request.priority} request. Token bucket rate limiter will handle backoff.`
           );
           
           // Reset our internal counter to prevent double-counting

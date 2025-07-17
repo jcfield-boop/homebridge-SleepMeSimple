@@ -32,9 +32,9 @@ export class EmpiricalRateLimiter {
   private config: EmpiricalRateLimiterConfig;
   private requestHistory: RequestMetrics[] = [];
   private currentMinuteStart: number;
-  private requestsThisMinute: number = 0;
-  private lastRateLimitTime: number = 0;
-  private adaptiveBackoffUntil: number = 0;
+  private requestsThisMinute = 0;
+  private lastRateLimitTime = 0;
+  private adaptiveBackoffUntil = 0;
   private startupTime: number;
 
   constructor(config: Partial<EmpiricalRateLimiterConfig> = {}) {
@@ -149,7 +149,7 @@ export class EmpiricalRateLimiter {
   /**
    * Record a request and its outcome
    */
-  public recordRequest(priority: RequestPriority, success: boolean, responseTime: number, rateLimited: boolean = false): void {
+  public recordRequest(priority: RequestPriority, success: boolean, responseTime: number, rateLimited = false): void {
     const now = Date.now();
     
     // Update minute window
