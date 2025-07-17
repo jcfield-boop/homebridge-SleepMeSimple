@@ -36,10 +36,10 @@ export const TEMPERATURE_STEP = 1;
  */
 export const MIN_REQUEST_INTERVAL = 6000;
 /**
- * Maximum API requests per minute (to respect rate limits)
- * More conservative limit to avoid rate limiting
+ * Maximum API requests per minute (empirically determined)
+ * Based on comprehensive API testing: actual limit is 4, using 3 for safety
  */
-export const MAX_REQUESTS_PER_MINUTE = 10;
+export const MAX_REQUESTS_PER_MINUTE = 3;
 /**
  * Default cache validity period in milliseconds
  * Increased for trusted cache entries

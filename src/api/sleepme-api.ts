@@ -20,6 +20,7 @@ import {
   PowerState,
   Logger
 } from './types.js';
+import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
 
 /**
  * Interface for a cached device status entry
@@ -74,6 +75,9 @@ export class SleepMeApi {
   private consecutiveErrors = 0;
   private rateExceededLogged = false;  // Flag to prevent redundant log messages
   
+  // Empirical rate limiter
+  private empiricalRateLimiter: EmpiricalRateLimiter;
+  
   // Request ID counter
   private requestIdCounter = 0;
   
@@ -94,6 +98,7 @@ export class SleepMeApi {
   private readonly startupComplete: Promise<void>;
   private startupFinished = false;
   private initialDiscoveryComplete = false;
+  private startupTime = Date.now();
   
   /**
    * Create a new SleepMe API client
@@ -129,7 +134,14 @@ export class SleepMeApi {
     // Set up cache cleanup interval
     setInterval(() => this.cleanupCache(), 300000); // Clean up cache every 5 minutes
     
-    this.logger.info('SleepMe API client initialized');
+    // Initialize empirical rate limiter
+    this.empiricalRateLimiter = new EmpiricalRateLimiter({
+      maxRequestsPerMinute: MAX_REQUESTS_PER_MINUTE,
+      allowCriticalBypass: true,
+      safetyMargin: 0.25 // 25% safety margin
+    });
+    
+    this.logger.info('SleepMe API client initialized with empirical rate limiting');
   }
   
   /**
@@ -138,6 +150,20 @@ export class SleepMeApi {
    */
   public getStats(): ApiStats {
     return { ...this.stats };
+  }
+  
+  /**
+   * Get empirical rate limiter statistics
+   * @returns Current rate limiter statistics and recommendations
+   */
+  public getRateLimiterStats(): {
+    stats: ReturnType<EmpiricalRateLimiter['getStats']>;
+    recommendations: string[];
+  } {
+    return {
+      stats: this.empiricalRateLimiter.getStats(),
+      recommendations: this.empiricalRateLimiter.getRecommendations()
+    };
   }
   
   /**
@@ -709,26 +735,6 @@ private async processQueue(): Promise<void> {
   try {
     // Keep processing as long as there are requests
     while (this.hasQueuedRequests()) {
-      // Check if we need to reset rate limit counter
-      this.checkRateLimit();
-      
-      // Check if we're in backoff mode
-      const now = Date.now();
-      if (this.rateLimitBackoffUntil > now) {
-        // Only log this once, not repeatedly
-        if (!this.rateExceededLogged) {
-          const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-          this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
-          this.rateExceededLogged = true;
-        }
-        
-        // Use a single timer rather than polling
-        await new Promise(resolve => 
-          setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000)
-        );
-        continue;
-      }
-      
       // Get the next request from prioritized queues first
       const request = this.getNextRequest();
       
@@ -736,32 +742,33 @@ private async processQueue(): Promise<void> {
         break; // No requests to process
       }
 
-      // CRITICAL requests can bypass rate limits completely
-      // HIGH priority requests can bypass only if we have room in the rate limit
-      const canBypassRateLimit = request.priority === RequestPriority.CRITICAL;
+      // Use empirical rate limiter to check if request should be allowed
+      const rateLimitCheck = this.empiricalRateLimiter.shouldAllowRequest(request.priority);
       
-      // Check if we've hit the rate limit (only for non-bypassing requests)
-      if (!canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
-        const resetTime = this.minuteStartTime + 60000;
-        const waitTime = resetTime - now;
-        
+      if (!rateLimitCheck.allowed) {
         // Only log this once, not repeatedly
         if (!this.rateExceededLogged) {
+          const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTime / 1000);
           this.logger.info(
-            `Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`
+            `Empirical rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`
           );
           this.rateExceededLogged = true;
         }
         
-        // Wait for rate limit reset with a single timer
-        await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
+        // Wait for the recommended time
+        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime));
         continue;
       }
       
+      // Reset rate exceeded logging on successful check
+      this.rateExceededLogged = false;
+      
       // Mark the request as executing
       request.executing = true;
-      request.lastAttempt = now;
+      request.lastAttempt = Date.now();
+      
+      const now = Date.now();
+      const startTime = now;
       
       try {
         // Update rate limiting counters (but don't count CRITICAL requests against our limit)
@@ -776,14 +783,9 @@ private async processQueue(): Promise<void> {
           Authorization: `Bearer ${this.apiToken}`
         };
         
-        const bypassMessage = canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE ? 
-          ' (bypassing rate limit)' : '';
-        
         this.logger.verbose(
-          `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]${bypassMessage}`
+          `Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`
         );
-        
-        const startTime = now;
         // Execute the request
         this.stats.totalRequests++;
         const response = await axios(request.config);
@@ -793,6 +795,9 @@ private async processQueue(): Promise<void> {
         // Track response time
         const responseTime = Date.now() - startTime;
         this.updateAverageResponseTime(responseTime);
+        
+        // Record successful request in empirical rate limiter
+        this.empiricalRateLimiter.recordRequest(request.priority, true, responseTime, false);
         
         // Resolve the promise with the data
         request.resolve(response.data);
@@ -811,28 +816,14 @@ private async processQueue(): Promise<void> {
         
         // Handle rate limiting (HTTP 429)
         if (axiosError.response?.status === 429) {
-          // For CRITICAL requests, implement shorter backoff (they're more urgent)
-          if (request.priority === RequestPriority.CRITICAL) {
-            const shortBackoff = 5000; // 5 seconds for critical requests
-            this.rateLimitBackoffUntil = now + shortBackoff;
-            
-            this.logger.warn(
-              `Rate limit exceeded (429) for CRITICAL request. Short backoff: ${Math.ceil(shortBackoff/1000)}s`
-            );
-          } else {
-            // For other requests, wait until the next minute boundary
-            const currentMinute = Math.floor(now / 60000) * 60000;
-            const nextMinute = currentMinute + 60000;
-            
-            // Add a small buffer (2 seconds) to ensure we're safely in the next minute
-            const waitTime = (nextMinute - now) + 2000;
-            
-            this.rateLimitBackoffUntil = now + waitTime;
-            
-            this.logger.warn(
-              `Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime/1000)}s`
-            );
-          }
+          const responseTime = Date.now() - startTime;
+          
+          // Record rate limit in empirical rate limiter
+          this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, true);
+          
+          this.logger.warn(
+            `Rate limit exceeded (429) for ${request.priority} request. Empirical rate limiter will handle backoff.`
+          );
           
           // Reset our internal counter to prevent double-counting
           this.requestsThisMinute = 0;
@@ -845,6 +836,10 @@ private async processQueue(): Promise<void> {
         else {
           // For other errors, check retry logic by priority
           this.consecutiveErrors++;
+          const responseTime = Date.now() - startTime;
+          
+          // Record failed request in empirical rate limiter
+          this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, false);
           
           // Critical and high priority get more retries
           const maxRetries = request.priority === RequestPriority.CRITICAL 

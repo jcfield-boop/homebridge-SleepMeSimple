@@ -1,4 +1,5 @@
 import { Device, DeviceStatus, ApiStats, Logger } from './types.js';
+import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
 /**
  * SleepMe API Client
  * Handles API communication with rate limiting and robust error handling
@@ -17,12 +18,14 @@ export declare class SleepMeApi {
     private rateLimitBackoffUntil;
     private consecutiveErrors;
     private rateExceededLogged;
+    private empiricalRateLimiter;
     private requestIdCounter;
     private deviceStatusCache;
     private stats;
     private readonly startupComplete;
     private startupFinished;
     private initialDiscoveryComplete;
+    private startupTime;
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token
@@ -34,6 +37,14 @@ export declare class SleepMeApi {
      * @returns Current API statistics
      */
     getStats(): ApiStats;
+    /**
+     * Get empirical rate limiter statistics
+     * @returns Current rate limiter statistics and recommendations
+     */
+    getRateLimiterStats(): {
+        stats: ReturnType<EmpiricalRateLimiter['getStats']>;
+        recommendations: string[];
+    };
     /**
      * Mark startup as complete (called by platform when initial discovery is done)
      * This allows the platform to control when startup is considered finished

@@ -4,6 +4,7 @@
 import axios from 'axios';
 import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
+import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
 /**
  * SleepMe API Client
  * Handles API communication with rate limiting and robust error handling
@@ -24,6 +25,8 @@ export class SleepMeApi {
     rateLimitBackoffUntil = 0;
     consecutiveErrors = 0;
     rateExceededLogged = false; // Flag to prevent redundant log messages
+    // Empirical rate limiter
+    empiricalRateLimiter;
     // Request ID counter
     requestIdCounter = 0;
     // Device status cache
@@ -41,6 +44,7 @@ export class SleepMeApi {
     startupComplete;
     startupFinished = false;
     initialDiscoveryComplete = false;
+    startupTime = Date.now();
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token
@@ -71,7 +75,13 @@ export class SleepMeApi {
         this.processQueue();
         // Set up cache cleanup interval
         setInterval(() => this.cleanupCache(), 300000); // Clean up cache every 5 minutes
-        this.logger.info('SleepMe API client initialized');
+        // Initialize empirical rate limiter
+        this.empiricalRateLimiter = new EmpiricalRateLimiter({
+            maxRequestsPerMinute: MAX_REQUESTS_PER_MINUTE,
+            allowCriticalBypass: true,
+            safetyMargin: 0.25 // 25% safety margin
+        });
+        this.logger.info('SleepMe API client initialized with empirical rate limiting');
     }
     /**
      * Get API statistics
@@ -79,6 +89,16 @@ export class SleepMeApi {
      */
     getStats() {
         return { ...this.stats };
+    }
+    /**
+     * Get empirical rate limiter statistics
+     * @returns Current rate limiter statistics and recommendations
+     */
+    getRateLimiterStats() {
+        return {
+            stats: this.empiricalRateLimiter.getStats(),
+            recommendations: this.empiricalRateLimiter.getRecommendations()
+        };
     }
     /**
      * Mark startup as complete (called by platform when initial discovery is done)
@@ -577,46 +597,31 @@ export class SleepMeApi {
         try {
             // Keep processing as long as there are requests
             while (this.hasQueuedRequests()) {
-                // Check if we need to reset rate limit counter
-                this.checkRateLimit();
-                // Check if we're in backoff mode
-                const now = Date.now();
-                if (this.rateLimitBackoffUntil > now) {
-                    // Only log this once, not repeatedly
-                    if (!this.rateExceededLogged) {
-                        const waitTime = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-                        this.logger.info(`Rate limit backoff active, waiting ${waitTime}s before retry`);
-                        this.rateExceededLogged = true;
-                    }
-                    // Use a single timer rather than polling
-                    await new Promise(resolve => setTimeout(resolve, this.rateLimitBackoffUntil - now + 1000));
-                    continue;
-                }
                 // Get the next request from prioritized queues first
                 const request = this.getNextRequest();
                 if (!request) {
                     break; // No requests to process
                 }
-                // CRITICAL requests can bypass rate limits completely
-                // HIGH priority requests can bypass only if we have room in the rate limit
-                const canBypassRateLimit = request.priority === RequestPriority.CRITICAL;
-                // Check if we've hit the rate limit (only for non-bypassing requests)
-                if (!canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
-                    const resetTime = this.minuteStartTime + 60000;
-                    const waitTime = resetTime - now;
+                // Use empirical rate limiter to check if request should be allowed
+                const rateLimitCheck = this.empiricalRateLimiter.shouldAllowRequest(request.priority);
+                if (!rateLimitCheck.allowed) {
                     // Only log this once, not repeatedly
                     if (!this.rateExceededLogged) {
-                        this.logger.info(`Rate limit approached (${this.requestsThisMinute}/${MAX_REQUESTS_PER_MINUTE} requests), ` +
-                            `waiting ${Math.ceil(waitTime / 1000)}s before continuing`);
+                        const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTime / 1000);
+                        this.logger.info(`Empirical rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`);
                         this.rateExceededLogged = true;
                     }
-                    // Wait for rate limit reset with a single timer
-                    await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
+                    // Wait for the recommended time
+                    await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime));
                     continue;
                 }
+                // Reset rate exceeded logging on successful check
+                this.rateExceededLogged = false;
                 // Mark the request as executing
                 request.executing = true;
-                request.lastAttempt = now;
+                request.lastAttempt = Date.now();
+                const now = Date.now();
+                const startTime = now;
                 try {
                     // Update rate limiting counters (but don't count CRITICAL requests against our limit)
                     if (request.priority !== RequestPriority.CRITICAL) {
@@ -628,10 +633,7 @@ export class SleepMeApi {
                         ...(request.config.headers || {}),
                         Authorization: `Bearer ${this.apiToken}`
                     };
-                    const bypassMessage = canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE ?
-                        ' (bypassing rate limit)' : '';
-                    this.logger.verbose(`Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]${bypassMessage}`);
-                    const startTime = now;
+                    this.logger.verbose(`Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`);
                     // Execute the request
                     this.stats.totalRequests++;
                     const response = await axios(request.config);
@@ -640,6 +642,8 @@ export class SleepMeApi {
                     // Track response time
                     const responseTime = Date.now() - startTime;
                     this.updateAverageResponseTime(responseTime);
+                    // Record successful request in empirical rate limiter
+                    this.empiricalRateLimiter.recordRequest(request.priority, true, responseTime, false);
                     // Resolve the promise with the data
                     request.resolve(response.data);
                     this.logger.verbose(`Request ${request.id} completed in ${responseTime}ms`);
@@ -652,21 +656,10 @@ export class SleepMeApi {
                     this.stats.lastError = axiosError;
                     // Handle rate limiting (HTTP 429)
                     if (axiosError.response?.status === 429) {
-                        // For CRITICAL requests, implement shorter backoff (they're more urgent)
-                        if (request.priority === RequestPriority.CRITICAL) {
-                            const shortBackoff = 5000; // 5 seconds for critical requests
-                            this.rateLimitBackoffUntil = now + shortBackoff;
-                            this.logger.warn(`Rate limit exceeded (429) for CRITICAL request. Short backoff: ${Math.ceil(shortBackoff / 1000)}s`);
-                        }
-                        else {
-                            // For other requests, wait until the next minute boundary
-                            const currentMinute = Math.floor(now / 60000) * 60000;
-                            const nextMinute = currentMinute + 60000;
-                            // Add a small buffer (2 seconds) to ensure we're safely in the next minute
-                            const waitTime = (nextMinute - now) + 2000;
-                            this.rateLimitBackoffUntil = now + waitTime;
-                            this.logger.warn(`Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime / 1000)}s`);
-                        }
+                        const responseTime = Date.now() - startTime;
+                        // Record rate limit in empirical rate limiter
+                        this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, true);
+                        this.logger.warn(`Rate limit exceeded (429) for ${request.priority} request. Empirical rate limiter will handle backoff.`);
                         // Reset our internal counter to prevent double-counting
                         this.requestsThisMinute = 0;
                         // Requeue the request
@@ -677,6 +670,9 @@ export class SleepMeApi {
                     else {
                         // For other errors, check retry logic by priority
                         this.consecutiveErrors++;
+                        const responseTime = Date.now() - startTime;
+                        // Record failed request in empirical rate limiter
+                        this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, false);
                         // Critical and high priority get more retries
                         const maxRetries = request.priority === RequestPriority.CRITICAL
                             ? MAX_RETRIES + 2

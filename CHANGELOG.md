@@ -1,5 +1,28 @@
 # Changelog
 
+## 7.0.16 (2025-07-17)
+
+### Major Enhancement
+- **Empirically-Derived Rate Limiting**: Completely refactored API rate limiting based on comprehensive testing
+  - Created dedicated test application that probed SleepMe API to determine actual rate limits
+  - Discovered actual limit is 4 requests per minute (not 5), implemented 3 requests/minute for safety
+  - Confirmed fixed-window rate limiting aligned to clock minutes
+  - Implemented adaptive backoff based on request priority and observed API behavior
+
+### New Features
+- **Intelligent Rate Limiting**: New EmpiricalRateLimiter class with priority-based adaptive backoff
+  - CRITICAL requests: 5-second backoff, can bypass normal limits
+  - HIGH requests: 15-second backoff with moderate limits
+  - NORMAL requests: Wait until next minute boundary
+- **Real-time Monitoring**: Rate limiter tracks response times, success rates, and provides recommendations
+- **Predictive Throttling**: Proactively prevents rate limits rather than reacting to 429 errors
+
+### Technical
+- **API Testing Framework**: Created comprehensive test suite to analyze rate limiting patterns
+- **Empirical Data**: Rate limits based on actual API behavior, not assumptions
+- **Adaptive Algorithms**: Rate limiter adjusts behavior based on observed API responses
+- **Enhanced Logging**: Detailed rate limit statistics and recommendations available
+
 ## 7.0.15 (2025-07-17)
 
 ### Fixed
