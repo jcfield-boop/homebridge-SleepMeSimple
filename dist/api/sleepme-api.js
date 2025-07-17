@@ -683,10 +683,19 @@ export class SleepMeApi {
                         this.logger.warn(`Rate limit exceeded (429) for ${request.priority} request. Empirical rate limiter will handle backoff.`);
                         // Reset our internal counter to prevent double-counting
                         this.requestsThisMinute = 0;
-                        // Requeue the request
-                        this.requeueRequest(request);
-                        // Don't remove the request from queue - it was requeued
-                        continue;
+                        // For 429 errors, don't immediately requeue - let the empirical rate limiter handle backoff
+                        // The request will be retried when the rate limiter allows it
+                        if (request.retryCount < MAX_RETRIES) {
+                            request.retryCount++;
+                            this.requeueRequest(request);
+                            // Don't remove the request from queue - it was requeued
+                            continue;
+                        }
+                        else {
+                            // Max retries exceeded
+                            this.logger.error(`Rate limit (429) retries exceeded for ${request.priority} request`);
+                            request.reject(error);
+                        }
                     }
                     else {
                         // For other errors, check retry logic by priority

@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.0.18 (2025-07-17)
+
+### Critical Fix
+- **Retry Loop Issue**: Fixed infinite retry loop for HIGH priority requests during startup
+  - Startup grace period now properly respects adaptive backoff after rate limit errors
+  - Prevents HIGH priority requests from bypassing backoff once 429 error occurs
+  - Fixed retry logic to respect rate limiter decisions instead of immediate requeue
+  - Eliminates rapid-fire request retries that overwhelm the API
+
+### Enhanced Logic
+- **Intelligent Grace Period**: Startup grace period disabled for priority level after rate limit error
+- **Proper Backoff Handling**: Adaptive backoff now properly blocks subsequent requests
+- **Better Retry Logic**: 429 errors increment retry count and respect rate limiter backoff
+- **Rate Limit Memory**: Rate limiter remembers recent 429 errors to prevent bypass abuse
+
+### Technical
+- **Fixed Bypass Logic**: Grace period bypass checks for recent rate limit errors before allowing
+- **Improved Error Handling**: Better coordination between retry logic and rate limiter
+- **Enhanced Safety**: Prevents startup grace period from overriding necessary backoff periods
+
 ## 7.0.17 (2025-07-17)
 
 ### Critical Fix

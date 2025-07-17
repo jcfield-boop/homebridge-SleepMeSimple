@@ -40,8 +40,15 @@ export class EmpiricalRateLimiter {
                 return { allowed: true, waitTime: 0, reason: 'Critical bypass during backoff' };
             }
             // HIGH priority requests can bypass backoff during startup grace period
+            // BUT NOT if we've had recent rate limit errors (we need to respect the backoff)
             if (priority === RequestPriority.HIGH && inStartupGracePeriod && this.config.allowHighPriorityStartupBypass) {
-                return { allowed: true, waitTime: 0, reason: 'HIGH priority startup grace period bypass' };
+                // Check if we've had a recent rate limit error - if so, don't bypass
+                const recentRateLimitError = this.requestHistory.find(r => r.rateLimited &&
+                    r.timestamp > now - 60000 && // Within last minute
+                    r.priority === priority);
+                if (!recentRateLimitError) {
+                    return { allowed: true, waitTime: 0, reason: 'HIGH priority startup grace period bypass' };
+                }
             }
             const waitTime = this.adaptiveBackoffUntil - now;
             return {
@@ -53,8 +60,14 @@ export class EmpiricalRateLimiter {
         // Calculate effective limit with safety margin
         let effectiveLimit = Math.floor(this.config.maxRequestsPerMinute * (1 - this.config.safetyMargin));
         // During startup grace period, be more lenient with HIGH priority requests
+        // BUT NOT if we've had recent rate limit errors
         if (inStartupGracePeriod && priority === RequestPriority.HIGH && this.config.allowHighPriorityStartupBypass) {
-            effectiveLimit = Math.max(effectiveLimit, this.config.maxRequestsPerMinute - 1); // Allow up to max-1 during startup
+            const recentRateLimitError = this.requestHistory.find(r => r.rateLimited &&
+                r.timestamp > now - 60000 && // Within last minute
+                r.priority === priority);
+            if (!recentRateLimitError) {
+                effectiveLimit = Math.max(effectiveLimit, this.config.maxRequestsPerMinute - 1); // Allow up to max-1 during startup
+            }
         }
         // Critical requests can bypass normal rate limits
         if (priority === RequestPriority.CRITICAL && this.config.allowCriticalBypass) {
