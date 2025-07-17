@@ -726,9 +726,10 @@ private async processQueue(): Promise<void> {
         break; // No requests to process
       }
 
-      // CRITICAL and HIGH priority requests can bypass rate limits
+      // CRITICAL requests can bypass rate limits completely
+      // HIGH priority requests can bypass if we're not severely over the limit
       const canBypassRateLimit = request.priority === RequestPriority.CRITICAL || 
-                                request.priority === RequestPriority.HIGH;
+                                (request.priority === RequestPriority.HIGH && this.requestsThisMinute < MAX_REQUESTS_PER_MINUTE * 1.5);
       
       // Check if we've hit the rate limit (only for non-bypassing requests)
       if (!canBypassRateLimit && this.requestsThisMinute >= MAX_REQUESTS_PER_MINUTE) {
@@ -754,8 +755,10 @@ private async processQueue(): Promise<void> {
       request.lastAttempt = now;
       
       try {
-        // Update rate limiting counters
-        this.requestsThisMinute++;
+        // Update rate limiting counters (but don't count CRITICAL requests against our limit)
+        if (request.priority !== RequestPriority.CRITICAL) {
+          this.requestsThisMinute++;
+        }
         this.lastRequestTime = now;
         
         // Add auth token to request
@@ -799,22 +802,31 @@ private async processQueue(): Promise<void> {
         
         // Handle rate limiting (HTTP 429)
         if (axiosError.response?.status === 429) {
-          // For rate limit errors, wait until the next minute boundary
-          const now = Date.now();
-          const currentMinute = Math.floor(now / 60000) * 60000;
-          const nextMinute = currentMinute + 60000;
-          
-          // Add a small buffer (2 seconds) to ensure we're safely in the next minute
-          const waitTime = (nextMinute - now) + 2000;
-          
-          this.rateLimitBackoffUntil = now + waitTime;
+          // For CRITICAL requests, implement shorter backoff (they're more urgent)
+          if (request.priority === RequestPriority.CRITICAL) {
+            const shortBackoff = 5000; // 5 seconds for critical requests
+            this.rateLimitBackoffUntil = now + shortBackoff;
+            
+            this.logger.warn(
+              `Rate limit exceeded (429) for CRITICAL request. Short backoff: ${Math.ceil(shortBackoff/1000)}s`
+            );
+          } else {
+            // For other requests, wait until the next minute boundary
+            const currentMinute = Math.floor(now / 60000) * 60000;
+            const nextMinute = currentMinute + 60000;
+            
+            // Add a small buffer (2 seconds) to ensure we're safely in the next minute
+            const waitTime = (nextMinute - now) + 2000;
+            
+            this.rateLimitBackoffUntil = now + waitTime;
+            
+            this.logger.warn(
+              `Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime/1000)}s`
+            );
+          }
           
           // Reset our internal counter to prevent double-counting
           this.requestsThisMinute = 0;
-          
-          this.logger.warn(
-            `Rate limit exceeded (429). Waiting until next minute: ${Math.ceil(waitTime/1000)}s`
-          );
           
           // Requeue the request
           this.requeueRequest(request);

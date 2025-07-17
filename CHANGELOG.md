@@ -1,5 +1,34 @@
 # Changelog
 
+## 7.0.14 (2025-07-17)
+
+### Fixed
+- **Critical Request Rate Limiting**: Fixed issue where HomeKit turn-off commands failed when device was in schedule mode
+  - Critical requests (power on/off, temperature changes) now properly bypass rate limits
+  - Reduced backoff time for critical requests from 60 seconds to 5 seconds when hitting 429 errors
+  - Critical requests no longer count against the rate limit counter
+  - Fixes cases where users had to resort to native app to turn off devices after HomeKit commands failed
+
+### Technical
+- **True Critical Bypass**: CRITICAL priority requests no longer increment the rate limit counter
+- **Adaptive Backoff**: Shorter 5-second backoff for critical requests vs 60-second backoff for normal requests
+- **Enhanced HIGH Priority**: HIGH priority requests can bypass rate limits when not severely over the limit
+- **Better UX**: HomeKit commands now execute promptly even during rate limit periods
+
+## 7.0.13 (2025-07-14)
+
+### Fixed
+- **Rate Limit Retry Bug**: Fixed critical issue where rate-limited requests (HTTP 429) would be requeued but immediately removed from the queue, preventing proper retry
+  - ON commands would fail permanently when hitting rate limits, while OFF commands worked due to their higher prioritization
+  - Request retry logic now properly continues processing instead of removing requeued requests
+  - Improved reliability of all critical user-initiated actions (power on/off, temperature changes)
+  - Enhanced API request queue management for better error recovery
+
+### Technical
+- **Queue Processing**: Fixed race condition in API request processing where requeued requests were immediately removed
+- **Error Recovery**: Improved retry logic for both rate limit (429) and general API errors
+- **Request Management**: Enhanced request lifecycle management to prevent stuck commands
+
 ## 7.0.12 (2025-07-11)
 
 ### Improved
