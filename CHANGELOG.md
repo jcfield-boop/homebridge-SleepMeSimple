@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.0.21 (2025-07-19)
+
+### 🔋 Water Level Battery Status Improvement
+- **Low Battery Threshold**: Updated HomeKit low battery status to trigger at 50% water level
+  - Previously relied solely on API's `isWaterLow` flag
+  - Now checks water level ≤ 50% when API flag unavailable
+  - Aligns with device behavior: 100% → 50% → 0% (Empty)
+  - Maintains backward compatibility with existing API responses
+- **Enhanced Monitoring**: Better reflects actual device water states in HomeKit
+
 ## 7.0.20 (2025-07-17)
 
 ### 🚀 Major Refactor - Empirical Token Bucket Rate Limiting
