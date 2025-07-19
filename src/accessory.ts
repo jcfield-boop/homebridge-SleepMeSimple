@@ -714,7 +714,8 @@ export class SleepMeAccessory {
       if (status.waterLevel !== undefined && 
          (status.waterLevel !== this.waterLevel || status.isWaterLow !== this.isWaterLow)) {
         this.waterLevel = status.waterLevel;
-        this.isWaterLow = !!status.isWaterLow;
+        // Determine low water status: use API flag if available, otherwise check if level is 50% or below
+        this.isWaterLow = status.isWaterLow !== undefined ? !!status.isWaterLow : this.waterLevel <= 50;
         this.setupWaterLevelService(this.waterLevel, this.isWaterLow);
       }
       
