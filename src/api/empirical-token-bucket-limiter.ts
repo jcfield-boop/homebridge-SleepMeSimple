@@ -74,10 +74,12 @@ export class EmpiricalTokenBucketLimiter {
       ...config
     };
 
-    // Apply safety margins to parameters
+    // Apply safety margin only to bucket capacity, not refill rate
+    // This provides safety without unnecessarily slowing recovery
     const safetyFactor = 1 - this.config.safetyMargin;
     this.config.bucketCapacity = Math.floor(this.config.bucketCapacity * safetyFactor);
-    this.config.refillRatePerSecond = this.config.refillRatePerSecond * safetyFactor;
+    // Keep refill rate at full speed for faster recovery
+    // this.config.refillRatePerSecond = this.config.refillRatePerSecond * safetyFactor;
 
     // Initialize state with full bucket
     this.state = {
@@ -92,7 +94,7 @@ export class EmpiricalTokenBucketLimiter {
   }
 
   /**
-   * Check if a request should be allowed
+   * Check if a request should be allowed and atomically reserve tokens
    */
   public shouldAllowRequest(priority: RequestPriority): RateLimitDecision {
     const now = Date.now();
@@ -124,15 +126,17 @@ export class EmpiricalTokenBucketLimiter {
       };
     }
 
-    // Check if we have tokens available
+    // Check if we have tokens available and atomically reserve one
     if (this.state.tokens >= 1) {
+      // Atomically consume the token here to prevent race conditions
+      this.state.tokens = Math.max(0, this.state.tokens - 1);
       return {
         allowed: true,
         reason: 'Token available',
         waitTimeMs: 0,
-        tokensRemaining: this.state.tokens - 1,
+        tokensRemaining: this.state.tokens,
         nextTokenTime: this.calculateNextTokenTime(),
-        recommendation: 'Request allowed - token consumed'
+        recommendation: 'Request allowed - token reserved'
       };
     }
 
@@ -180,10 +184,8 @@ export class EmpiricalTokenBucketLimiter {
     // Clean old history (keep last 10 minutes)
     this.requestHistory = this.requestHistory.filter(r => r.timestamp > now - 600000);
 
-    // If request was allowed, consume token
-    if (allowed && !rateLimited) {
-      this.state.tokens = Math.max(0, this.state.tokens - 1);
-    }
+    // Token consumption now happens in shouldAllowRequest() to prevent race conditions
+    // No need to consume tokens here since they were already reserved
 
     // Handle rate limiting
     if (rateLimited) {
@@ -240,8 +242,9 @@ export class EmpiricalTokenBucketLimiter {
       }
     }
     
-    // Reset critical bypass counter every minute
-    if (now - this.state.criticalBypassResetTime > 60000) {
+    // Reset critical bypass counter based on API rate limit window (approximately 30-40 seconds)
+    // This aligns better with empirical API behavior
+    if (now - this.state.criticalBypassResetTime > 35000) {
       this.state.criticalBypassesUsed = 0;
       this.state.criticalBypassResetTime = now;
     }

@@ -20,11 +20,7 @@ export class SleepMeApi {
     normalPriorityQueue = [];
     lowPriorityQueue = [];
     // Rate limiting state
-    requestsThisMinute = 0;
-    minuteStartTime = Date.now();
-    lastRequestTime = 0;
     processingQueue = false;
-    rateLimitBackoffUntil = 0;
     consecutiveErrors = 0;
     rateExceededLogged = false; // Flag to prevent redundant log messages
     // Legacy empirical rate limiter (kept for monitoring)
@@ -740,10 +736,18 @@ export class SleepMeApi {
                 // Use empirical token bucket rate limiter (primary) to check if request should be allowed
                 const rateLimitCheck = this.tokenBucketLimiter.shouldAllowRequest(request.priority);
                 if (!rateLimitCheck.allowed) {
-                    // Only log this once, not repeatedly
+                    // Enhanced logging for rate limiting behavior
                     if (!this.rateExceededLogged) {
                         const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
+                        const bucketStatus = this.tokenBucketLimiter.getStatus();
                         this.logger.info(`Token bucket rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s (${rateLimitCheck.tokensRemaining} tokens)`);
+                        // Enhanced debug logging for troubleshooting
+                        this.logger.debug(`Rate limit details: Priority=${request.priority}, ` +
+                            `Tokens=${bucketStatus.tokens}/${bucketStatus.maxTokens}, ` +
+                            `RefillRate=${bucketStatus.refillRate.toFixed(4)}/s, ` +
+                            `AdaptiveBackoff=${bucketStatus.adaptiveBackoffActive}, ` +
+                            `ConsecutiveFailures=${bucketStatus.consecutiveRateLimits}, ` +
+                            `CriticalBypasses=${bucketStatus.criticalBypassesUsed}/${bucketStatus.criticalBypassesRemaining + bucketStatus.criticalBypassesUsed}`);
                         this.logger.debug(`Rate limiter recommendation: ${rateLimitCheck.recommendation}`);
                         this.rateExceededLogged = true;
                     }
@@ -759,11 +763,7 @@ export class SleepMeApi {
                 const now = Date.now();
                 const startTime = now;
                 try {
-                    // Update rate limiting counters (but don't count CRITICAL requests against our limit)
-                    if (request.priority !== RequestPriority.CRITICAL) {
-                        this.requestsThisMinute++;
-                    }
-                    this.lastRequestTime = now;
+                    // Rate limiting is now handled exclusively by the empirical token bucket limiter
                     // Add auth token to request
                     request.config.headers = {
                         ...(request.config.headers || {}),
@@ -782,6 +782,9 @@ export class SleepMeApi {
                     this.empiricalRateLimiter.recordRequest(request.priority, true, responseTime, false);
                     this.ultraConservativeRateLimiter.recordRequest(request.priority, true, false);
                     this.tokenBucketLimiter.recordRequest(request.priority, true, false);
+                    // Log successful request timing for patterns analysis
+                    this.logger.verbose(`Request success: ${request.method} ${request.url} [${request.priority}] ` +
+                        `took ${responseTime}ms, ${this.tokenBucketLimiter.getStatus().tokens.toFixed(2)} tokens remaining`);
                     // Resolve the promise with the data
                     request.resolve(response.data);
                     this.logger.verbose(`Request ${request.id} completed in ${responseTime}ms`);
@@ -799,9 +802,15 @@ export class SleepMeApi {
                         this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, true);
                         this.ultraConservativeRateLimiter.recordRequest(request.priority, false, true);
                         this.tokenBucketLimiter.recordRequest(request.priority, false, true);
+                        // Enhanced logging for 429 errors to track patterns
+                        const bucketStatus = this.tokenBucketLimiter.getStatus();
+                        this.logger.warn(`429 Rate Limit Hit: ${request.method} ${request.url} [${request.priority}] ` +
+                            `after ${responseTime}ms. Bucket state: ${bucketStatus.tokens.toFixed(2)}/${bucketStatus.maxTokens} tokens, ` +
+                            `Success rate: ${bucketStatus.successRate.toFixed(1)}%, ` +
+                            `Recent requests: ${bucketStatus.recentRequests}, ` +
+                            `Consecutive failures: ${bucketStatus.consecutiveRateLimits}`);
                         this.logger.warn(`Rate limit exceeded (429) for ${request.priority} request. Token bucket rate limiter will handle backoff.`);
-                        // Reset our internal counter to prevent double-counting
-                        this.requestsThisMinute = 0;
+                        // Legacy rate limiting counter removed - now handled by token bucket limiter
                         // For 429 errors, don't immediately requeue - let the empirical rate limiter handle backoff
                         // The request will be retried when the rate limiter allows it
                         if (request.retryCount < MAX_RETRIES) {
@@ -863,31 +872,6 @@ export class SleepMeApi {
             this.highPriorityQueue.length > 0 ||
             this.normalPriorityQueue.length > 0 ||
             this.lowPriorityQueue.length > 0;
-    }
-    /**
-     * Check and reset rate limit counter using discrete minute windows
-     * Enhanced to handle API timing mismatches
-     */
-    checkRateLimit() {
-        const now = Date.now();
-        // Get current discrete minute (aligned to clock minutes)
-        const currentMinute = Math.floor(now / 60000) * 60000;
-        // If we've moved to a new discrete minute, reset counter
-        if (currentMinute > this.minuteStartTime) {
-            // Only reset if we're not in a backoff period
-            // This prevents resetting the counter when the API is still enforcing rate limits
-            if (this.rateLimitBackoffUntil <= now) {
-                this.requestsThisMinute = 0;
-                this.minuteStartTime = currentMinute;
-                this.rateExceededLogged = false;
-                this.logger.debug(`Resetting rate limit counter (new discrete minute: ${new Date(currentMinute).toISOString()})`);
-            }
-            else {
-                // We're in a new minute but still in backoff - log this condition
-                const backoffRemaining = Math.ceil((this.rateLimitBackoffUntil - now) / 1000);
-                this.logger.debug(`New discrete minute but still in backoff for ${backoffRemaining}s (API timing mismatch)`);
-            }
-        }
     }
     /**
      * Get the next request from the appropriate priority queue

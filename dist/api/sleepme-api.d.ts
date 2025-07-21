@@ -13,11 +13,7 @@ export declare class SleepMeApi {
     private highPriorityQueue;
     private normalPriorityQueue;
     private lowPriorityQueue;
-    private requestsThisMinute;
-    private minuteStartTime;
-    private lastRequestTime;
     private processingQueue;
-    private rateLimitBackoffUntil;
     private consecutiveErrors;
     private rateExceededLogged;
     private empiricalRateLimiter;
@@ -178,11 +174,6 @@ export declare class SleepMeApi {
    * Determine if there are any queued requests
    */
     private hasQueuedRequests;
-    /**
-     * Check and reset rate limit counter using discrete minute windows
-     * Enhanced to handle API timing mismatches
-     */
-    private checkRateLimit;
     /**
      * Get the next request from the appropriate priority queue
      * With improved OFF command prioritization

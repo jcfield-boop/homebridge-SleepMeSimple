@@ -126,6 +126,12 @@ export declare class SleepMeAccessory {
      */
     private updatePollingInterval;
     /**
+     * Get device-specific jitter to prevent synchronized polling
+     * Uses device ID as seed for consistent but distributed jitter
+     * @returns Jitter in milliseconds (±10-20% of base interval)
+     */
+    private getDeviceJitter;
+    /**
      * Set up water level service for compatible devices
      */
     private setupWaterLevelService;

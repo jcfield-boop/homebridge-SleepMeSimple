@@ -601,11 +601,15 @@ export class SleepMeAccessory {
       });
     };
     
-    // Initial poll
-    setTimeout(pollFunction, 2000);
+    // Add device-specific jitter to prevent synchronized polling across devices
+    const deviceJitter = this.getDeviceJitter();
     
-    // Set up recurring polling - we'll adjust interval dynamically
-    this.statusUpdateTimer = setInterval(pollFunction, this.currentPollingInterval * 1000);
+    // Initial poll with jitter
+    setTimeout(pollFunction, 2000 + deviceJitter);
+    
+    // Set up recurring polling - we'll adjust interval dynamically with jitter
+    const jitteredInterval = (this.currentPollingInterval * 1000) + deviceJitter;
+    this.statusUpdateTimer = setInterval(pollFunction, jitteredInterval);
   }
 
   /**
@@ -632,17 +636,45 @@ export class SleepMeAccessory {
       this.currentPollingInterval = newInterval;
       this.platform.log.debug(`Polling interval changed to ${newInterval}s`);
       
-      // Restart timer with new interval
+      // Restart timer with new interval and jitter to prevent synchronization
       if (this.statusUpdateTimer) {
         clearInterval(this.statusUpdateTimer);
+        const deviceJitter = this.getDeviceJitter();
+        const jitteredInterval = (newInterval * 1000) + deviceJitter;
         this.statusUpdateTimer = setInterval(() => {
           this.refreshDeviceStatus().catch(error => {
             this.failedUpdateAttempts++;
             this.platform.log.error(`Status update error: ${error}`);
           });
-        }, newInterval * 1000);
+        }, jitteredInterval);
       }
     }
+  }
+  
+  /**
+   * Get device-specific jitter to prevent synchronized polling
+   * Uses device ID as seed for consistent but distributed jitter
+   * @returns Jitter in milliseconds (±10-20% of base interval)
+   */
+  private getDeviceJitter(): number {
+    // Create a simple hash of device ID for consistent jitter
+    let hash = 0;
+    const deviceId = this.deviceId;
+    for (let i = 0; i < deviceId.length; i++) {
+      const char = deviceId.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Convert to positive number and get jitter percentage between 10-20%
+    const jitterPercent = 10 + (Math.abs(hash) % 11); // 10-20%
+    const baseInterval = this.currentPollingInterval * 1000;
+    
+    // Apply jitter (can be positive or negative)
+    const jitterDirection = (hash % 2 === 0) ? 1 : -1;
+    const jitter = Math.floor((baseInterval * jitterPercent / 100) * jitterDirection);
+    
+    return jitter;
   }
   
   /**

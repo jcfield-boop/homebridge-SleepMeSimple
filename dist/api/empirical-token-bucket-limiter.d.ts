@@ -40,7 +40,7 @@ export declare class EmpiricalTokenBucketLimiter {
     private requestHistory;
     constructor(config?: Partial<EmpiricalTokenBucketConfig>);
     /**
-     * Check if a request should be allowed
+     * Check if a request should be allowed and atomically reserve tokens
      */
     shouldAllowRequest(priority: RequestPriority): RateLimitDecision;
     /**
