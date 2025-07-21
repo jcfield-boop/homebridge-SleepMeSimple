@@ -1,5 +1,31 @@
 # Changelog
 
+## 7.0.23 (2025-07-21)
+
+### 🔧 Rate Limiting Reliability Improvements - Eliminates Steady-State 429 Errors
+
+**Problem Solved**: Occasional 429 rate limit errors during steady-state operation despite sophisticated rate limiting system.
+
+### 🎯 Root Cause Analysis & Fixes
+- **Race Conditions**: Fixed token bucket race conditions where multiple requests could consume same tokens
+- **Legacy Interference**: Removed redundant rate limiting counters that created timing conflicts
+- **Polling Synchronization**: Added device-specific jitter (10-20%) to prevent synchronized request bursts
+- **Safety Margin Optimization**: Apply safety only to capacity (6 vs 8 tokens) while maintaining full refill speed
+
+### ⚡ Technical Improvements
+- **Atomic Token Reservation**: Tokens now consumed when requests approved, not after completion
+- **Aligned Critical Bypass**: Reduced bypass window from 60s to 35s to match empirical API behavior
+- **Enhanced Observability**: Detailed rate limiting state logging and 429 error pattern tracking
+- **Eliminated Legacy Code**: Removed `requestsThisMinute`, `minuteStartTime`, and `checkRateLimit()` method
+
+### 📊 Expected Results
+- **Zero steady-state 429 errors** during normal polling operations
+- **Faster recovery** after rate limits due to optimized margins
+- **Better request distribution** across devices prevents synchronized bursts
+- **Improved diagnostics** for any future rate limiting issues
+
+---
+
 ## 7.0.22 (2025-07-21)
 
 ### 🔄 Adaptive Polling System - Major HomeKit Responsiveness Improvement
