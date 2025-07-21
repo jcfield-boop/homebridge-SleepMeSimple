@@ -13,9 +13,10 @@ A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad
 ## Key Features
 
 - **Intelligent Temperature Control**: Clean and responsive interface for temperature adjustments and power control
-- **Trust-based Caching**: Optimized API usage that prioritizes responsiveness while respecting rate limits
+- **Adaptive Polling System**: Context-aware status updates that accelerate during schedules and user activity
+- **Trust-based Caching**: Optimized API usage with smart cache lifetimes based on operation type
 - **Advanced Queue Management**: Prioritizes critical commands like power changes while managing background updates
-- **Rate Limit Protection**: Smart handling of API rate limits with clock-synchronized request timing
+- **Rate Limit Protection**: Empirical token bucket rate limiting stays well within 3 requests/minute API limit
 - **Water Level Monitoring**: Check your device's water level through HomeKit
 - **Automatic Device Detection**: Auto-discovers your SleepMe devices
 - **Comprehensive Model Support**: Compatible with Dock Pro, OOLER, and ChiliPad devices
@@ -34,8 +35,9 @@ SleepMe Simple addresses these problems through:
 
 - Simplified, intuitive controls that match the mental model of how SleepMe devices actually work
 - Request prioritization that ensures user-initiated commands always take precedence
-- Smart caching that reduces API calls while maintaining responsive feedback
-- Adaptive request scheduling that works with API rate limits instead of fighting against them
+- Smart caching with context-aware validity periods (user vs schedule vs system operations)
+- Adaptive polling that accelerates during active periods while maintaining API compliance
+- Real-time HomeKit updates during schedule execution (like warm awake sequences)
 
 ## HomeKit Integration
 
@@ -62,11 +64,12 @@ The **Hybrid Mode** solves the common synchronization issues between power contr
 
 ## Advanced Technical Features
 
-- **Discrete Minute Synchronization**: Aligns with API server-side rate limiting windows
-- **Prioritized Command Queue**: Ensures critical operations complete first
+- **Adaptive Polling System**: Context-aware status updates with 60s base rate that accelerates to 20-30s during activity
+- **Empirical Token Bucket Rate Limiting**: Based on 45+ minutes of comprehensive API testing for optimal performance
+- **Context-Aware Caching**: Different cache lifetimes for user commands (3min), schedule operations (1.5min), and system updates
+- **Prioritized Command Queue**: Ensures critical operations complete first with intelligent retry logic
 - **Optimistic Updates**: Updates UI immediately while command executes for responsive feedback
-- **Exponential Backoff**: Intelligently handles API limitations or connectivity issues
-- **Smart Polling**: Adjusts status check frequency based on device activity and user interaction
+- **Real-time Schedule Visibility**: HomeKit shows temperature changes during warm awake sequences within 30-90 seconds
 
 ## Installation
 
@@ -88,7 +91,7 @@ Configure through the Homebridge UI or manually in your `config.json`:
       "name": "SleepMe Simple",
       "apiToken": "YOUR_SLEEPME_API_TOKEN",
       "unit": "C",
-      "pollingInterval": 90,
+      "pollingInterval": 60,
       "logLevel": "normal",
       "interfaceMode": "hybrid",
       "enableSchedules": true
@@ -101,7 +104,7 @@ Configure through the Homebridge UI or manually in your `config.json`:
 
 - **apiToken**: Your SleepMe API token (required, obtain from your account at sleep.me)
 - **unit**: Temperature unit, "C" for Celsius or "F" for Fahrenheit (default: "C")
-- **pollingInterval**: How frequently to check device status in seconds (default: 90, minimum: 60)
+- **pollingInterval**: Base polling frequency in seconds (default: 60, adaptive acceleration during activity)
 - **logLevel**: Log detail level - "normal", "debug", or "verbose"
 - **interfaceMode**: HomeKit interface mode - "hybrid", "switch", or "thermostat" (default: "hybrid")
 - **enableSchedules**: Enable temperature scheduling features (default: false)
@@ -214,9 +217,9 @@ These templates are designed to work with your body's natural temperature regula
 ### Rate Limiting
 
 If you see rate limit warnings in your logs:
-- Increase the `pollingInterval` value (90-120 seconds recommended)
-- For logs with "Rate limit exceeded" errors, the plugin will automatically back off and retry
-- If experiencing rate limiting during plugin startup/restart, consider increasing the `startupDelay` value in advanced configuration
+- The adaptive polling system should automatically handle rate limits with 1 req/min base rate
+- Check for any API connectivity issues or invalid tokens
+- The empirical token bucket limiter should prevent rate limit errors under normal operation
 
 ### Unresponsive Controls
 
