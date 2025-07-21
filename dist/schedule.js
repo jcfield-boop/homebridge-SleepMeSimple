@@ -31,6 +31,8 @@ export class ScheduleManager {
     warmHugConfig;
     // Map of device IDs to their schedules
     schedules = new Map();
+    // Callback to mark schedule actions on accessories
+    markScheduleActionCallback;
     // Timer for the scheduler
     schedulerTimer;
     // Keep track of last known temperature for each device
@@ -47,10 +49,11 @@ export class ScheduleManager {
      * @param api SleepMe API client
      * @param warmHugConfig Warm Hug configuration
      */
-    constructor(logger, api, warmHugConfig) {
+    constructor(logger, api, warmHugConfig, markScheduleActionCallback) {
         this.logger = logger;
         this.api = api;
         this.warmHugConfig = warmHugConfig;
+        this.markScheduleActionCallback = markScheduleActionCallback;
         this.logger.info('Schedule Manager initialized');
         this.logger.info(`Warm Hug config: ${warmHugConfig.increment}°C/min for ${warmHugConfig.duration} minutes`);
     }
@@ -185,8 +188,12 @@ export class ScheduleManager {
      */
     executeSchedule(deviceId, schedule) {
         this.logger.info(`Executing schedule for device ${deviceId}: Set to ${schedule.temperature}°C`);
-        // Set the temperature
-        this.api.turnDeviceOn(deviceId, schedule.temperature)
+        // Mark schedule action on accessory for adaptive polling
+        if (this.markScheduleActionCallback) {
+            this.markScheduleActionCallback(deviceId);
+        }
+        // Set the temperature using schedule context
+        this.api.turnDeviceOnForSchedule(deviceId, schedule.temperature)
             .then(success => {
             if (success) {
                 this.logger.info(`Successfully executed schedule: Device ${deviceId} temperature set to ${schedule.temperature}°C`);
@@ -212,6 +219,10 @@ export class ScheduleManager {
             this.logger.debug(`Warm Hug already active for device ${deviceId}, skipping`);
             return;
         }
+        // Mark schedule action on accessory for adaptive polling
+        if (this.markScheduleActionCallback) {
+            this.markScheduleActionCallback(deviceId);
+        }
         // Get last known temperature or use a sensible default
         const startTemperature = this.lastTemperatureByDevice.get(deviceId) || (schedule.temperature - 4);
         // Calculate target time (when warm hug should complete)
@@ -221,8 +232,8 @@ export class ScheduleManager {
         this.warmHugStartTimeByDevice.set(deviceId, Date.now());
         this.logger.info(`Starting Warm Hug for device ${deviceId}: ` +
             `${startTemperature}°C → ${schedule.temperature}°C over ${this.warmHugConfig.duration} minutes`);
-        // Set initial temperature
-        this.api.setTemperature(deviceId, startTemperature)
+        // Set initial temperature using schedule context
+        this.api.setTemperatureForSchedule(deviceId, startTemperature)
             .then(success => {
             if (!success) {
                 this.logger.error(`Failed to set initial Warm Hug temperature for device ${deviceId}`);
@@ -245,8 +256,8 @@ export class ScheduleManager {
                 const nextTemperature = startTemperature + (stepSize * currentStep);
                 const roundedTemperature = Math.round(nextTemperature * 10) / 10; // Round to 1 decimal place
                 this.logger.debug(`Warm Hug step ${currentStep}/${totalSteps} for device ${deviceId}: ${roundedTemperature}°C`);
-                // Set new temperature
-                this.api.setTemperature(deviceId, roundedTemperature)
+                // Set new temperature using schedule context
+                this.api.setTemperatureForSchedule(deviceId, roundedTemperature)
                     .catch(error => {
                     this.logger.error(`Error during Warm Hug temperature adjustment: ${error}`);
                 });

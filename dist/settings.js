@@ -15,10 +15,10 @@ export const PLUGIN_NAME = 'homebridge-sleepme-simple';
 export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 /**
  * Default polling interval in seconds
- * Based on empirical testing: 30 seconds balances responsiveness with API limits
- * Token bucket allows for more frequent polling when needed
+ * Base rate: 60s (1 request/minute) for sustained operations
+ * Adaptive acceleration during active periods
  */
-export const DEFAULT_POLLING_INTERVAL = 30;
+export const DEFAULT_POLLING_INTERVAL = 60;
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -46,10 +46,12 @@ export const MIN_REQUEST_INTERVAL = 20000;
  */
 export const MAX_REQUESTS_PER_MINUTE = 3;
 /**
- * Default cache validity period in milliseconds
- * Increased for trusted cache entries
+ * Cache validity periods in milliseconds
  */
-export const DEFAULT_CACHE_VALIDITY_MS = 600000;
+export const DEFAULT_CACHE_VALIDITY_MS = 120000; // 2 minutes base
+export const USER_COMMAND_CACHE_VALIDITY_MS = 180000; // 3 minutes for user commands
+export const SCHEDULE_CACHE_VALIDITY_MS = 90000; // 1.5 minutes for schedule operations
+export const ACTIVE_PERIOD_CACHE_VALIDITY_MS = 60000; // 1 minute during active periods
 /**
  * Maximum number of retries for API requests
  * Higher priority requests will be retried more times
@@ -66,9 +68,9 @@ export const INITIAL_BACKOFF_MS = 10000; // 10 seconds
 export const MAX_BACKOFF_MS = 300000; // 5 minutes
 /**
  * Post-user-action quiet period in milliseconds
- * Increased as we trust API responses more
+ * Only applies to user actions, not system/schedule operations
  */
-export const USER_ACTION_QUIET_PERIOD_MS = 60000; // 60 seconds
+export const USER_ACTION_QUIET_PERIOD_MS = 30000; // 30 seconds
 /**
  * Command debounce delay in milliseconds
  */
@@ -113,4 +115,20 @@ export const DEFAULT_SHOW_INDIVIDUAL_SCHEDULES = true;
  * Enable warm hug feature by default
  */
 export const DEFAULT_ENABLE_WARM_HUG = true;
+/**
+ * Polling intervals for different contexts (in seconds)
+ */
+export const POLLING_INTERVALS = {
+    BASE: 60,
+    ACTIVE: 30,
+    RESPONSIVE: 20 // After user commands (brief period)
+};
+/**
+ * Context periods for adaptive polling (in milliseconds)
+ */
+export const POLLING_CONTEXTS = {
+    RESPONSIVE_PERIOD: 120000,
+    SCHEDULE_ACTIVE_PERIOD: 300000,
+    STARTUP_PERIOD: 180000 // 3 minutes of more frequent polling at startup
+};
 //# sourceMappingURL=settings.js.map

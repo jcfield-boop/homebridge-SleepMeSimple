@@ -58,6 +58,9 @@ export class ScheduleManager {
   // Map of device IDs to their schedules
   private schedules: Map<string, TemperatureSchedule[]> = new Map();
   
+  // Callback to mark schedule actions on accessories
+  private markScheduleActionCallback?: (deviceId: string) => void;
+  
   // Timer for the scheduler
   private schedulerTimer?: NodeJS.Timeout;
   
@@ -82,8 +85,10 @@ export class ScheduleManager {
   constructor(
     private readonly logger: Logger,
     private readonly api: SleepMeApi,
-    private readonly warmHugConfig: WarmHugConfig
+    private readonly warmHugConfig: WarmHugConfig,
+    markScheduleActionCallback?: (deviceId: string) => void
   ) {
+    this.markScheduleActionCallback = markScheduleActionCallback;
     this.logger.info('Schedule Manager initialized');
     this.logger.info(`Warm Hug config: ${warmHugConfig.increment}°C/min for ${warmHugConfig.duration} minutes`);
   }
@@ -236,8 +241,13 @@ if (shouldRunToday && now >= schedule.nextExecutionTime) {
   private executeSchedule(deviceId: string, schedule: TemperatureSchedule): void {
     this.logger.info(`Executing schedule for device ${deviceId}: Set to ${schedule.temperature}°C`);
     
-    // Set the temperature
-    this.api.turnDeviceOn(deviceId, schedule.temperature)
+    // Mark schedule action on accessory for adaptive polling
+    if (this.markScheduleActionCallback) {
+      this.markScheduleActionCallback(deviceId);
+    }
+    
+    // Set the temperature using schedule context
+    this.api.turnDeviceOnForSchedule(deviceId, schedule.temperature)
       .then(success => {
         if (success) {
           this.logger.info(`Successfully executed schedule: Device ${deviceId} temperature set to ${schedule.temperature}°C`);
@@ -265,6 +275,11 @@ if (shouldRunToday && now >= schedule.nextExecutionTime) {
       return;
     }
     
+    // Mark schedule action on accessory for adaptive polling
+    if (this.markScheduleActionCallback) {
+      this.markScheduleActionCallback(deviceId);
+    }
+    
     // Get last known temperature or use a sensible default
     const startTemperature = this.lastTemperatureByDevice.get(deviceId) || (schedule.temperature - 4);
     
@@ -280,8 +295,8 @@ if (shouldRunToday && now >= schedule.nextExecutionTime) {
       `${startTemperature}°C → ${schedule.temperature}°C over ${this.warmHugConfig.duration} minutes`
     );
     
-    // Set initial temperature
-    this.api.setTemperature(deviceId, startTemperature)
+    // Set initial temperature using schedule context
+    this.api.setTemperatureForSchedule(deviceId, startTemperature)
       .then(success => {
         if (!success) {
           this.logger.error(`Failed to set initial Warm Hug temperature for device ${deviceId}`);
@@ -311,8 +326,8 @@ if (shouldRunToday && now >= schedule.nextExecutionTime) {
           
           this.logger.debug(`Warm Hug step ${currentStep}/${totalSteps} for device ${deviceId}: ${roundedTemperature}°C`);
           
-          // Set new temperature
-          this.api.setTemperature(deviceId, roundedTemperature)
+          // Set new temperature using schedule context
+          this.api.setTemperatureForSchedule(deviceId, roundedTemperature)
             .catch(error => {
               this.logger.error(`Error during Warm Hug temperature adjustment: ${error}`);
             });

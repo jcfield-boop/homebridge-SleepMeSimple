@@ -1,5 +1,5 @@
 import { ThermalStatus, PowerState } from './api/types.js';
-import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, COMMAND_DEBOUNCE_DELAY_MS, USER_ACTION_QUIET_PERIOD_MS, InterfaceMode, DEFAULT_INTERFACE_MODE } from './settings.js';
+import { MIN_TEMPERATURE_C, MAX_TEMPERATURE_C, COMMAND_DEBOUNCE_DELAY_MS, USER_ACTION_QUIET_PERIOD_MS, InterfaceMode, DEFAULT_INTERFACE_MODE, POLLING_INTERVALS, POLLING_CONTEXTS } from './settings.js';
 /**
  * Creates a debounced function that limits how often a function can be called
  */
@@ -66,8 +66,10 @@ export class SleepMeAccessory {
     statusUpdateTimer;
     lastStatusUpdate = 0;
     lastUserActionTime = 0;
+    lastScheduleActionTime = 0;
     failedUpdateAttempts = 0;
     updateInProgress = false;
+    currentPollingInterval = POLLING_INTERVALS.BASE;
     // Debounced handlers
     debouncedTemperatureSet;
     debouncedPowerSet;
@@ -432,28 +434,35 @@ export class SleepMeAccessory {
         this.thermostatService.updateCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState, targetState);
     }
     /**
-     * Set up the status polling mechanism
+     * Set up adaptive status polling mechanism
+     * Adjusts polling frequency based on context (user actions, schedules, etc.)
      */
     setupStatusPolling() {
         if (this.statusUpdateTimer) {
             clearInterval(this.statusUpdateTimer);
         }
-        const pollingIntervalMs = this.platform.pollingInterval * 1000;
-        this.statusUpdateTimer = setInterval(() => {
+        // Start with responsive polling for first few minutes
+        this.currentPollingInterval = POLLING_INTERVALS.RESPONSIVE;
+        const pollFunction = () => {
             // Skip update if another one is in progress
             if (this.updateInProgress) {
                 return;
             }
-            // Skip update if we've recently had user interaction
-            const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+            const now = Date.now();
+            const timeSinceUserAction = now - this.lastUserActionTime;
+            const timeSinceScheduleAction = now - this.lastScheduleActionTime;
+            // Determine appropriate polling interval based on context
+            this.updatePollingInterval(timeSinceUserAction, timeSinceScheduleAction);
+            // Skip polling only for recent user actions (not schedule actions)
             if (timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS) {
+                this.platform.log.debug(`Skipping poll due to recent user action (${Math.round(timeSinceUserAction / 1000)}s ago)`);
                 return;
             }
             // Apply exponential backoff for repeated failures
             if (this.failedUpdateAttempts > 1) {
                 const backoffFactor = Math.min(8, Math.pow(2, this.failedUpdateAttempts - 1));
-                const extendedInterval = pollingIntervalMs * backoffFactor;
-                if (this.lastStatusUpdate && Date.now() - this.lastStatusUpdate < extendedInterval) {
+                const extendedInterval = this.currentPollingInterval * 1000 * backoffFactor;
+                if (this.lastStatusUpdate && now - this.lastStatusUpdate < extendedInterval) {
                     return;
                 }
             }
@@ -461,7 +470,44 @@ export class SleepMeAccessory {
                 this.failedUpdateAttempts++;
                 this.platform.log.error(`Status update error: ${error}`);
             });
-        }, pollingIntervalMs);
+        };
+        // Initial poll
+        setTimeout(pollFunction, 2000);
+        // Set up recurring polling - we'll adjust interval dynamically
+        this.statusUpdateTimer = setInterval(pollFunction, this.currentPollingInterval * 1000);
+    }
+    /**
+     * Update polling interval based on current context
+     */
+    updatePollingInterval(timeSinceUserAction, timeSinceScheduleAction) {
+        let newInterval = POLLING_INTERVALS.BASE;
+        // Responsive period after user actions
+        if (timeSinceUserAction < POLLING_CONTEXTS.RESPONSIVE_PERIOD) {
+            newInterval = POLLING_INTERVALS.RESPONSIVE;
+        }
+        // Active period during/after schedules 
+        else if (timeSinceScheduleAction < POLLING_CONTEXTS.SCHEDULE_ACTIVE_PERIOD) {
+            newInterval = POLLING_INTERVALS.ACTIVE;
+        }
+        // Startup period - more frequent polling initially
+        else if (Date.now() - this.platform.startTime < POLLING_CONTEXTS.STARTUP_PERIOD) {
+            newInterval = POLLING_INTERVALS.ACTIVE;
+        }
+        // Update timer if interval changed
+        if (newInterval !== this.currentPollingInterval) {
+            this.currentPollingInterval = newInterval;
+            this.platform.log.debug(`Polling interval changed to ${newInterval}s`);
+            // Restart timer with new interval
+            if (this.statusUpdateTimer) {
+                clearInterval(this.statusUpdateTimer);
+                this.statusUpdateTimer = setInterval(() => {
+                    this.refreshDeviceStatus().catch(error => {
+                        this.failedUpdateAttempts++;
+                        this.platform.log.error(`Status update error: ${error}`);
+                    });
+                }, newInterval * 1000);
+            }
+        }
     }
     /**
      * Set up water level service for compatible devices
@@ -485,12 +531,19 @@ export class SleepMeAccessory {
         }
     }
     /**
+     * Mark that a schedule action occurred (called by schedule manager)
+     */
+    markScheduleAction() {
+        this.lastScheduleActionTime = Date.now();
+    }
+    /**
      * Refresh device status from the API
      */
     async refreshDeviceStatus(isInitialSetup = false) {
-        // Skip if we've had recent user interaction
+        // Only skip for recent user actions during non-initial setups
         if (!isInitialSetup) {
             const timeSinceUserAction = Date.now() - this.lastUserActionTime;
+            // Note: We don't skip for schedule actions - they need fresh status
             if (timeSinceUserAction < USER_ACTION_QUIET_PERIOD_MS) {
                 return;
             }

@@ -1,5 +1,37 @@
 # Changelog
 
+## 7.0.22 (2025-07-21)
+
+### 🔄 Adaptive Polling System - Major HomeKit Responsiveness Improvement
+- **Problem Solved**: Fixed stale HomeKit display during warm awake schedules (was showing static 25°C for 9+ minutes)
+- **Root Cause**: Extended cache validity (up to 30 minutes) for schedule operations prevented real-time updates
+
+### 🎯 Context-Aware Polling Strategy
+- **Base Rate**: 60s polling (1 req/minute) - well within API limits
+- **Adaptive Acceleration**: 
+  - 20s polling for 2 minutes after user actions (responsive mode)
+  - 30s polling for 5 minutes during/after schedule execution (active mode)
+  - 30s polling for first 3 minutes after startup
+- **Intelligent Transitions**: Automatically adjusts polling frequency based on activity context
+
+### 💾 Smart Cache Management
+- **Context-Aware Validity**: Different cache lifetimes based on operation type
+  - User commands: 3 minutes (was 30 minutes)
+  - Schedule operations: 1.5 minutes (was 30 minutes) 
+  - Active periods: 1 minute during high-activity
+  - Base: 2 minutes for normal operations
+- **Separated Quiet Periods**: User actions block polling (30s), schedule operations don't
+
+### 🔧 Schedule Operation Enhancements
+- **New API Methods**: `setTemperatureForSchedule()` and `turnDeviceOnForSchedule()` with proper context
+- **Real-time Feedback**: Schedule manager triggers adaptive polling for immediate HomeKit updates
+- **Warm Awake Visibility**: Temperature changes now visible within 30-90 seconds instead of 9+ minutes
+
+### 📈 Performance & Reliability
+- **API Compliance**: Maintains 1 req/min base rate with smart bursts under 3 req/min limit
+- **Enhanced UX**: Real-time HomeKit updates during automated sequences while preserving user responsiveness
+- **Backward Compatibility**: All existing functionality preserved with improved performance
+
 ## 7.0.21 (2025-07-19)
 
 ### 🔋 Water Level Battery Status Improvement

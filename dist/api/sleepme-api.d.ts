@@ -126,6 +126,20 @@ export declare class SleepMeApi {
      */
     cancelAllDeviceRequests(deviceId: string): void;
     /**
+     * Turn device on for schedule operation (uses schedule context)
+     * @param deviceId Device identifier
+     * @param temperature Target temperature in Celsius
+     * @returns Whether operation was successful
+     */
+    turnDeviceOnForSchedule(deviceId: string, temperature: number): Promise<boolean>;
+    /**
+     * Set temperature for schedule operation (uses schedule context)
+     * @param deviceId Device identifier
+     * @param temperature Target temperature in Celsius
+     * @returns Whether operation was successful
+     */
+    setTemperatureForSchedule(deviceId: string, temperature: number): Promise<boolean>;
+    /**
      * Update device settings
      * @param deviceId Device identifier
      * @param settings Settings to update
@@ -137,6 +151,7 @@ export declare class SleepMeApi {
    * Enhanced with better consistency handling
    * @param deviceId Device identifier
    * @param updates Status updates to apply
+   * @param context Context of the update (user/schedule/system)
    */
     private updateCacheWithTrustedState;
     /**

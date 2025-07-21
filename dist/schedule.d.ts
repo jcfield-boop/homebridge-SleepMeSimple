@@ -54,6 +54,7 @@ export declare class ScheduleManager {
     private readonly api;
     private readonly warmHugConfig;
     private schedules;
+    private markScheduleActionCallback?;
     private schedulerTimer?;
     private lastTemperatureByDevice;
     private warmHugActiveDevices;
@@ -65,7 +66,7 @@ export declare class ScheduleManager {
      * @param api SleepMe API client
      * @param warmHugConfig Warm Hug configuration
      */
-    constructor(logger: Logger, api: SleepMeApi, warmHugConfig: WarmHugConfig);
+    constructor(logger: Logger, api: SleepMeApi, warmHugConfig: WarmHugConfig, markScheduleActionCallback?: (deviceId: string) => void);
     /**
      * Set schedules for a specific device
      * @param deviceId Device identifier

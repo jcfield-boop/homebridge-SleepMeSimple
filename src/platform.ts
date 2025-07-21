@@ -41,6 +41,7 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
   public readonly logLevel!: LogLevel;
   public readonly pollingInterval: number;
   public readonly temperatureUnit: string = 'C';
+  public readonly startTime: number;
   private startupDelay = 45000; // Default 45 seconds
   
   // Map to track active accessory instances for proper cleanup
@@ -71,6 +72,9 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly homebridgeApi: API
   ) {
+    // Record startup time for adaptive polling
+    this.startTime = Date.now();
+    
     // Store references to Homebridge services and characteristics
     this.Service = this.homebridgeApi.hap.Service;
     this.Characteristic = this.homebridgeApi.hap.Characteristic;
@@ -121,9 +125,15 @@ export class SleepMeSimplePlatform implements DynamicPlatformPlugin {
       
       // Initialize schedule manager if enabled
       if (config.enableSchedules && this.api) {
-        // Create the schedule manager but don't set schedules yet
-        // We'll do that after device discovery
-        this._scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
+        // Create the schedule manager with callback for adaptive polling
+        const markScheduleAction = (deviceId: string) => {
+          const accessory = this.accessoryInstances.get(deviceId);
+          if (accessory) {
+            accessory.markScheduleAction();
+          }
+        };
+        
+        this._scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig, markScheduleAction);
         this.log.info('Schedule Manager initialized');
         this.log.info(`Warm Hug config: ${warmHugConfig.increment}°C/min for ${warmHugConfig.duration} minutes`);
       }

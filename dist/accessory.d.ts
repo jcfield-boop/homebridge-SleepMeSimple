@@ -34,8 +34,10 @@ export declare class SleepMeAccessory {
     private statusUpdateTimer?;
     private lastStatusUpdate;
     private lastUserActionTime;
+    private lastScheduleActionTime;
     private failedUpdateAttempts;
     private updateInProgress;
+    private currentPollingInterval;
     private debouncedTemperatureSet;
     private debouncedPowerSet;
     /**
@@ -115,13 +117,22 @@ export declare class SleepMeAccessory {
      */
     private updateHeatingCoolingStates;
     /**
-     * Set up the status polling mechanism
+     * Set up adaptive status polling mechanism
+     * Adjusts polling frequency based on context (user actions, schedules, etc.)
      */
     private setupStatusPolling;
+    /**
+     * Update polling interval based on current context
+     */
+    private updatePollingInterval;
     /**
      * Set up water level service for compatible devices
      */
     private setupWaterLevelService;
+    /**
+     * Mark that a schedule action occurred (called by schedule manager)
+     */
+    markScheduleAction(): void;
     /**
      * Refresh device status from the API
      */

@@ -24,6 +24,7 @@ export class SleepMeSimplePlatform {
     logLevel;
     pollingInterval;
     temperatureUnit = 'C';
+    startTime;
     startupDelay = 45000; // Default 45 seconds
     // Map to track active accessory instances for proper cleanup
     accessoryInstances = new Map();
@@ -46,6 +47,8 @@ export class SleepMeSimplePlatform {
     constructor(logger, config, homebridgeApi) {
         this.config = config;
         this.homebridgeApi = homebridgeApi;
+        // Record startup time for adaptive polling
+        this.startTime = Date.now();
         // Store references to Homebridge services and characteristics
         this.Service = this.homebridgeApi.hap.Service;
         this.Characteristic = this.homebridgeApi.hap.Characteristic;
@@ -85,9 +88,14 @@ export class SleepMeSimplePlatform {
             this.startupDelay = (config.advanced?.startupDelay || 45) * 1000;
             // Initialize schedule manager if enabled
             if (config.enableSchedules && this.api) {
-                // Create the schedule manager but don't set schedules yet
-                // We'll do that after device discovery
-                this._scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig);
+                // Create the schedule manager with callback for adaptive polling
+                const markScheduleAction = (deviceId) => {
+                    const accessory = this.accessoryInstances.get(deviceId);
+                    if (accessory) {
+                        accessory.markScheduleAction();
+                    }
+                };
+                this._scheduleManager = new ScheduleManager(this.log, this.api, warmHugConfig, markScheduleAction);
                 this.log.info('Schedule Manager initialized');
                 this.log.info(`Warm Hug config: ${warmHugConfig.increment}°C/min for ${warmHugConfig.duration} minutes`);
             }

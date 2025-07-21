@@ -2,7 +2,7 @@
  * SleepMe API client implementation with robust error handling and rate limiting
  */
 import axios from 'axios';
-import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, DEFAULT_CACHE_VALIDITY_MS, MAX_RETRIES, RequestPriority } from '../settings.js';
+import { API_BASE_URL, MAX_REQUESTS_PER_MINUTE, DEFAULT_CACHE_VALIDITY_MS, USER_COMMAND_CACHE_VALIDITY_MS, SCHEDULE_CACHE_VALIDITY_MS, ACTIVE_PERIOD_CACHE_VALIDITY_MS, MAX_RETRIES, RequestPriority } from '../settings.js';
 import { ThermalStatus, PowerState } from './types.js';
 import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
 import { UltraConservativeRateLimiter } from './ultra-conservative-rate-limiter.js';
@@ -258,15 +258,18 @@ export class SleepMeApi {
                 // High confidence cache (from PATCH responses) can be used longer
                 if (cachedStatus) {
                     let validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
-                    // Adjust validity period based on confidence and source
-                    if (cachedStatus.confidence === 'high' && !cachedStatus.isOptimistic) {
-                        // Extend validity for high confidence updates, especially if they came from a PATCH
-                        validityPeriod = cachedStatus.source === 'patch' ?
-                            DEFAULT_CACHE_VALIDITY_MS * 3 : // Much longer validity for PATCH responses
-                            DEFAULT_CACHE_VALIDITY_MS * 2; // Standard extension for high confidence
+                    // Context-aware cache validity
+                    if (cachedStatus.context === 'user') {
+                        validityPeriod = USER_COMMAND_CACHE_VALIDITY_MS;
+                    }
+                    else if (cachedStatus.context === 'schedule') {
+                        validityPeriod = SCHEDULE_CACHE_VALIDITY_MS;
                     }
                     else if (cachedStatus.isOptimistic) {
-                        validityPeriod = DEFAULT_CACHE_VALIDITY_MS / 2; // Shorter validity for optimistic updates
+                        validityPeriod = ACTIVE_PERIOD_CACHE_VALIDITY_MS;
+                    }
+                    else {
+                        validityPeriod = DEFAULT_CACHE_VALIDITY_MS;
                     }
                     // Add jitter to prevent thundering herd when multiple devices have synchronized cache expiration
                     // Use device ID as seed for consistent but distributed jitter per device
@@ -316,7 +319,8 @@ export class SleepMeApi {
                 isOptimistic: false,
                 confidence: 'high',
                 source: 'get',
-                verified: true // This is from a GET so it's verified by definition
+                verified: true,
+                context: 'system' // GET requests are system-initiated
             });
             return status;
         }
@@ -378,7 +382,7 @@ export class SleepMeApi {
                     // We don't know current temperature yet, but we'll assume it's moving toward target
                     // This gives better UX without requiring a GET
                     currentTemperature: this.getLastKnownTemperature(deviceId, targetTemp)
-                });
+                }, 'user');
                 this.logger.verbose(`Device ${deviceId} turned ON successfully`);
                 return true;
             }
@@ -414,7 +418,7 @@ export class SleepMeApi {
                 this.updateCacheWithTrustedState(deviceId, {
                     powerState: PowerState.OFF,
                     thermalStatus: ThermalStatus.STANDBY
-                });
+                }, 'user');
                 this.logger.verbose(`Device ${deviceId} turned OFF successfully`);
                 return true;
             }
@@ -453,7 +457,7 @@ export class SleepMeApi {
                     // Setting temperature implies the device is ON
                     powerState: PowerState.ON,
                     thermalStatus: ThermalStatus.ACTIVE
-                });
+                }, 'user');
                 this.logger.verbose(`Device ${deviceId} temperature set successfully to ${temperature}°C`);
                 return true;
             }
@@ -473,6 +477,67 @@ export class SleepMeApi {
      */
     cancelAllDeviceRequests(deviceId) {
         this.cancelPendingRequests(deviceId);
+    }
+    /**
+     * Turn device on for schedule operation (uses schedule context)
+     * @param deviceId Device identifier
+     * @param temperature Target temperature in Celsius
+     * @returns Whether operation was successful
+     */
+    async turnDeviceOnForSchedule(deviceId, temperature) {
+        try {
+            this.logger.info(`Schedule: Turning device ${deviceId} ON with temperature ${temperature}°C`);
+            this.cancelAllDeviceRequests(deviceId);
+            const payload = {
+                set_temperature_f: Math.round(this.convertCtoF(temperature)),
+                thermal_control_status: 'active'
+            };
+            const success = await this.updateDeviceSettings(deviceId, payload);
+            if (success) {
+                this.updateCacheWithTrustedState(deviceId, {
+                    powerState: PowerState.ON,
+                    targetTemperature: temperature,
+                    thermalStatus: ThermalStatus.ACTIVE,
+                    currentTemperature: this.getLastKnownTemperature(deviceId, temperature)
+                }, 'schedule');
+                this.logger.verbose(`Schedule: Device ${deviceId} turned ON successfully`);
+                return true;
+            }
+            return false;
+        }
+        catch (error) {
+            this.handleApiError(`turnDeviceOnForSchedule(${deviceId})`, error);
+            return false;
+        }
+    }
+    /**
+     * Set temperature for schedule operation (uses schedule context)
+     * @param deviceId Device identifier
+     * @param temperature Target temperature in Celsius
+     * @returns Whether operation was successful
+     */
+    async setTemperatureForSchedule(deviceId, temperature) {
+        try {
+            this.logger.info(`Schedule: Setting device ${deviceId} temperature to ${temperature}°C`);
+            const payload = {
+                set_temperature_f: Math.round(this.convertCtoF(temperature))
+            };
+            const success = await this.updateDeviceSettings(deviceId, payload);
+            if (success) {
+                this.updateCacheWithTrustedState(deviceId, {
+                    targetTemperature: temperature,
+                    powerState: PowerState.ON,
+                    thermalStatus: ThermalStatus.ACTIVE
+                }, 'schedule');
+                this.logger.verbose(`Schedule: Device ${deviceId} temperature set successfully to ${temperature}°C`);
+                return true;
+            }
+            return false;
+        }
+        catch (error) {
+            this.handleApiError(`setTemperatureForSchedule(${deviceId})`, error);
+            return false;
+        }
     }
     /**
      * Update device settings
@@ -518,8 +583,9 @@ export class SleepMeApi {
    * Enhanced with better consistency handling
    * @param deviceId Device identifier
    * @param updates Status updates to apply
+   * @param context Context of the update (user/schedule/system)
    */
-    updateCacheWithTrustedState(deviceId, updates) {
+    updateCacheWithTrustedState(deviceId, updates, context = 'system') {
         // Get current cached status
         const cachedEntry = this.deviceStatusCache.get(deviceId);
         let updatedStatus;
@@ -576,7 +642,8 @@ export class SleepMeApi {
             isOptimistic: false,
             confidence: 'high',
             source: 'patch',
-            verified: false // Not verified yet, but trusted until proven otherwise
+            verified: false,
+            context: context
         });
         this.logger.verbose(`Updated cache with trusted state for device ${deviceId}: ` +
             `Power=${updatedStatus.powerState}, ` +

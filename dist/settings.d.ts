@@ -15,10 +15,10 @@ export declare const PLUGIN_NAME = "homebridge-sleepme-simple";
 export declare const API_BASE_URL = "https://api.developer.sleep.me/v1";
 /**
  * Default polling interval in seconds
- * Based on empirical testing: 30 seconds balances responsiveness with API limits
- * Token bucket allows for more frequent polling when needed
+ * Base rate: 60s (1 request/minute) for sustained operations
+ * Adaptive acceleration during active periods
  */
-export declare const DEFAULT_POLLING_INTERVAL = 30;
+export declare const DEFAULT_POLLING_INTERVAL = 60;
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -46,10 +46,12 @@ export declare const MIN_REQUEST_INTERVAL = 20000;
  */
 export declare const MAX_REQUESTS_PER_MINUTE = 3;
 /**
- * Default cache validity period in milliseconds
- * Increased for trusted cache entries
+ * Cache validity periods in milliseconds
  */
-export declare const DEFAULT_CACHE_VALIDITY_MS = 600000;
+export declare const DEFAULT_CACHE_VALIDITY_MS = 120000;
+export declare const USER_COMMAND_CACHE_VALIDITY_MS = 180000;
+export declare const SCHEDULE_CACHE_VALIDITY_MS = 90000;
+export declare const ACTIVE_PERIOD_CACHE_VALIDITY_MS = 60000;
 /**
  * Maximum number of retries for API requests
  * Higher priority requests will be retried more times
@@ -66,9 +68,9 @@ export declare const INITIAL_BACKOFF_MS = 10000;
 export declare const MAX_BACKOFF_MS = 300000;
 /**
  * Post-user-action quiet period in milliseconds
- * Increased as we trust API responses more
+ * Only applies to user actions, not system/schedule operations
  */
-export declare const USER_ACTION_QUIET_PERIOD_MS = 60000;
+export declare const USER_ACTION_QUIET_PERIOD_MS = 30000;
 /**
  * Command debounce delay in milliseconds
  */
@@ -110,3 +112,19 @@ export declare const DEFAULT_SHOW_INDIVIDUAL_SCHEDULES = true;
  * Enable warm hug feature by default
  */
 export declare const DEFAULT_ENABLE_WARM_HUG = true;
+/**
+ * Polling intervals for different contexts (in seconds)
+ */
+export declare const POLLING_INTERVALS: {
+    BASE: number;
+    ACTIVE: number;
+    RESPONSIVE: number;
+};
+/**
+ * Context periods for adaptive polling (in milliseconds)
+ */
+export declare const POLLING_CONTEXTS: {
+    RESPONSIVE_PERIOD: number;
+    SCHEDULE_ACTIVE_PERIOD: number;
+    STARTUP_PERIOD: number;
+};
