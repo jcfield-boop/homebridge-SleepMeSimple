@@ -25,7 +25,7 @@ import {
 } from './types.js';
 import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
 import { UltraConservativeRateLimiter } from './ultra-conservative-rate-limiter.js';
-import { EmpiricalTokenBucketLimiter } from './empirical-token-bucket-limiter.js';
+import { EmpiricalDiscreteWindowLimiter } from './empirical-token-bucket-limiter.js';
 
 /**
  * Interface for a cached device status entry
@@ -83,8 +83,8 @@ export class SleepMeApi {
   // Ultra-conservative rate limiter (fallback)
   private ultraConservativeRateLimiter: UltraConservativeRateLimiter;
   
-  // Primary rate limiter - empirical token bucket (based on comprehensive testing)
-  private tokenBucketLimiter: EmpiricalTokenBucketLimiter;
+  // Primary rate limiter - empirical discrete window (based on live testing)
+  private discreteWindowLimiter: EmpiricalDiscreteWindowLimiter;
   
   // Request ID counter
   private requestIdCounter = 0;
@@ -159,12 +159,12 @@ export class SleepMeApi {
       startupGracePeriodMs: 180000 // 3 minutes
     });
     
-    // Initialize PRIMARY rate limiter - empirical token bucket (based on comprehensive testing)
-    // Configuration matches actual API behavior: 10 token burst, ~1 token per 15 seconds
-    this.tokenBucketLimiter = new EmpiricalTokenBucketLimiter({
-      bucketCapacity: 10,             // Match actual API burst capacity
-      refillRatePerSecond: 1/15,      // 1 token per 15 seconds (matches API timing)
-      minRecoveryTimeMs: 8000,        // 8 seconds minimum recovery (shorter for responsiveness)
+    // Initialize PRIMARY rate limiter - empirical discrete window (based on live testing)
+    // Configuration matches actual API behavior: 1 request per 60s window
+    this.discreteWindowLimiter = new EmpiricalDiscreteWindowLimiter({
+      windowDurationMs: 90000,        // 90s windows with safety margin
+      requestsPerWindow: 1,           // Only 1 request per window
+      minWindowGapMs: 22500,          // 22.5s minimum between requests
       safetyMargin: 0.1,              // Reduced to 10% for better responsiveness
       allowCriticalBypass: true,
       criticalBypassLimit: 3,         // Max 3 critical bypasses per minute
@@ -212,18 +212,18 @@ export class SleepMeApi {
   }
 
   /**
-   * Get primary token bucket rate limiter statistics and recommendations
+   * Get primary discrete window rate limiter statistics and recommendations
    * @returns Current rate limiter status and detailed statistics
    */
-  public getTokenBucketStats(): {
-    status: ReturnType<EmpiricalTokenBucketLimiter['getStatus']>;
-    detailedStats: ReturnType<EmpiricalTokenBucketLimiter['getDetailedStats']>;
+  public getDiscreteWindowStats(): {
+    status: ReturnType<EmpiricalDiscreteWindowLimiter['getStatus']>;
+    detailedStats: ReturnType<EmpiricalDiscreteWindowLimiter['getDetailedStats']>;
     recommendations: string[];
   } {
     return {
-      status: this.tokenBucketLimiter.getStatus(),
-      detailedStats: this.tokenBucketLimiter.getDetailedStats(),
-      recommendations: this.tokenBucketLimiter.getRecommendations()
+      status: this.discreteWindowLimiter.getStatus(),
+      detailedStats: this.discreteWindowLimiter.getDetailedStats(),
+      recommendations: this.discreteWindowLimiter.getRecommendations()
     };
   }
   
@@ -903,12 +903,12 @@ private async processQueue(): Promise<void> {
         break; // No requests to process
       }
 
-      // Use empirical token bucket rate limiter (primary) to check if request should be allowed
-      const rateLimitCheck = this.tokenBucketLimiter.shouldAllowRequest(request.priority);
+      // Use empirical discrete window rate limiter (primary) to check if request should be allowed
+      const rateLimitCheck = this.discreteWindowLimiter.shouldAllowRequest(request.priority);
       
       // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
-      const bucketStatus = this.tokenBucketLimiter.getStatus();
-      if (bucketStatus.consecutiveRateLimits > 2 && !rateLimitCheck.allowed) {
+      const windowStatus = this.discreteWindowLimiter.getStatus();
+      if (windowStatus.consecutiveRateLimits > 2 && !rateLimitCheck.allowed) {
         const emergencyWaitMs = Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000);
         this.logger.warn(`Emergency rate limit protection: extending wait to ${Math.ceil(emergencyWaitMs / 1000)}s`);
         await new Promise(resolve => setTimeout(resolve, emergencyWaitMs));
@@ -919,20 +919,20 @@ private async processQueue(): Promise<void> {
         // Enhanced logging for rate limiting behavior
         if (!this.rateExceededLogged) {
           const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
-          const bucketStatus = this.tokenBucketLimiter.getStatus();
+          const windowStatus = this.discreteWindowLimiter.getStatus();
           
           this.logger.info(
-            `Token bucket rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s (${rateLimitCheck.tokensRemaining} tokens)`
+            `Discrete window rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s (${rateLimitCheck.requestsRemaining} requests remaining)`
           );
           
           // Enhanced debug logging for troubleshooting
           this.logger.debug(
             `Rate limit details: Priority=${request.priority}, ` +
-            `Tokens=${bucketStatus.tokens}/${bucketStatus.maxTokens}, ` +
-            `RefillRate=${bucketStatus.refillRate.toFixed(4)}/s, ` +
-            `AdaptiveBackoff=${bucketStatus.adaptiveBackoffActive}, ` +
-            `ConsecutiveFailures=${bucketStatus.consecutiveRateLimits}, ` +
-            `CriticalBypasses=${bucketStatus.criticalBypassesUsed}/${bucketStatus.criticalBypassesRemaining + bucketStatus.criticalBypassesUsed}`
+            `WindowRequests=${windowStatus.requestsInCurrentWindow}/${windowStatus.maxRequestsPerWindow}, ` +
+            `WindowDuration=${windowStatus.windowDurationMs}ms, ` +
+            `AdaptiveBackoff=${windowStatus.adaptiveBackoffActive}, ` +
+            `ConsecutiveFailures=${windowStatus.consecutiveRateLimits}, ` +
+            `CriticalBypasses=${windowStatus.criticalBypassesUsed}/${windowStatus.criticalBypassesRemaining + windowStatus.criticalBypassesUsed}`
           );
           
           this.logger.debug(`Rate limiter recommendation: ${rateLimitCheck.recommendation}`);
@@ -979,12 +979,12 @@ private async processQueue(): Promise<void> {
         // Record successful request in all rate limiters
         this.empiricalRateLimiter.recordRequest(request.priority, true, responseTime, false);
         this.ultraConservativeRateLimiter.recordRequest(request.priority, true, false);
-        this.tokenBucketLimiter.recordRequest(request.priority, true, false);
+        this.discreteWindowLimiter.recordRequest(request.priority, true, false);
         
         // Log successful request timing for patterns analysis
         this.logger.verbose(
           `Request success: ${request.method} ${request.url} [${request.priority}] ` +
-          `took ${responseTime}ms, ${this.tokenBucketLimiter.getStatus().tokens.toFixed(2)} tokens remaining`
+          `took ${responseTime}ms, ${this.discreteWindowLimiter.getStatus().requestsInCurrentWindow}/${this.discreteWindowLimiter.getStatus().maxRequestsPerWindow} window requests used`
         );
         
         // Resolve the promise with the data
@@ -1009,16 +1009,16 @@ private async processQueue(): Promise<void> {
           // Record rate limit in all rate limiters
           this.empiricalRateLimiter.recordRequest(request.priority, false, responseTime, true);
           this.ultraConservativeRateLimiter.recordRequest(request.priority, false, true);
-          this.tokenBucketLimiter.recordRequest(request.priority, false, true);
+          this.discreteWindowLimiter.recordRequest(request.priority, false, true);
           
           // Enhanced logging for 429 errors to track patterns
-          const bucketStatus = this.tokenBucketLimiter.getStatus();
+          const windowStatus = this.discreteWindowLimiter.getStatus();
           this.logger.warn(
             `429 Rate Limit Hit: ${request.method} ${request.url} [${request.priority}] ` +
-            `after ${responseTime}ms. Bucket state: ${bucketStatus.tokens.toFixed(2)}/${bucketStatus.maxTokens} tokens, ` +
-            `Success rate: ${bucketStatus.successRate.toFixed(1)}%, ` +
-            `Recent requests: ${bucketStatus.recentRequests}, ` +
-            `Consecutive failures: ${bucketStatus.consecutiveRateLimits}`
+            `after ${responseTime}ms. Window state: ${windowStatus.requestsInCurrentWindow}/${windowStatus.maxRequestsPerWindow} requests, ` +
+            `Success rate: ${windowStatus.successRate.toFixed(1)}%, ` +
+            `Recent requests: ${windowStatus.recentRequests}, ` +
+            `Consecutive failures: ${windowStatus.consecutiveRateLimits}`
           );
           
           this.logger.warn(
@@ -1283,7 +1283,7 @@ private async makeRequest<T>(options: {
   
   // Skip redundant status updates if queue is getting large or rate limited
   if ((this.criticalQueue.length + this.highPriorityQueue.length > 5 || 
-       this.tokenBucketLimiter.getStatus().tokens < 1) && 
+       this.discreteWindowLimiter.getStatus().requestsInCurrentWindow >= this.discreteWindowLimiter.getStatus().maxRequestsPerWindow) && 
       options.operationType === 'getDeviceStatus' && 
       priority !== RequestPriority.CRITICAL && 
       priority !== RequestPriority.HIGH) {

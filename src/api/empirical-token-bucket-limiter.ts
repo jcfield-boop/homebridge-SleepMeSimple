@@ -1,20 +1,20 @@
 /**
- * Empirical Token Bucket Rate Limiter for SleepMe API
- * Based on comprehensive 30-minute testing revealing true API behavior:
- * - Burst capacity: 10 tokens
- * - Refill rate: ~1 token per 15 seconds (4 per minute)
- * - Continuous refill (not discrete windows)
- * - 5-second minimum recovery after rate limit
+ * Empirical Discrete Window Rate Limiter for SleepMe API
+ * Based on live testing revealing TRUE API behavior:
+ * - Burst capacity: 0-1 requests maximum
+ * - Window behavior: Discrete ~60s windows (NOT token bucket)
+ * - Recovery pattern: Success windows followed by rate limit periods
+ * - Critical finding: API does NOT use continuous token bucket
  */
 
 import { RequestPriority } from '../settings.js';
 
-export interface EmpiricalTokenBucketConfig {
-  // TRUE API PARAMETERS (from testing)
-  bucketCapacity: number;        // 10 tokens max burst
-  refillRatePerSecond: number;   // ~0.0667 tokens/second (1 per 15s)
-  minRecoveryTimeMs: number;     // 5000ms minimum recovery
-  safetyMargin: number;          // Apply safety margin to all parameters
+export interface EmpiricalDiscreteWindowConfig {
+  // TRUE API PARAMETERS (from live testing)
+  windowDurationMs: number;      // 60000ms discrete windows
+  requestsPerWindow: number;     // 1 request max per window
+  minWindowGapMs: number;        // 15000ms minimum gap between requests
+  safetyMargin: number;          // Apply safety margin to timing
   
   // PRIORITY HANDLING
   allowCriticalBypass: boolean;
@@ -25,9 +25,10 @@ export interface EmpiricalTokenBucketConfig {
   maxAdaptiveBackoffMs: number;       // Maximum adaptive backoff time
 }
 
-export interface TokenBucketState {
-  tokens: number;
-  lastRefillTime: number;
+export interface DiscreteWindowState {
+  currentWindowStart: number;
+  requestsInCurrentWindow: number;
+  lastRequestTime: number;
   consecutiveRateLimits: number;
   lastRateLimitTime: number;
   adaptiveBackoffUntil: number;
@@ -39,68 +40,68 @@ export interface RateLimitDecision {
   allowed: boolean;
   reason: string;
   waitTimeMs: number;
-  tokensRemaining: number;
-  nextTokenTime: number;
+  requestsRemaining: number;
+  nextWindowTime: number;
   recommendation: string;
 }
 
-export class EmpiricalTokenBucketLimiter {
-  private config: EmpiricalTokenBucketConfig;
-  private state: TokenBucketState;
+export class EmpiricalDiscreteWindowLimiter {
+  private config: EmpiricalDiscreteWindowConfig;
+  private state: DiscreteWindowState;
   private requestHistory: Array<{
     timestamp: number;
     priority: RequestPriority;
     allowed: boolean;
     rateLimited: boolean;
-    tokensAtRequest: number;
+    requestsInWindow: number;
   }> = [];
 
-  constructor(config: Partial<EmpiricalTokenBucketConfig> = {}) {
+  constructor(config: Partial<EmpiricalDiscreteWindowConfig> = {}) {
     this.config = {
-      // TRUE API PARAMETERS (from comprehensive testing)
-      bucketCapacity: 10,                    // Observed max burst
-      refillRatePerSecond: 1/15,            // 1 token per 15 seconds
-      minRecoveryTimeMs: 5000,              // 5 seconds minimum recovery
-      safetyMargin: 0.2,                    // 20% safety margin
+      // TRUE API PARAMETERS (from live testing)
+      windowDurationMs: 60000,              // 60 second discrete windows
+      requestsPerWindow: 1,                 // Only 1 request per window
+      minWindowGapMs: 15000,                // 15 second minimum gap
+      safetyMargin: 0.5,                    // 50% safety margin due to strict API
       
       // PRIORITY HANDLING
       allowCriticalBypass: true,
-      criticalBypassLimit: 3,               // Max 3 critical bypasses during rate limit
+      criticalBypassLimit: 1,               // Only 1 critical bypass per window
       
       // ADAPTIVE BEHAVIOR
-      adaptiveBackoffMultiplier: 1.5,       // 50% increase per consecutive failure
+      adaptiveBackoffMultiplier: 2.0,       // Double backoff per consecutive failure
       maxAdaptiveBackoffMs: 300000,         // 5 minutes max backoff
       
       ...config
     };
 
-    // Apply safety margin only to bucket capacity, not refill rate
-    // This provides safety without unnecessarily slowing recovery
-    const safetyFactor = 1 - this.config.safetyMargin;
-    this.config.bucketCapacity = Math.floor(this.config.bucketCapacity * safetyFactor);
-    // Keep refill rate at full speed for faster recovery
-    // this.config.refillRatePerSecond = this.config.refillRatePerSecond * safetyFactor;
+    // Apply safety margin to timing
+    const safetyFactor = 1 + this.config.safetyMargin;
+    this.config.windowDurationMs = Math.floor(this.config.windowDurationMs * safetyFactor);
+    this.config.minWindowGapMs = Math.floor(this.config.minWindowGapMs * safetyFactor);
 
-    // Initialize state with full bucket
+    // Initialize state
+    const now = Date.now();
     this.state = {
-      tokens: this.config.bucketCapacity,
-      lastRefillTime: Date.now(),
+      currentWindowStart: now,
+      requestsInCurrentWindow: 0,
+      lastRequestTime: 0,
       consecutiveRateLimits: 0,
       lastRateLimitTime: 0,
       adaptiveBackoffUntil: 0,
       criticalBypassesUsed: 0,
-      criticalBypassResetTime: Date.now()
+      criticalBypassResetTime: now
     };
   }
 
   /**
-   * Check if a request should be allowed and atomically reserve tokens
+   * Check if a request should be allowed based on discrete window limits
    */
   public shouldAllowRequest(priority: RequestPriority): RateLimitDecision {
     const now = Date.now();
     
-    // Always refill tokens first
-    this.refillTokens(now);
+    // Update current window
+    this.updateCurrentWindow(now);
     
     // Check for adaptive backoff
     if (this.state.adaptiveBackoffUntil > now) {
@@ -110,8 +111,8 @@ export class EmpiricalTokenBucketLimiter {
           allowed: true,
           reason: 'Critical bypass during adaptive backoff',
           waitTimeMs: 0,
-          tokensRemaining: this.state.tokens,
-          nextTokenTime: this.calculateNextTokenTime(),
+          requestsRemaining: this.config.requestsPerWindow - this.state.requestsInCurrentWindow,
+          nextWindowTime: this.calculateNextWindowTime(),
           recommendation: 'Critical request bypassed adaptive backoff'
         };
       }
@@ -120,49 +121,65 @@ export class EmpiricalTokenBucketLimiter {
         allowed: false,
         reason: 'Adaptive backoff active',
         waitTimeMs: this.state.adaptiveBackoffUntil - now,
-        tokensRemaining: this.state.tokens,
-        nextTokenTime: this.calculateNextTokenTime(),
+        requestsRemaining: this.config.requestsPerWindow - this.state.requestsInCurrentWindow,
+        nextWindowTime: this.calculateNextWindowTime(),
         recommendation: `Wait ${Math.ceil((this.state.adaptiveBackoffUntil - now) / 1000)}s for adaptive backoff to end`
       };
     }
 
-    // Check if we have tokens available and atomically reserve one
-    if (this.state.tokens >= 1) {
-      // Atomically consume the token here to prevent race conditions
-      this.state.tokens = Math.max(0, this.state.tokens - 1);
+    // Check minimum gap since last request
+    const timeSinceLastRequest = now - this.state.lastRequestTime;
+    if (this.state.lastRequestTime > 0 && timeSinceLastRequest < this.config.minWindowGapMs) {
+      const waitTime = this.config.minWindowGapMs - timeSinceLastRequest;
       return {
-        allowed: true,
-        reason: 'Token available',
-        waitTimeMs: 0,
-        tokensRemaining: this.state.tokens,
-        nextTokenTime: this.calculateNextTokenTime(),
-        recommendation: 'Request allowed - token reserved'
+        allowed: false,
+        reason: 'Minimum gap not met',
+        waitTimeMs: waitTime,
+        requestsRemaining: this.config.requestsPerWindow - this.state.requestsInCurrentWindow,
+        nextWindowTime: this.calculateNextWindowTime(),
+        recommendation: `Wait ${Math.ceil(waitTime / 1000)}s for minimum gap`
       };
     }
 
-    // No tokens available - check for critical bypass
+    // Check if we have requests available in current window
+    if (this.state.requestsInCurrentWindow < this.config.requestsPerWindow) {
+      // Reserve the request slot
+      this.state.requestsInCurrentWindow++;
+      this.state.lastRequestTime = now;
+      return {
+        allowed: true,
+        reason: 'Request slot available in current window',
+        waitTimeMs: 0,
+        requestsRemaining: this.config.requestsPerWindow - this.state.requestsInCurrentWindow,
+        nextWindowTime: this.calculateNextWindowTime(),
+        recommendation: 'Request allowed - slot reserved'
+      };
+    }
+
+    // No slots available - check for critical bypass
     if (priority === RequestPriority.CRITICAL && this.canUseCriticalBypass()) {
       this.state.criticalBypassesUsed++;
+      this.state.lastRequestTime = now;
       return {
         allowed: true,
-        reason: 'Critical bypass - no tokens',
+        reason: 'Critical bypass - window full',
         waitTimeMs: 0,
-        tokensRemaining: 0,
-        nextTokenTime: this.calculateNextTokenTime(),
-        recommendation: 'Critical request bypassed empty bucket'
+        requestsRemaining: 0,
+        nextWindowTime: this.calculateNextWindowTime(),
+        recommendation: 'Critical request bypassed full window'
       };
     }
 
-    // Calculate wait time for next token
-    const waitTimeMs = this.calculateWaitTimeForNextToken();
+    // Calculate wait time for next window
+    const waitTimeMs = this.calculateWaitTimeForNextWindow();
     
     return {
       allowed: false,
-      reason: 'No tokens available',
+      reason: 'Window request limit reached',
       waitTimeMs,
-      tokensRemaining: 0,
-      nextTokenTime: this.calculateNextTokenTime(),
-      recommendation: `Wait ${Math.ceil(waitTimeMs / 1000)}s for next token`
+      requestsRemaining: 0,
+      nextWindowTime: this.calculateNextWindowTime(),
+      recommendation: `Wait ${Math.ceil(waitTimeMs / 1000)}s for next window`
     };
   }
 
@@ -178,14 +195,14 @@ export class EmpiricalTokenBucketLimiter {
       priority,
       allowed,
       rateLimited,
-      tokensAtRequest: this.state.tokens
+      requestsInWindow: this.state.requestsInCurrentWindow
     });
 
     // Clean old history (keep last 10 minutes)
     this.requestHistory = this.requestHistory.filter(r => r.timestamp > now - 600000);
 
-    // Token consumption now happens in shouldAllowRequest() to prevent race conditions
-    // No need to consume tokens here since they were already reserved
+    // Request slots are already reserved in shouldAllowRequest()
+    // No need to modify counts here
 
     // Handle rate limiting
     if (rateLimited) {
@@ -203,11 +220,11 @@ export class EmpiricalTokenBucketLimiter {
     this.state.consecutiveRateLimits++;
     this.state.lastRateLimitTime = now;
     
-    // Empty the bucket immediately
-    this.state.tokens = 0;
+    // Mark current window as exhausted
+    this.state.requestsInCurrentWindow = this.config.requestsPerWindow;
     
     // Calculate adaptive backoff
-    const baseBackoff = this.config.minRecoveryTimeMs;
+    const baseBackoff = this.config.windowDurationMs;
     const adaptiveMultiplier = Math.pow(
       this.config.adaptiveBackoffMultiplier, 
       this.state.consecutiveRateLimits - 1
@@ -219,32 +236,24 @@ export class EmpiricalTokenBucketLimiter {
     
     this.state.adaptiveBackoffUntil = now + backoffTime;
     
-    // Don't reset refill time - tokens should continue refilling during backoff
-    // The adaptive backoff prevents requests, but tokens can still accumulate
+    // Force new window after rate limit
+    this.state.currentWindowStart = now + backoffTime;
   }
 
   /**
-   * Refill tokens based on elapsed time
+   * Update current window and reset counters if needed
    */
-  private refillTokens(now: number): void {
-    const timeSinceLastRefill = now - this.state.lastRefillTime;
+  private updateCurrentWindow(now: number): void {
+    const windowAge = now - this.state.currentWindowStart;
     
-    if (timeSinceLastRefill > 0) {
-      // Calculate tokens to add (continuous refill)
-      const tokensToAdd = (timeSinceLastRefill / 1000) * this.config.refillRatePerSecond;
-      
-      if (tokensToAdd > 0) {
-        this.state.tokens = Math.min(
-          this.config.bucketCapacity,
-          this.state.tokens + tokensToAdd
-        );
-        this.state.lastRefillTime = now;
-      }
+    // Check if we need to start a new window
+    if (windowAge >= this.config.windowDurationMs) {
+      this.state.currentWindowStart = now;
+      this.state.requestsInCurrentWindow = 0;
     }
     
-    // Reset critical bypass counter based on API rate limit window (approximately 30-40 seconds)
-    // This aligns better with empirical API behavior
-    if (now - this.state.criticalBypassResetTime > 35000) {
+    // Reset critical bypass counter per window
+    if (now - this.state.criticalBypassResetTime > this.config.windowDurationMs) {
       this.state.criticalBypassesUsed = 0;
       this.state.criticalBypassResetTime = now;
     }
@@ -259,31 +268,31 @@ export class EmpiricalTokenBucketLimiter {
   }
 
   /**
-   * Calculate wait time for next token
+   * Calculate wait time for next window
    */
-  private calculateWaitTimeForNextToken(): number {
-    const timeForOneToken = 1000 / this.config.refillRatePerSecond; // ms per token
-    const timeSinceLastRefill = Date.now() - this.state.lastRefillTime;
+  private calculateWaitTimeForNextWindow(): number {
+    const now = Date.now();
+    const windowAge = now - this.state.currentWindowStart;
+    const timeUntilNextWindow = this.config.windowDurationMs - windowAge;
     
-    return Math.max(0, timeForOneToken - timeSinceLastRefill);
+    return Math.max(0, timeUntilNextWindow);
   }
 
   /**
-   * Calculate when next token will be available
+   * Calculate when next window will start
    */
-  private calculateNextTokenTime(): number {
-    const timeForOneToken = 1000 / this.config.refillRatePerSecond;
-    return this.state.lastRefillTime + timeForOneToken;
+  private calculateNextWindowTime(): number {
+    return this.state.currentWindowStart + this.config.windowDurationMs;
   }
 
   /**
    * Get current status
    */
   public getStatus(): {
-    tokens: number;
-    maxTokens: number;
-    refillRate: number;
-    nextTokenTime: number;
+    requestsInCurrentWindow: number;
+    maxRequestsPerWindow: number;
+    windowDurationMs: number;
+    nextWindowTime: number;
     adaptiveBackoffActive: boolean;
     adaptiveBackoffUntil: number;
     consecutiveRateLimits: number;
@@ -294,7 +303,7 @@ export class EmpiricalTokenBucketLimiter {
     successRate: number;
   } {
     const now = Date.now();
-    this.refillTokens(now);
+    this.updateCurrentWindow(now);
     
     const recentRequests = this.requestHistory.filter(r => r.timestamp > now - 60000);
     const recentRateLimits = recentRequests.filter(r => r.rateLimited).length;
@@ -302,10 +311,10 @@ export class EmpiricalTokenBucketLimiter {
       recentRequests.filter(r => r.allowed && !r.rateLimited).length / recentRequests.length : 1;
 
     return {
-      tokens: this.state.tokens,
-      maxTokens: this.config.bucketCapacity,
-      refillRate: this.config.refillRatePerSecond,
-      nextTokenTime: this.calculateNextTokenTime(),
+      requestsInCurrentWindow: this.state.requestsInCurrentWindow,
+      maxRequestsPerWindow: this.config.requestsPerWindow,
+      windowDurationMs: this.config.windowDurationMs,
+      nextWindowTime: this.calculateNextWindowTime(),
       adaptiveBackoffActive: this.state.adaptiveBackoffUntil > now,
       adaptiveBackoffUntil: this.state.adaptiveBackoffUntil,
       consecutiveRateLimits: this.state.consecutiveRateLimits,
@@ -324,12 +333,10 @@ export class EmpiricalTokenBucketLimiter {
     const status = this.getStatus();
     const recommendations: string[] = [];
 
-    // Token availability
-    if (status.tokens === 0) {
-      const waitTime = Math.max(0, status.nextTokenTime - Date.now());
-      recommendations.push(`No tokens available - wait ${Math.ceil(waitTime / 1000)}s for next token`);
-    } else if (status.tokens < status.maxTokens * 0.3) {
-      recommendations.push('Token bucket low - space out requests');
+    // Window availability
+    if (status.requestsInCurrentWindow >= status.maxRequestsPerWindow) {
+      const waitTime = Math.max(0, status.nextWindowTime - Date.now());
+      recommendations.push(`Window exhausted - wait ${Math.ceil(waitTime / 1000)}s for next window`);
     }
 
     // Adaptive backoff
@@ -345,7 +352,7 @@ export class EmpiricalTokenBucketLimiter {
 
     // Critical bypasses
     if (status.criticalBypassesUsed > 0) {
-      recommendations.push(`${status.criticalBypassesUsed}/${this.config.criticalBypassLimit} critical bypasses used this minute`);
+      recommendations.push(`${status.criticalBypassesUsed}/${this.config.criticalBypassLimit} critical bypasses used this window`);
     }
 
     // Success rate
@@ -354,8 +361,8 @@ export class EmpiricalTokenBucketLimiter {
     }
 
     // Optimal timing
-    const optimalInterval = Math.ceil(1000 / this.config.refillRatePerSecond);
-    recommendations.push(`Optimal request interval: ${optimalInterval}s (${this.config.refillRatePerSecond.toFixed(4)} tokens/s)`);
+    const windowIntervalS = Math.ceil(this.config.windowDurationMs / 1000);
+    recommendations.push(`Optimal request interval: ${windowIntervalS}s windows with ${this.config.requestsPerWindow} request each`);
 
     return recommendations;
   }
@@ -365,12 +372,12 @@ export class EmpiricalTokenBucketLimiter {
    */
   public getDetailedStats(): {
     empiricalParameters: {
-      bucketCapacity: number;
-      refillRatePerSecond: number;
-      minRecoveryTimeMs: number;
+      windowDurationMs: number;
+      requestsPerWindow: number;
+      minWindowGapMs: number;
       safetyMargin: number;
     };
-    currentState: TokenBucketState;
+    currentState: DiscreteWindowState;
     performance: {
       totalRequests: number;
       successfulRequests: number;
@@ -385,9 +392,9 @@ export class EmpiricalTokenBucketLimiter {
 
     return {
       empiricalParameters: {
-        bucketCapacity: this.config.bucketCapacity,
-        refillRatePerSecond: this.config.refillRatePerSecond,
-        minRecoveryTimeMs: this.config.minRecoveryTimeMs,
+        windowDurationMs: this.config.windowDurationMs,
+        requestsPerWindow: this.config.requestsPerWindow,
+        minWindowGapMs: this.config.minWindowGapMs,
         safetyMargin: this.config.safetyMargin
       },
       currentState: { ...this.state },

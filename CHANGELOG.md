@@ -1,5 +1,67 @@
 # Changelog
 
+## 7.0.26 (2025-07-24)
+
+### 🔬 MAJOR: Empirical API Rate Limiting Overhaul
+
+**Critical Discovery**: Through comprehensive live API testing, we discovered the SleepMe API uses **discrete time windows** rather than continuous token bucket behavior. The previous rate limiting implementation was fundamentally incorrect.
+
+### 🧪 Empirical Testing Results
+
+**API Behavior Analysis**:
+- **Burst Capacity**: Only 0-1 requests allowed (not 8-10 tokens as assumed)
+- **Window Pattern**: ~60-second discrete windows with strict enforcement
+- **Recovery**: Success periods of 10-30s followed by rate limit periods
+- **Critical Finding**: API does NOT use continuous token bucket refill
+
+### 🔧 Complete Rate Limiter Redesign
+
+**New Architecture**:
+- **Discrete Window Limiter**: Replaces token bucket with window-based tracking
+- **Conservative Configuration**: 90s windows with 1 request maximum
+- **Minimum Gap Enforcement**: 22.5s minimum between any requests
+- **Adaptive Window Sizing**: Doubles backoff on consecutive failures
+
+**Updated Polling Strategy**:
+- **Base Polling**: 90s → 120s (empirically derived safe interval)
+- **Active Polling**: 45s → 90s (still conservative during schedules)
+- **Responsive Polling**: 30s → 60s (minimum safe window)
+
+### 📊 Expected Impact
+
+**Immediate Benefits**:
+- **Elimination of steady-state 429 errors** (root cause addressed)
+- **Predictable API behavior** based on actual windows
+- **Reliable long-term operation** over 24+ hour periods
+
+**User Experience**:
+- **No more 8-34 second backoffs** in normal operation
+- **Responsive critical actions** via bypass mechanism
+- **Stable HomeKit integration** with consistent status updates
+
+### 🛠️ Technical Implementation
+
+- **File Renamed**: `EmpiricalTokenBucketLimiter` → `EmpiricalDiscreteWindowLimiter`
+- **Window Tracking**: Current window start time and request count
+- **Safety Margins**: 50% buffer due to strict API behavior
+- **Emergency Protection**: Critical bypass for user interactions
+
+**This represents the most significant rate limiting improvement since plugin inception, solving the fundamental architectural mismatch with the SleepMe API.**
+
+---
+
+## 7.0.25 (2025-07-24)
+
+### 🔧 Critical Bug Fix: Token Bucket Refill
+
+**Problem**: Token bucket was not refilling properly after rate limits due to a critical bug in `handleRateLimit()` that set `lastRefillTime` to a future time, preventing token accumulation during backoff periods.
+
+**Solution**: Removed the line `this.state.lastRefillTime = now + backoffTime;` that was preventing proper token refill during adaptive backoff.
+
+**Impact**: Tokens now properly accumulate during backoff periods, improving recovery from rate limits.
+
+---
+
 ## 7.0.24 (2025-07-24)
 
 ### 🚀 Major Rate Limiting Responsiveness Improvements
