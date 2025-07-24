@@ -1,6 +1,6 @@
 # Changelog
 
-## 7.0.24 (TBD)
+## 7.0.24 (2025-07-24)
 
 ### 🚀 Major Rate Limiting Responsiveness Improvements
 
