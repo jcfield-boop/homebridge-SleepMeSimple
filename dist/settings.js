@@ -15,10 +15,10 @@ export const PLUGIN_NAME = 'homebridge-sleepme-simple';
 export const API_BASE_URL = 'https://api.developer.sleep.me/v1';
 /**
  * Default polling interval in seconds
- * Base rate: 90s for sustained operations (more conservative)
- * Adaptive acceleration during active periods
+ * Based on empirical API testing: 1 request per 60s window maximum
+ * Conservative 120s for sustained operations
  */
-export const DEFAULT_POLLING_INTERVAL = 90;
+export const DEFAULT_POLLING_INTERVAL = 120;
 /**
  * Minimum allowed temperature in Celsius
  */
@@ -119,9 +119,9 @@ export const DEFAULT_ENABLE_WARM_HUG = true;
  * Polling intervals for different contexts (in seconds)
  */
 export const POLLING_INTERVALS = {
-    BASE: 90,
-    ACTIVE: 45,
-    RESPONSIVE: 30 // After user commands (brief period)
+    BASE: 120,
+    ACTIVE: 90,
+    RESPONSIVE: 60 // After user commands (minimum safe interval)
 };
 /**
  * Context periods for adaptive polling (in milliseconds)

@@ -1,25 +1,26 @@
 /**
- * Empirical Token Bucket Rate Limiter for SleepMe API
- * Based on comprehensive 30-minute testing revealing true API behavior:
- * - Burst capacity: 10 tokens
- * - Refill rate: ~1 token per 15 seconds (4 per minute)
- * - Continuous refill (not discrete windows)
- * - 5-second minimum recovery after rate limit
+ * Empirical Discrete Window Rate Limiter for SleepMe API
+ * Based on live testing revealing TRUE API behavior:
+ * - Burst capacity: 0-1 requests maximum
+ * - Window behavior: Discrete ~60s windows (NOT token bucket)
+ * - Recovery pattern: Success windows followed by rate limit periods
+ * - Critical finding: API does NOT use continuous token bucket
  */
 import { RequestPriority } from '../settings.js';
-export interface EmpiricalTokenBucketConfig {
-    bucketCapacity: number;
-    refillRatePerSecond: number;
-    minRecoveryTimeMs: number;
+export interface EmpiricalDiscreteWindowConfig {
+    windowDurationMs: number;
+    requestsPerWindow: number;
+    minWindowGapMs: number;
     safetyMargin: number;
     allowCriticalBypass: boolean;
     criticalBypassLimit: number;
     adaptiveBackoffMultiplier: number;
     maxAdaptiveBackoffMs: number;
 }
-export interface TokenBucketState {
-    tokens: number;
-    lastRefillTime: number;
+export interface DiscreteWindowState {
+    currentWindowStart: number;
+    requestsInCurrentWindow: number;
+    lastRequestTime: number;
     consecutiveRateLimits: number;
     lastRateLimitTime: number;
     adaptiveBackoffUntil: number;
@@ -30,17 +31,17 @@ export interface RateLimitDecision {
     allowed: boolean;
     reason: string;
     waitTimeMs: number;
-    tokensRemaining: number;
-    nextTokenTime: number;
+    requestsRemaining: number;
+    nextWindowTime: number;
     recommendation: string;
 }
-export declare class EmpiricalTokenBucketLimiter {
+export declare class EmpiricalDiscreteWindowLimiter {
     private config;
     private state;
     private requestHistory;
-    constructor(config?: Partial<EmpiricalTokenBucketConfig>);
+    constructor(config?: Partial<EmpiricalDiscreteWindowConfig>);
     /**
-     * Check if a request should be allowed and atomically reserve tokens
+     * Check if a request should be allowed based on discrete window limits
      */
     shouldAllowRequest(priority: RequestPriority): RateLimitDecision;
     /**
@@ -52,29 +53,29 @@ export declare class EmpiricalTokenBucketLimiter {
      */
     private handleRateLimit;
     /**
-     * Refill tokens based on elapsed time
+     * Update current window and reset counters if needed
      */
-    private refillTokens;
+    private updateCurrentWindow;
     /**
      * Check if critical bypass can be used
      */
     private canUseCriticalBypass;
     /**
-     * Calculate wait time for next token
+     * Calculate wait time for next window
      */
-    private calculateWaitTimeForNextToken;
+    private calculateWaitTimeForNextWindow;
     /**
-     * Calculate when next token will be available
+     * Calculate when next window will start
      */
-    private calculateNextTokenTime;
+    private calculateNextWindowTime;
     /**
      * Get current status
      */
     getStatus(): {
-        tokens: number;
-        maxTokens: number;
-        refillRate: number;
-        nextTokenTime: number;
+        requestsInCurrentWindow: number;
+        maxRequestsPerWindow: number;
+        windowDurationMs: number;
+        nextWindowTime: number;
         adaptiveBackoffActive: boolean;
         adaptiveBackoffUntil: number;
         consecutiveRateLimits: number;
@@ -93,12 +94,12 @@ export declare class EmpiricalTokenBucketLimiter {
      */
     getDetailedStats(): {
         empiricalParameters: {
-            bucketCapacity: number;
-            refillRatePerSecond: number;
-            minRecoveryTimeMs: number;
+            windowDurationMs: number;
+            requestsPerWindow: number;
+            minWindowGapMs: number;
             safetyMargin: number;
         };
-        currentState: TokenBucketState;
+        currentState: DiscreteWindowState;
         performance: {
             totalRequests: number;
             successfulRequests: number;

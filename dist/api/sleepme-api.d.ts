@@ -1,7 +1,7 @@
 import { Device, DeviceStatus, ApiStats, Logger } from './types.js';
 import { EmpiricalRateLimiter } from './empirical-rate-limiter.js';
 import { UltraConservativeRateLimiter } from './ultra-conservative-rate-limiter.js';
-import { EmpiricalTokenBucketLimiter } from './empirical-token-bucket-limiter.js';
+import { EmpiricalDiscreteWindowLimiter } from './empirical-token-bucket-limiter.js';
 /**
  * SleepMe API Client
  * Handles API communication with rate limiting and robust error handling
@@ -18,7 +18,7 @@ export declare class SleepMeApi {
     private rateExceededLogged;
     private empiricalRateLimiter;
     private ultraConservativeRateLimiter;
-    private tokenBucketLimiter;
+    private discreteWindowLimiter;
     private requestIdCounter;
     private deviceStatusCache;
     private stats;
@@ -54,12 +54,12 @@ export declare class SleepMeApi {
         recommendations: string[];
     };
     /**
-     * Get primary token bucket rate limiter statistics and recommendations
+     * Get primary discrete window rate limiter statistics and recommendations
      * @returns Current rate limiter status and detailed statistics
      */
-    getTokenBucketStats(): {
-        status: ReturnType<EmpiricalTokenBucketLimiter['getStatus']>;
-        detailedStats: ReturnType<EmpiricalTokenBucketLimiter['getDetailedStats']>;
+    getDiscreteWindowStats(): {
+        status: ReturnType<EmpiricalDiscreteWindowLimiter['getStatus']>;
+        detailedStats: ReturnType<EmpiricalDiscreteWindowLimiter['getDetailedStats']>;
         recommendations: string[];
     };
     /**
