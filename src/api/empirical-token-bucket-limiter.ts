@@ -219,8 +219,8 @@ export class EmpiricalTokenBucketLimiter {
     
     this.state.adaptiveBackoffUntil = now + backoffTime;
     
-    // Reset refill time to account for backoff
-    this.state.lastRefillTime = now + backoffTime;
+    // Don't reset refill time - tokens should continue refilling during backoff
+    // The adaptive backoff prevents requests, but tokens can still accumulate
   }
 
   /**
