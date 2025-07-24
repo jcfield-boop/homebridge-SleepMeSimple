@@ -93,15 +93,16 @@ export class SleepMeApi {
             startupGracePeriodMs: 180000 // 3 minutes
         });
         // Initialize PRIMARY rate limiter - empirical token bucket (based on comprehensive testing)
+        // Configuration matches actual API behavior: 10 token burst, ~1 token per 15 seconds
         this.tokenBucketLimiter = new EmpiricalTokenBucketLimiter({
-            bucketCapacity: 8,
-            refillRatePerSecond: 1 / 20,
-            minRecoveryTimeMs: 10000,
-            safetyMargin: 0.2,
+            bucketCapacity: 10,
+            refillRatePerSecond: 1 / 15,
+            minRecoveryTimeMs: 8000,
+            safetyMargin: 0.1,
             allowCriticalBypass: true,
             criticalBypassLimit: 3,
-            adaptiveBackoffMultiplier: 1.5,
-            maxAdaptiveBackoffMs: 300000 // 5 minutes max backoff
+            adaptiveBackoffMultiplier: 1.2,
+            maxAdaptiveBackoffMs: 120000 // Reduced from 5 minutes to 2 minutes
         });
         this.logger.info('SleepMe API client initialized with empirical token bucket rate limiting');
     }
@@ -288,12 +289,10 @@ export class SleepMeApi {
             // At this point, we need fresh data
             this.logger.debug(`Fetching status for device ${deviceId}...`);
             // MORE CONSERVATIVE APPROACH:
-            // Only use HIGH priority when explicitly requested by user actions
-            // For system-initiated refreshes (including initial polls), use NORMAL or LOW
-            const isSystemInitiated = !forceFresh || (this.startupFinished === false);
-            const priority = isSystemInitiated ?
-                RequestPriority.NORMAL :
-                RequestPriority.HIGH;
+            // Use smarter priority assignment based on actual need
+            // HIGH priority for forced fresh requests (user-initiated)
+            // NORMAL priority for regular status updates with intelligent rate limiting
+            const priority = forceFresh ? RequestPriority.HIGH : RequestPriority.NORMAL;
             this.logger.verbose(`Using ${priority} priority for device status request (forceFresh: ${forceFresh})`);
             const response = await this.makeRequest({
                 method: 'GET',
@@ -735,6 +734,14 @@ export class SleepMeApi {
                 }
                 // Use empirical token bucket rate limiter (primary) to check if request should be allowed
                 const rateLimitCheck = this.tokenBucketLimiter.shouldAllowRequest(request.priority);
+                // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
+                const bucketStatus = this.tokenBucketLimiter.getStatus();
+                if (bucketStatus.consecutiveRateLimits > 2 && !rateLimitCheck.allowed) {
+                    const emergencyWaitMs = Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000);
+                    this.logger.warn(`Emergency rate limit protection: extending wait to ${Math.ceil(emergencyWaitMs / 1000)}s`);
+                    await new Promise(resolve => setTimeout(resolve, emergencyWaitMs));
+                    continue;
+                }
                 if (!rateLimitCheck.allowed) {
                     // Enhanced logging for rate limiting behavior
                     if (!this.rateExceededLogged) {
@@ -1028,12 +1035,13 @@ export class SleepMeApi {
     async makeRequest(options) {
         // Set default priority
         const priority = options.priority || RequestPriority.NORMAL;
-        // Skip redundant status updates if queue is getting large
-        if (this.criticalQueue.length + this.highPriorityQueue.length > 3 &&
+        // Skip redundant status updates if queue is getting large or rate limited
+        if ((this.criticalQueue.length + this.highPriorityQueue.length > 5 ||
+            this.tokenBucketLimiter.getStatus().tokens < 1) &&
             options.operationType === 'getDeviceStatus' &&
             priority !== RequestPriority.CRITICAL &&
             priority !== RequestPriority.HIGH) {
-            this.logger.debug(`Skipping non-critical status update due to queue backlog`);
+            this.logger.debug(`Skipping non-critical status update due to queue backlog or low tokens`);
             return Promise.resolve(null);
         }
         // Log request at different levels based on operation type to reduce noise

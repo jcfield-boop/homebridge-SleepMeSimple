@@ -15,10 +15,10 @@ export declare const PLUGIN_NAME = "homebridge-sleepme-simple";
 export declare const API_BASE_URL = "https://api.developer.sleep.me/v1";
 /**
  * Default polling interval in seconds
- * Base rate: 60s (1 request/minute) for sustained operations
+ * Base rate: 90s for sustained operations (more conservative)
  * Adaptive acceleration during active periods
  */
-export declare const DEFAULT_POLLING_INTERVAL = 60;
+export declare const DEFAULT_POLLING_INTERVAL = 90;
 /**
  * Minimum allowed temperature in Celsius
  */

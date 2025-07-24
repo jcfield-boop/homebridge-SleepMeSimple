@@ -1,5 +1,49 @@
 # Changelog
 
+## 7.0.24 (TBD)
+
+### 🚀 Major Rate Limiting Responsiveness Improvements
+
+**Problem Solved**: Excessive 429 rate limit errors causing poor user experience with long backoff periods (8-34 seconds) and unresponsive HomeKit controls.
+
+### 🎯 Configuration Optimizations
+
+**Token Bucket Improvements**:
+- **Increased Capacity**: 6 → 9 effective tokens (50% improvement)
+- **Faster Refill**: 20s → 15s per token (25% faster recovery)
+- **Reduced Safety Margin**: 20% → 10% for better responsiveness
+- **Less Aggressive Backoff**: 1.5x → 1.2x multiplier for failures
+- **Shorter Max Backoff**: 5min → 2min maximum wait time
+
+**Polling Strategy Updates**:
+- **Base Polling**: 60s → 90s (more conservative)
+- **Active Polling**: 30s → 45s during schedules
+- **Responsive Polling**: 20s → 30s after user actions
+- **Reduced API pressure** during normal operations
+
+### ⚡ Enhanced Queue Management
+
+**Smart Request Filtering**:
+- Better queue backlog detection with token awareness
+- Skip redundant status updates when rate limited
+- Smarter priority assignment for status requests
+- Emergency protection for consecutive rate limits
+
+**Improved Recovery**:
+- Automatic wait time extension when >2 consecutive failures
+- Better coordination between request queues and rate limiter
+- Enhanced fallback logic for rate limit scenarios
+
+### 📊 Expected Results
+
+- **50% more burst capacity** (6 → 9 tokens available)
+- **25% faster recovery** from rate limits (15s vs 20s per token)
+- **Reduced 429 errors** during normal operations
+- **Better user experience** with more responsive HomeKit controls
+- **Shorter adaptive backoff periods** (2min max vs 5min)
+
+---
+
 ## 7.0.23 (2025-07-21)
 
 ### 🔧 Rate Limiting Reliability Improvements - Eliminates Steady-State 429 Errors
