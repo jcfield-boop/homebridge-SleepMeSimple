@@ -160,12 +160,12 @@ export class SleepMeApi {
     });
     
     // Initialize PRIMARY rate limiter - empirical discrete window (based on live testing)
-    // Configuration matches actual API behavior: 1 request per 60s window
+    // Configuration optimized based on empirical 10-15s success windows
     this.discreteWindowLimiter = new EmpiricalDiscreteWindowLimiter({
-      windowDurationMs: 90000,        // 90s windows with safety margin
+      windowDurationMs: 75000,        // 75s windows (reduced from 90s for better responsiveness)
       requestsPerWindow: 1,           // Only 1 request per window
-      minWindowGapMs: 22500,          // 22.5s minimum between requests
-      safetyMargin: 0.1,              // Reduced to 10% for better responsiveness
+      minWindowGapMs: 15000,          // 15s minimum between requests (reduced from 22.5s)
+      safetyMargin: 0.25,             // 25% safety margin balances caution with responsiveness
       allowCriticalBypass: true,
       criticalBypassLimit: 3,         // Max 3 critical bypasses per minute
       adaptiveBackoffMultiplier: 1.2, // Reduced from 1.5 to 1.2 for less aggressive backoff
@@ -916,26 +916,59 @@ private async processQueue(): Promise<void> {
       }
       
       if (!rateLimitCheck.allowed) {
-        // Enhanced logging for rate limiting behavior
+        // For status requests, try to use cached data before waiting
+        if (request.config.method === 'GET' && 
+            request.config.url?.includes('/devices/') && 
+            request.priority !== RequestPriority.CRITICAL) {
+          
+          const deviceId = request.config.url.split('/devices/')[1];
+          if (deviceId && this.deviceStatusCache.has(deviceId)) {
+            const cached = this.deviceStatusCache.get(deviceId)!;
+            const age = Date.now() - cached.timestamp;
+            
+            // Use cache if less than 2 minutes old for non-critical requests
+            if (age < 120000) {
+              this.logger.debug(
+                `Using cached data for rate-limited request to device ${deviceId} (age: ${Math.round(age/1000)}s)`
+              );
+              
+              // Remove request from queue and resolve with cached data
+              const queueIndex = this.findRequestInQueues(request.id);
+              if (queueIndex) {
+                this.removeRequestFromQueue(queueIndex.queue, queueIndex.index);
+              }
+              
+              request.resolve(cached.status);
+              continue;
+            }
+          }
+        }
+        
+        // Contextual logging for rate limiting behavior
         if (!this.rateExceededLogged) {
           const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
           const windowStatus = this.discreteWindowLimiter.getStatus();
           
-          this.logger.info(
-            `Discrete window rate limiter: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s (${rateLimitCheck.requestsRemaining} requests remaining)`
-          );
+          // Log at debug level for expected rate limiting, info for longer waits
+          const logLevel = waitTimeSeconds <= 20 ? 'debug' : 'info';
+          const contextMessage = rateLimitCheck.reason === 'Minimum gap not met' 
+            ? `Rate limited: waiting ${waitTimeSeconds}s between requests (API enforces discrete windows)`
+            : `Rate limited: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`;
+            
+          this.logger[logLevel](contextMessage);
           
-          // Enhanced debug logging for troubleshooting
-          this.logger.debug(
-            `Rate limit details: Priority=${request.priority}, ` +
-            `WindowRequests=${windowStatus.requestsInCurrentWindow}/${windowStatus.maxRequestsPerWindow}, ` +
-            `WindowDuration=${windowStatus.windowDurationMs}ms, ` +
-            `AdaptiveBackoff=${windowStatus.adaptiveBackoffActive}, ` +
-            `ConsecutiveFailures=${windowStatus.consecutiveRateLimits}, ` +
-            `CriticalBypasses=${windowStatus.criticalBypassesUsed}/${windowStatus.criticalBypassesRemaining + windowStatus.criticalBypassesUsed}`
-          );
+          // Verbose debug logging only when needed for troubleshooting
+          if (windowStatus.consecutiveRateLimits > 1) {
+            this.logger.debug(
+              `Rate limit details: Priority=${request.priority}, ` +
+              `WindowRequests=${windowStatus.requestsInCurrentWindow}/${windowStatus.maxRequestsPerWindow}, ` +
+              `WindowDuration=${windowStatus.windowDurationMs}ms, ` +
+              `AdaptiveBackoff=${windowStatus.adaptiveBackoffActive}, ` +
+              `ConsecutiveFailures=${windowStatus.consecutiveRateLimits}, ` +
+              `CriticalBypasses=${windowStatus.criticalBypassesUsed}/${windowStatus.criticalBypassesRemaining + windowStatus.criticalBypassesUsed}`
+            );
+          }
           
-          this.logger.debug(`Rate limiter recommendation: ${rateLimitCheck.recommendation}`);
           this.rateExceededLogged = true;
         }
         
@@ -1281,14 +1314,26 @@ private async makeRequest<T>(options: {
   // Set default priority
   const priority = options.priority || RequestPriority.NORMAL;
   
-  // Skip redundant status updates if queue is getting large or rate limited
-  if ((this.criticalQueue.length + this.highPriorityQueue.length > 5 || 
-       this.discreteWindowLimiter.getStatus().requestsInCurrentWindow >= this.discreteWindowLimiter.getStatus().maxRequestsPerWindow) && 
+  // Skip redundant status updates only if queue is getting large (not due to rate limiting)
+  // Rate limiting should be handled by the rate limiter itself, not by skipping requests
+  if (this.criticalQueue.length + this.highPriorityQueue.length > 8 && 
       options.operationType === 'getDeviceStatus' && 
       priority !== RequestPriority.CRITICAL && 
       priority !== RequestPriority.HIGH) {
-    this.logger.debug(`Skipping non-critical status update due to queue backlog or low tokens`);
-    return Promise.resolve(null as unknown as T);
+    this.logger.debug(`Skipping non-critical status update due to large queue backlog (${this.criticalQueue.length + this.highPriorityQueue.length} items)`);
+    
+    // Try to return cached data instead of null to prevent downstream errors
+    if (options.deviceId && this.deviceStatusCache.has(options.deviceId)) {
+      const cached = this.deviceStatusCache.get(options.deviceId)!;
+      const age = Date.now() - cached.timestamp;
+      if (age < 300000) { // Use cache if less than 5 minutes old
+        this.logger.debug(`Returning cached data for device ${options.deviceId} (age: ${Math.round(age/1000)}s)`);
+        return Promise.resolve(cached.status as T);
+      }
+    }
+    
+    // If no valid cache, still proceed with request but log the situation
+    this.logger.debug(`No valid cache available, proceeding with rate-limited request`);
   }
   
   // Log request at different levels based on operation type to reduce noise
@@ -1514,6 +1559,50 @@ private extractPowerState(data: Record<string, unknown>): PowerState {
   }
   
   return PowerState.UNKNOWN;
+}
+
+/**
+ * Find a request in all queues by ID
+ * @param requestId The request ID to find
+ * @returns Queue and index information if found
+ */
+private findRequestInQueues(requestId: string): { queue: QueuedRequest[], index: number } | null {
+  // Check critical queue
+  let index = this.criticalQueue.findIndex((r: QueuedRequest) => r.id === requestId);
+  if (index !== -1) {
+    return { queue: this.criticalQueue, index };
+  }
+  
+  // Check high priority queue
+  index = this.highPriorityQueue.findIndex((r: QueuedRequest) => r.id === requestId);
+  if (index !== -1) {
+    return { queue: this.highPriorityQueue, index };
+  }
+  
+  // Check normal priority queue
+  index = this.normalPriorityQueue.findIndex((r: QueuedRequest) => r.id === requestId);
+  if (index !== -1) {
+    return { queue: this.normalPriorityQueue, index };
+  }
+  
+  // Check low priority queue  
+  index = this.lowPriorityQueue.findIndex((r: QueuedRequest) => r.id === requestId);
+  if (index !== -1) {
+    return { queue: this.lowPriorityQueue, index };
+  }
+  
+  return null;
+}
+
+/**
+ * Remove a request from a specific queue
+ * @param queue The queue to remove from
+ * @param index The index to remove
+ */
+private removeRequestFromQueue(queue: QueuedRequest[], index: number): void {
+  if (index >= 0 && index < queue.length) {
+    queue.splice(index, 1);
+  }
 }
 
 /**

@@ -1,5 +1,63 @@
 # Changelog
 
+## 7.0.27 (2025-07-24)
+
+### 🔧 Critical Fixes: Discrete Window Rate Limiter Issues
+
+**Problem Solved**: The v7.0.26 discrete window rate limiter was causing "empty response" errors, excessive request skipping, and overly conservative 22+ second waits that made the system appear broken to users.
+
+### 🚀 Request Handling Improvements
+
+**Fixed Request Skipping Logic**:
+- **Eliminated null responses** that were causing "empty response for device" errors
+- **Removed rate limiting from queue filtering** - let the rate limiter handle timing
+- **Added intelligent cache fallback** when requests would be skipped
+- **Increased queue threshold** from 5 to 8 items before skipping non-critical requests
+
+**Intelligent Cache Strategy**:
+- **Use cached data instead of waiting** when rate-limited (if cache <2min old)
+- **Graceful degradation** - system uses available data rather than failing
+- **Transparent operation** - logs cache usage for visibility
+
+### ⚡ Performance Optimizations
+
+**Faster Rate Limiting** (based on empirical 10-15s success windows):
+- **Minimum gap reduced**: 22.5s → 15s (33% faster recovery)
+- **Window duration reduced**: 90s → 75s (17% faster windows)
+- **Balanced safety margin**: 10% → 25% (better reliability without excessive delays)
+
+### 📊 User Experience Improvements
+
+**Better Logging**:
+- **Contextual messages** - explains API discrete window behavior
+- **Appropriate log levels** - debug for expected waits, info for longer delays
+- **Reduced noise** - verbose details only when troubleshooting needed
+
+**Error Elimination**:
+- No more "Skipping non-critical status update due to queue backlog or low tokens"
+- No more "Empty response for device" → "Status refresh error" cascades
+- No more 22+ second waits appearing as system failures
+
+### 🎯 Expected Results
+
+**Before v7.0.27**:
+```
+[SleepMe Simple] Skipping non-critical status update due to queue backlog or low tokens
+[SleepMe Simple] Empty response for device zx-cr48hfkn6kic7143dtkg  
+[SleepMe Simple] Status refresh error: Error: Failed to get status
+[SleepMe Simple] Discrete window rate limiter: Minimum gap not met, waiting 22s
+```
+
+**After v7.0.27**:
+```
+[SleepMe Simple] Using cached data for rate-limited request (age: 45s)
+[SleepMe Simple] Rate limited: waiting 15s between requests (API enforces discrete windows)
+```
+
+**This update fixes the usability issues with the discrete window rate limiter while maintaining its empirical benefits for preventing 429 errors.**
+
+---
+
 ## 7.0.26 (2025-07-24)
 
 ### 🔬 MAJOR: Empirical API Rate Limiting Overhaul
