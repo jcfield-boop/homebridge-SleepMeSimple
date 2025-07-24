@@ -241,6 +241,18 @@ export declare class SleepMeApi {
      */
     private extractPowerState;
     /**
+     * Find a request in all queues by ID
+     * @param requestId The request ID to find
+     * @returns Queue and index information if found
+     */
+    private findRequestInQueues;
+    /**
+     * Remove a request from a specific queue
+     * @param queue The queue to remove from
+     * @param index The index to remove
+     */
+    private removeRequestFromQueue;
+    /**
      * Convert Celsius to Fahrenheit
      * @param celsius Temperature in Celsius
      * @returns Temperature in Fahrenheit
