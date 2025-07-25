@@ -22,7 +22,6 @@
   "files": [
     "dist",
     "config.schema.json",
-    "homebridge-ui",
     "license.md",
     "CHANGELOG.md",
     "README.MD"
