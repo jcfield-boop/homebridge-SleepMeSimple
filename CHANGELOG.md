@@ -1,6 +1,6 @@
 # Changelog
 
-## 7.0.29-beta.1 (2025-07-25)
+## 7.0.29 (2025-07-25)
 
 ### 🔧 Temperature Characteristic & Code Quality Fixes
 
@@ -11,14 +11,20 @@
 - **Enhanced validation**: Improved `validateTemperature()` function to handle zero/invalid values with safer fallbacks
 - **Characteristic protection**: Added validation before all HomeKit characteristic updates to prevent invalid values
 
+**Fixed Config UI Visibility**: Resolved issue where plugin configuration was not visible in Homebridge UI.
+- **Root cause**: Package was including duplicate homebridge-ui files (both source and built versions)
+- **Solution**: Removed duplicate `homebridge-ui` entry from package.json files array
+- **Result**: Package size reduced from 171.7 kB to 147.3 kB, cleaner file structure
+
 **Code Quality Improvements**:
 - **Lint warnings reduced**: From 69 to 60 warnings by cleaning up unused parameters and variables
 - **Better TypeScript**: Replaced `any` types with `unknown` where appropriate
 - **Cleaner interfaces**: Added underscore prefixes to intentionally unused parameters
 - **Removed unused imports**: Cleaned up unnecessary imports in platform.ts and api files
 
-**Expected Results**:
+**Results**:
 - ✅ No more HomeKit temperature characteristic warnings in logs
+- ✅ Config UI visible and functional in Homebridge UI
 - ✅ Cleaner TypeScript code with better type safety
 - ✅ Improved development experience with fewer lint warnings
 
