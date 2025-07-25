@@ -1,5 +1,87 @@
 # Changelog
 
+## 7.1.7 (2025-07-25)
+
+### 🔧 Temporary Fix: Disable Custom UI to Restore Config Access
+
+**Disabled Custom UI**: Temporarily set `customUi: false` to restore standard config.json visibility in Homebridge UI.
+
+**Root Cause**: The custom UI server was not loading properly (inheritance issues with @homebridge/plugin-ui-utils), preventing both custom UI and standard config access.
+
+**Fix Applied**:
+- Set `"customUi": false` in config.schema.json
+- Maintains all plugin functionality while restoring configuration access
+- Standard Homebridge config form now works normally
+
+**Result**: Raw config.json should now be visible and editable in Homebridge UI plugin settings.
+
+**Next Steps**: Will debug and re-enable custom UI in future version with proper module compatibility.
+
+---
+
+## 7.1.6 (2025-07-25)
+
+### 🔧 Custom UI Server Inheritance Fix
+
+**Fixed Custom UI Server**: Simplified server.js to resolve inheritance issues with HomebridgePluginUiServer.
+
+**Problems Resolved**:
+- Fixed `this.getPluginConfig is not a function` errors
+- Added comprehensive method validation and error handling
+- Enhanced logging to identify missing inherited methods
+
+**Changes**:
+- Simplified server constructor and method handling
+- Added graceful fallbacks when inheritance fails
+- Better error reporting for debugging UI issues
+
+**Note**: Despite fixes, Homebridge still wasn't loading the custom UI server, leading to v7.1.7 temporary disable.
+
+---
+
+## 7.1.5 (2025-07-25)
+
+### 🔧 Config Schema Cleanup
+
+**Removed noServerLogs**: Eliminated `"noServerLogs": true` from config.schema.json which may have interfered with config visibility.
+
+**Updates**:
+- Updated footerDisplay to current version (v7.1.4)
+- Cleaner config schema structure
+- Maintained all existing functionality
+
+---
+
+## 7.1.4 (2025-07-25)
+
+### 🧹 Package Structure Cleanup
+
+**Clean Dist Structure**: Rebuilt dist/homebridge-ui/ to remove duplicate directories that were confusing Homebridge UI discovery.
+
+**Improvements**:
+- Clean package structure without duplicate directories
+- Maintained both homebridge-ui source and built files
+- Consistent build process
+
+---
+
+## 7.1.3 (2025-07-25)
+
+### 🔧 Critical Fix: Restore homebridge-ui to Package Files
+
+**Root Cause Found**: Re-added `"homebridge-ui"` to package.json files array - this was incorrectly removed in v7.0.29-beta.1, breaking custom UI discovery.
+
+**Problem**: Homebridge requires homebridge-ui/ directory at package root when `customUi: true` is set, even though build process copies files to dist/.
+
+**Solution**: 
+- Added "homebridge-ui" back to package.json files array
+- Homebridge can now discover custom UI files at package root
+- Maintains built files in dist/homebridge-ui/ for consistency
+
+**Result**: Custom UI interface should now be properly visible in Homebridge UI.
+
+---
+
 ## 7.1.2 (2025-07-25)
 
 ### 🔧 Critical Fix: JSON Schema Validation Error
