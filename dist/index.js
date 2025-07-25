@@ -5,7 +5,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
  */
 export default (api) => {
     // Register the platform
-    api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, SleepMeSimplePlatform);
+    api.registerPlatform(PLATFORM_NAME, SleepMeSimplePlatform);
     // Log plugin initialization
     // Using console.log since api.log is not available
     console.log(`${PLUGIN_NAME} plugin initialized`);

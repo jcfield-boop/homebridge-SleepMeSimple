@@ -1,6 +1,22 @@
 # Changelog
 
-## 7.0.29 (2025-07-25)
+## 7.1.1 (2025-07-25)
+
+### 🔧 Hotfix: Config UI Visibility
+
+**Fixed Config UI Registration**: Corrected platform registration to use the preferred 2-parameter format for Homebridge v2.0.
+
+**Problem**: Plugin configuration was not visible in Homebridge UI due to incorrect 3-parameter registration format.
+
+**Root Cause**: Homebridge v2.0 prefers the 2-parameter `api.registerPlatform(platformName, constructor)` format where the plugin identifier is automatically determined, rather than the legacy 3-parameter format.
+
+**Solution**: Reverted to `api.registerPlatform(PLATFORM_NAME, SleepMeSimplePlatform)` which works correctly with both Homebridge v1.6+ and v2.0.
+
+**Result**: Plugin configuration now visible and functional in Homebridge UI while maintaining all temperature validation improvements.
+
+---
+
+## 7.1.0 (2025-07-25)
 
 ### 🔧 Temperature Characteristic & Code Quality Fixes
 
