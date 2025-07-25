@@ -8,144 +8,134 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
   constructor() {
     super();
     
-    console.log('[SleepMeUI] Server constructor started');
+    console.log('[SleepMeUI] Starting custom UI server...');
     
-    // Check inheritance immediately after super()
-    setTimeout(() => {
-      console.log('[SleepMeUI] Checking inherited methods...');
-      console.log('[SleepMeUI] this.getPluginConfig type:', typeof this.getPluginConfig);
-      console.log('[SleepMeUI] this.updatePluginConfig type:', typeof this.updatePluginConfig);
-      console.log('[SleepMeUI] this.savePluginConfig type:', typeof this.savePluginConfig);
-      
-      if (typeof this.getPluginConfig !== 'function') {
-        console.error('[SleepMeUI] CRITICAL ERROR: this.getPluginConfig is not a function');
-        console.error('[SleepMeUI] HomebridgePluginUiServer inheritance may be broken');
-      } else {
-        console.log('[SleepMeUI] Successfully validated HomebridgePluginUiServer methods');
-      }
-    }, 100);
+    // Add debugging for inheritance
+    this.checkInheritance();
     
-    // Register simplified request handlers
-    this.onRequest('/config/load', this.handleConfigLoad.bind(this));
-    this.onRequest('/config/save', this.handleConfigSave.bind(this));
+    // Register request handlers
+    this.onRequest('/config/load', this.loadConfig.bind(this));
+    this.onRequest('/config/save', this.saveConfig.bind(this));
     
-    console.log('[SleepMeUI] Server initialized, calling ready()');
+    console.log('[SleepMeUI] Custom UI server ready');
     this.ready();
   }
   
   /**
-   * Handle loading configuration with basic error handling
+   * Check if inheritance is working properly
    */
-  async handleConfigLoad() {
-    console.log('[SleepMeUI] Loading configuration');
+  checkInheritance() {
+    console.log('[SleepMeUI] Checking inheritance...');
+    console.log('[SleepMeUI] getPluginConfig available:', typeof this.getPluginConfig === 'function');
+    console.log('[SleepMeUI] updatePluginConfig available:', typeof this.updatePluginConfig === 'function');
+    
+    if (typeof this.getPluginConfig !== 'function') {
+      console.error('[SleepMeUI] CRITICAL: getPluginConfig method not inherited');
+    } else {
+      console.log('[SleepMeUI] Inheritance working correctly');
+    }
+  }
+  
+  /**
+   * Load plugin configuration
+   */
+  async loadConfig() {
+    console.log('[SleepMeUI] Loading configuration...');
     
     try {
-      // Check if methods are available
       if (typeof this.getPluginConfig !== 'function') {
-        console.error('[SleepMeUI] getPluginConfig not available, returning default');
-        return {
-          success: true,
-          config: this._createDefaultConfig(),
-          warning: 'Using default config - inheritance issue detected'
-        };
+        throw new Error('getPluginConfig method not available');
       }
       
       const pluginConfig = await this.getPluginConfig();
-      console.log('[SleepMeUI] Retrieved plugin config:', pluginConfig?.length, 'entries');
+      console.log('[SleepMeUI] Retrieved plugin config array with', pluginConfig?.length || 0, 'entries');
       
       if (!Array.isArray(pluginConfig)) {
-        console.warn('[SleepMeUI] Plugin config is not an array');
-        return { 
-          success: true, 
-          config: this._createDefaultConfig()
-        };
+        console.warn('[SleepMeUI] Plugin config is not an array, using default');
+        return { success: true, config: this.getDefaultConfig() };
       }
       
-      // Find the platform configuration
-      const platformConfig = pluginConfig.find(config => 
+      // Find our platform config
+      const sleepMeConfig = pluginConfig.find(config => 
         config && config.platform === 'SleepMeSimple'
       );
       
-      if (!platformConfig) {
-        console.log('[SleepMeUI] Platform configuration not found');
-        return { 
-          success: true, 
-          config: this._createDefaultConfig()
-        };
+      if (!sleepMeConfig) {
+        console.log('[SleepMeUI] No existing config found, using default');
+        return { success: true, config: this.getDefaultConfig() };
       }
       
-      console.log('[SleepMeUI] Found platform configuration');
-      return { success: true, config: platformConfig };
+      console.log('[SleepMeUI] Found existing configuration');
+      return { success: true, config: sleepMeConfig };
       
     } catch (error) {
-      console.error('[SleepMeUI] Error loading configuration:', error.message);
+      console.error('[SleepMeUI] Error loading config:', error.message);
       return { 
-        success: true, 
-        config: this._createDefaultConfig(),
-        error: error.message
+        success: false, 
+        error: error.message,
+        config: this.getDefaultConfig()
       };
     }
   }
   
   /**
-   * Handle saving configuration with basic error handling
+   * Save plugin configuration
    */
-  async handleConfigSave(payload) {
-    console.log('[SleepMeUI] Saving configuration');
+  async saveConfig(payload) {
+    console.log('[SleepMeUI] Saving configuration...');
     
     if (!payload || !payload.config) {
       throw new RequestError('No configuration provided', { status: 400 });
     }
     
     try {
-      // Check if methods are available
       if (typeof this.getPluginConfig !== 'function' || 
           typeof this.updatePluginConfig !== 'function') {
-        throw new RequestError('Configuration methods not available', { status: 500 });
+        throw new Error('Configuration methods not available');
       }
       
-      const configData = payload.config;
+      const newConfig = payload.config;
       
-      // Ensure basic structure
-      configData.platform = 'SleepMeSimple';
-      if (!configData.name) configData.name = 'SleepMe Simple';
+      // Ensure required fields
+      newConfig.platform = 'SleepMeSimple';
+      if (!newConfig.name) newConfig.name = 'SleepMe Simple';
       
+      // Get current plugin config array
       const pluginConfig = await this.getPluginConfig();
-      console.log('[SleepMeUI] Current config has', pluginConfig?.length || 0, 'entries');
-      
       const configArray = Array.isArray(pluginConfig) ? pluginConfig : [];
       
-      // Find existing config or add new
+      // Find and replace or add new config
       const existingIndex = configArray.findIndex(c => 
         c && c.platform === 'SleepMeSimple'
       );
       
-      let updatedConfig;
       if (existingIndex >= 0) {
-        updatedConfig = [...configArray];
-        updatedConfig[existingIndex] = configData;
+        configArray[existingIndex] = newConfig;
+        console.log('[SleepMeUI] Updated existing config');
       } else {
-        updatedConfig = [...configArray, configData];
+        configArray.push(newConfig);
+        console.log('[SleepMeUI] Added new config');
       }
       
-      await this.updatePluginConfig(updatedConfig);
-      console.log('[SleepMeUI] Configuration updated successfully');
+      // Save the updated config
+      await this.updatePluginConfig(configArray);
+      console.log('[SleepMeUI] Configuration saved successfully');
       
       return { 
         success: true, 
-        message: 'Configuration saved successfully'
+        message: 'Configuration saved successfully' 
       };
       
     } catch (error) {
-      console.error('[SleepMeUI] Error saving configuration:', error.message);
-      throw new RequestError(`Error saving configuration: ${error.message}`, { status: 500 });
+      console.error('[SleepMeUI] Error saving config:', error.message);
+      throw new RequestError(`Failed to save configuration: ${error.message}`, { status: 500 });
     }
   }
   
   /**
-   * Create a default configuration object
+   * Get default configuration
    */
-  _createDefaultConfig() {
+  getDefaultConfig() {
     return {
       platform: 'SleepMeSimple',
       name: 'SleepMe Simple',
@@ -153,14 +143,20 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       unit: 'C',
       pollingInterval: 90,
       logLevel: 'normal',
+      interfaceMode: 'hybrid',
       enableSchedules: false,
       schedules: []
     };
   }
 }
 
-// Create and export the server instance
+// Export the server instance
 (() => {
-  console.log('[SleepMeUI] Creating server instance...');
-  return new SleepMeUiServer();
+  console.log('[SleepMeUI] Initializing SleepMe Custom UI Server...');
+  try {
+    return new SleepMeUiServer();
+  } catch (error) {
+    console.error('[SleepMeUI] Failed to initialize server:', error.message);
+    throw error;
+  }
 })();
