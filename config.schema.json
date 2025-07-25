@@ -2,7 +2,7 @@
   "pluginAlias": "SleepMeSimple",
   "pluginType": "platform",
   "customUi": false,
-  "footerDisplay": "SleepMe Simple Homebridge Plugin v7.1.4",
+  "footerDisplay": "SleepMe Simple Homebridge Plugin v7.1.7",
   "customIcon": "icons/sleepmebasic.png",
   "schema": {
     "type": "object",
@@ -23,7 +23,8 @@
         "type": "string",
         "enum": ["C", "F"],
         "default": "C",
-        "description": "Temperature display unit"
+        "minLength": 1,
+        "description": "Temperature display unit (Celsius or Fahrenheit)"
       },
       "pollingInterval": {
         "title": "Polling Interval",
@@ -38,6 +39,7 @@
         "type": "string",
         "enum": ["normal", "debug", "verbose"],
         "default": "normal",
+        "minLength": 1,
         "description": "Controls the detail level of plugin logs"
       },
       "interfaceMode": {
@@ -45,6 +47,7 @@
         "type": "string",
         "enum": ["hybrid", "switch", "thermostat"],
         "default": "hybrid",
+        "minLength": 1,
         "description": "Choose how devices appear in HomeKit",
         "enumNames": [
           "Hybrid (Recommended) - Power switch + temperature control + schedules",
