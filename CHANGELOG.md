@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.0.28 (2025-07-25)
+
+### 🔧 Critical Fix: Homebridge v2.0 Compatibility
+
+**Fixed Plugin Registration**: Corrected platform registration to work with Homebridge v2.0.
+
+**Problem**: Plugin was not appearing in Homebridge UI or registering devices due to incorrect `api.registerPlatform()` call missing the required `pluginName` parameter.
+
+**Solution**: Updated `src/index.ts` to use the correct three-parameter format: `api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, SleepMeSimplePlatform)`.
+
+**Impact**: Plugin now properly registers with both Homebridge v1.6+ and v2.0, devices appear in HomeKit, and configuration UI works correctly.
+
+---
+
 ## 7.0.27 (2025-07-24)
 
 ### 🔧 Critical Fixes: Discrete Window Rate Limiter Issues
