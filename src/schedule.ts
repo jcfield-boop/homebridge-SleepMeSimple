@@ -59,7 +59,7 @@ export class ScheduleManager {
   private schedules: Map<string, TemperatureSchedule[]> = new Map();
   
   // Callback to mark schedule actions on accessories
-  private markScheduleActionCallback?: (deviceId: string) => void;
+  private markScheduleActionCallback?: (_deviceId: string) => void;
   
   // Timer for the scheduler
   private schedulerTimer?: NodeJS.Timeout;
@@ -86,7 +86,7 @@ export class ScheduleManager {
     private readonly logger: Logger,
     private readonly api: SleepMeApi,
     private readonly warmHugConfig: WarmHugConfig,
-    markScheduleActionCallback?: (deviceId: string) => void
+    markScheduleActionCallback?: (_deviceId: string) => void
   ) {
     this.markScheduleActionCallback = markScheduleActionCallback;
     this.logger.info('Schedule Manager initialized');
@@ -284,7 +284,7 @@ if (shouldRunToday && now >= schedule.nextExecutionTime) {
     const startTemperature = this.lastTemperatureByDevice.get(deviceId) || (schedule.temperature - 4);
     
     // Calculate target time (when warm hug should complete)
-    const targetTime = schedule.nextExecutionTime || Date.now();
+    const _targetTime = schedule.nextExecutionTime || Date.now();
     
     // Record warm hug start
     this.warmHugActiveDevices.add(deviceId);

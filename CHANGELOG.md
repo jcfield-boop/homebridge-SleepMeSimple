@@ -1,5 +1,29 @@
 # Changelog
 
+## 7.0.29-beta.1 (2025-07-25)
+
+### 🔧 Temperature Characteristic & Code Quality Fixes
+
+**Fixed Temperature Validation Warnings**: Eliminated HomeKit characteristic validation warnings during initialization.
+
+**Temperature Issues Fixed**:
+- **Initial values**: Changed from 21°C to 13°C (MIN_TEMPERATURE_C) to meet HomeKit minimums for both current (8°C) and target (13°C) temperature characteristics
+- **Enhanced validation**: Improved `validateTemperature()` function to handle zero/invalid values with safer fallbacks
+- **Characteristic protection**: Added validation before all HomeKit characteristic updates to prevent invalid values
+
+**Code Quality Improvements**:
+- **Lint warnings reduced**: From 69 to 60 warnings by cleaning up unused parameters and variables
+- **Better TypeScript**: Replaced `any` types with `unknown` where appropriate
+- **Cleaner interfaces**: Added underscore prefixes to intentionally unused parameters
+- **Removed unused imports**: Cleaned up unnecessary imports in platform.ts and api files
+
+**Expected Results**:
+- ✅ No more HomeKit temperature characteristic warnings in logs
+- ✅ Cleaner TypeScript code with better type safety
+- ✅ Improved development experience with fewer lint warnings
+
+---
+
 ## 7.0.28 (2025-07-25)
 
 ### 🔧 Critical Fix: Homebridge v2.0 Compatibility

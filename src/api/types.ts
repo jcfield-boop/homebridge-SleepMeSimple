@@ -28,7 +28,7 @@ export interface DeviceStatus {
   isWaterLow?: boolean;
   
   // Raw API response for debugging
-  rawResponse?: Record<string, any>;
+  rawResponse?: Record<string, unknown>;
 }
 
 /**
@@ -78,11 +78,11 @@ export interface ApiStats {
  * Logger interface for standardizing log output
  */
 export interface Logger {
-  debug(message: string): void;
-  info(message: string): void;
-  warn(message: string): void;
-  error(message: string): void;
-  verbose(message: string): void;
+  debug(_message: string): void;
+  info(_message: string): void;
+  warn(_message: string): void;
+  error(_message: string): void;
+  verbose(_message: string): void;
   isVerbose(): boolean;
   isDebug(): boolean;
 }

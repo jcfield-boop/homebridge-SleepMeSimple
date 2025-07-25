@@ -29,7 +29,7 @@ function debounce<T extends (...args: any[]) => any>(
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
   
-  return function(...args: Parameters<T>): void {
+  return function(..._args: Parameters<T>): void {
     const callNow = immediate && !timeout;
     
     if (timeout) {
@@ -39,12 +39,12 @@ function debounce<T extends (...args: any[]) => any>(
     timeout = setTimeout(() => {
       timeout = null;
       if (!immediate) {
-        callback(...args);
+        callback(..._args);
       }
     }, wait);
     
     if (callNow) {
-      callback(...args);
+      callback(..._args);
     }
   };
 }
@@ -53,9 +53,9 @@ function debounce<T extends (...args: any[]) => any>(
  * Validates and clamps temperature to HomeKit acceptable range
  * Any temperature above HomeKit's maximum (46°C) is clamped to the maximum
  */
-function validateTemperature(temperature: number, fallback = 21): number {
-  // For invalid/NaN temperatures, use fallback
-  if (isNaN(temperature)) {
+function validateTemperature(temperature: number, fallback = MIN_TEMPERATURE_C): number {
+  // For invalid/NaN temperatures or zero values, use fallback
+  if (isNaN(temperature) || temperature <= 0) {
     return fallback;
   }
   
@@ -81,9 +81,9 @@ export class SleepMeAccessory {
   // Interface configuration
   private interfaceMode: InterfaceMode;
   
-  // Device state
-  private currentTemperature = 21;
-  private targetTemperature = 21;
+  // Device state - use safe initial values that meet HomeKit minimums
+  private currentTemperature = MIN_TEMPERATURE_C; // 13°C - meets both current (8°C) and target (13°C) minimums
+  private targetTemperature = MIN_TEMPERATURE_C;  // 13°C - meets target minimum
   private isPowered = false;
   private waterLevel = 100;
   private isWaterLow = false;
@@ -104,8 +104,8 @@ export class SleepMeAccessory {
   private currentPollingInterval = POLLING_INTERVALS.BASE;
   
   // Debounced handlers
-  private debouncedTemperatureSet: (temp: number) => void;
-  private debouncedPowerSet: (on: boolean) => void;
+  private debouncedTemperatureSet: (_temp: number) => void;
+  private debouncedPowerSet: (_on: boolean) => void;
   
   /**
    * Constructor for the SleepMe accessory
@@ -483,9 +483,11 @@ export class SleepMeAccessory {
       this.switchService.updateCharacteristic(this.platform.Characteristic.On, this.isPowered);
     }
     if (this.temperatureSensorService) {
+      // Validate current temperature before updating HomeKit
+      const validCurrentTemp = validateTemperature(this.currentTemperature);
       this.temperatureSensorService.updateCharacteristic(
         this.platform.Characteristic.CurrentTemperature, 
-        this.currentTemperature
+        validCurrentTemp
       );
     }
   }
@@ -501,9 +503,11 @@ export class SleepMeAccessory {
     
     // Update temperature sensor
     if (this.temperatureSensorService) {
+      // Validate current temperature before updating HomeKit
+      const validCurrentTemp = validateTemperature(this.currentTemperature);
       this.temperatureSensorService.updateCharacteristic(
         this.platform.Characteristic.CurrentTemperature, 
-        this.currentTemperature
+        validCurrentTemp
       );
     }
     
@@ -516,14 +520,15 @@ export class SleepMeAccessory {
    */
   private updateThermostatServices(): void {
     if (this.thermostatService) {
-      // Current temperature should never be validated - pass through as-is
+      // Validate current temperature before updating HomeKit
+      const validCurrentTemp = validateTemperature(this.currentTemperature);
       this.thermostatService.updateCharacteristic(
         this.platform.Characteristic.CurrentTemperature, 
-        this.currentTemperature
+        validCurrentTemp
       );
       
-      // Only validate target temperature (for schedule mode with 999°C values)
-      const validTargetTemp = validateTemperature(this.targetTemperature, this.targetTemperature);
+      // Validate target temperature (for schedule mode with 999°C values)
+      const validTargetTemp = validateTemperature(this.targetTemperature);
       this.thermostatService.updateCharacteristic(
         this.platform.Characteristic.TargetTemperature, 
         validTargetTemp

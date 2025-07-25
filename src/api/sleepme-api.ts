@@ -5,14 +5,11 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { 
   API_BASE_URL, 
   MAX_REQUESTS_PER_MINUTE,
-  MIN_REQUEST_INTERVAL,
   DEFAULT_CACHE_VALIDITY_MS,
   USER_COMMAND_CACHE_VALIDITY_MS,
   SCHEDULE_CACHE_VALIDITY_MS,
   ACTIVE_PERIOD_CACHE_VALIDITY_MS,
   MAX_RETRIES,
-  INITIAL_BACKOFF_MS,
-  MAX_BACKOFF_MS,
   RequestPriority
 } from '../settings.js';
 import { 
@@ -48,8 +45,8 @@ interface QueuedRequest {
   id: string;                          // Unique ID for the request
   config: AxiosRequestConfig;          // Request configuration
   priority: RequestPriority;           // Request priority
-  resolve: (value: unknown) => void;   // Promise resolution function
-  reject: (reason: unknown) => void;   // Promise rejection function
+  resolve: (_value: unknown) => void;   // Promise resolution function
+  reject: (_reason: unknown) => void;   // Promise rejection function
   retryCount: number;                  // Number of retries attempted
   timestamp: number;                   // When the request was queued
   executing?: boolean;                 // Whether the request is currently executing
@@ -1379,7 +1376,7 @@ private async makeRequest<T>(options: {
       id: requestId,
       config,
       priority,
-      resolve: resolve as (value: unknown) => void,
+      resolve: resolve as (_value: unknown) => void,
       reject,
       retryCount: 0,
       timestamp: Date.now(),

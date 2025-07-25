@@ -226,7 +226,7 @@ export class ScheduleManager {
         // Get last known temperature or use a sensible default
         const startTemperature = this.lastTemperatureByDevice.get(deviceId) || (schedule.temperature - 4);
         // Calculate target time (when warm hug should complete)
-        const targetTime = schedule.nextExecutionTime || Date.now();
+        const _targetTime = schedule.nextExecutionTime || Date.now();
         // Record warm hug start
         this.warmHugActiveDevices.add(deviceId);
         this.warmHugStartTimeByDevice.set(deviceId, Date.now());
