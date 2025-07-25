@@ -11,15 +11,13 @@
       "name": {
         "title": "Name",
         "type": "string",
-        "default": "SleepMe Simple",
-        "required": true
+        "default": "SleepMe Simple"
       },
       "apiToken": {
         "title": "API Token",
         "type": "string",
         "format": "password",
-        "description": "Your SleepMe API token",
-        "required": true
+        "description": "Your SleepMe API token"
       },
       "unit": {
         "title": "Temperature Unit",
@@ -124,6 +122,6 @@
         }
       }
     },
-    "required": ["apiToken"]
+    "required": ["name", "apiToken"]
   }
 }

@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.1.2 (2025-07-25)
+
+### 🔧 Critical Fix: JSON Schema Validation Error
+
+**Fixed Config UI Schema Parsing**: Corrected invalid JSON Schema syntax in config.schema.json that was preventing Homebridge UI from discovering and displaying the configuration interface.
+
+**Root Cause**: The `"required": true` properties were incorrectly placed inside individual property definitions, which violates JSON Schema standards and breaks Homebridge Config UI schema parsing.
+
+**Fix Applied**:
+- Removed invalid `"required": true` from individual properties (`name`, `apiToken`)
+- Added proper JSON Schema `"required": ["name", "apiToken"]` array at schema level
+- Validated JSON syntax and schema structure
+
+**Result**: Plugin configuration interface should now be visible and functional in Homebridge UI.
+
+---
+
 ## 7.1.1 (2025-07-25)
 
 ### 🔧 Hotfix: Config UI Visibility
