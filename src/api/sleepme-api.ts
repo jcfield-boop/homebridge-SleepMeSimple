@@ -903,16 +903,27 @@ private async processQueue(): Promise<void> {
       // Use empirical discrete window rate limiter (primary) to check if request should be allowed
       const rateLimitCheck = this.discreteWindowLimiter.shouldAllowRequest(request.priority);
       
-      // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
+      // Get window status for emergency protection checks
       const windowStatus = this.discreteWindowLimiter.getStatus();
-      if (windowStatus.consecutiveRateLimits > 2 && !rateLimitCheck.allowed) {
+      
+      // CRITICAL REQUEST IMMEDIATE EXECUTION
+      // If this is a critical request and rate limiter allows it (including bypass), execute immediately
+      if (request.priority === RequestPriority.CRITICAL && rateLimitCheck.allowed) {
+        this.logger.debug(`Critical request executing immediately: ${rateLimitCheck.reason}`);
+        // Skip all waiting and emergency protections for critical requests that are allowed
+        // Continue to execution section below
+      }
+      // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
+      // BUT NEVER apply emergency protection to critical requests that got bypass approval
+      else if (windowStatus.consecutiveRateLimits > 2 && !rateLimitCheck.allowed && 
+               request.priority !== RequestPriority.CRITICAL) {
         const emergencyWaitMs = Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000);
         this.logger.warn(`Emergency rate limit protection: extending wait to ${Math.ceil(emergencyWaitMs / 1000)}s`);
         await new Promise(resolve => setTimeout(resolve, emergencyWaitMs));
         continue;
       }
-      
-      if (!rateLimitCheck.allowed) {
+      // Handle rate limiting for non-critical requests or critical requests that couldn't bypass
+      else if (!rateLimitCheck.allowed) {
         // For status requests, try to use cached data before waiting
         if (request.config.method === 'GET' && 
             request.config.url?.includes('/devices/') && 
@@ -944,15 +955,22 @@ private async processQueue(): Promise<void> {
         // Contextual logging for rate limiting behavior
         if (!this.rateExceededLogged) {
           const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
-          const windowStatus = this.discreteWindowLimiter.getStatus();
           
-          // Log at debug level for expected rate limiting, info for longer waits
-          const logLevel = waitTimeSeconds <= 20 ? 'debug' : 'info';
-          const contextMessage = rateLimitCheck.reason === 'Minimum gap not met' 
-            ? `Rate limited: waiting ${waitTimeSeconds}s between requests (API enforces discrete windows)`
-            : `Rate limited: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`;
-            
-          this.logger[logLevel](contextMessage);
+          // Special logging for critical requests that have to wait (this should be rare)
+          if (request.priority === RequestPriority.CRITICAL) {
+            this.logger.warn(
+              `CRITICAL request forced to wait ${waitTimeSeconds}s - bypass limit exceeded. ` +
+              `Reason: ${rateLimitCheck.reason}`
+            );
+          } else {
+            // Log at debug level for expected rate limiting, info for longer waits
+            const logLevel = waitTimeSeconds <= 20 ? 'debug' : 'info';
+            const contextMessage = rateLimitCheck.reason === 'Minimum gap not met' 
+              ? `Rate limited: waiting ${waitTimeSeconds}s between requests (API enforces discrete windows)`
+              : `Rate limited: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`;
+              
+            this.logger[logLevel](contextMessage);
+          }
           
           // Verbose debug logging only when needed for troubleshooting
           if (windowStatus.consecutiveRateLimits > 1) {

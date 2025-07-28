@@ -1,5 +1,57 @@
 # Changelog
 
+## 7.1.9 (2025-07-25)
+
+### 🚀 Critical Performance Fix: Immediate User Actions
+
+**Fixed 70-second delays** for user-initiated power and temperature changes by implementing true immediate execution for critical requests.
+
+**Problem Solved**:
+- User actions (power on/off, temperature changes) were delayed up to 70 seconds due to queue processing
+- Even though marked as [critical] priority, requests waited in queue before rate limiter evaluation
+- Poor user experience - HomeKit controls felt unresponsive
+
+**Solution Implemented**:
+- **Immediate execution** for critical requests when rate limiter allows bypass
+- **Smart queue processing** that skips waiting for critical requests with bypass approval
+- **Enhanced logging** to distinguish critical vs normal request handling
+- **Preserved rate limiting** for background/status requests
+
+**Result**: Power and temperature changes now execute within 1-2 seconds instead of 60+ seconds, dramatically improving HomeKit user experience.
+
+**Technical Details**:
+- Critical requests bypass queue delays when rate limiter grants bypass approval
+- Emergency protection still applies to non-critical requests
+- Up to 3 critical bypasses per window maintained for safety
+- Background polling still respects rate limits
+
+---
+
+## 7.1.8 (2025-07-25)
+
+### 🎨 Custom UI Re-enabled + Schema Improvements
+
+**Re-enabled Custom UI**: Restored the professional HTML interface with logo, branding, and intuitive configuration forms.
+
+**Fixed Schema Issues**:
+- Removed illogical "None" options from dropdowns (Temperature Unit, Interface Mode, Log Level)
+- Added `minLength: 1` constraints to prevent empty selections
+- Updated footer version display to current version
+
+**Enhanced Server Reliability**:
+- Completely rewrote server.js with better error handling and debugging
+- Added comprehensive inheritance checking for @homebridge/plugin-ui-utils
+- Improved module structure with proper CommonJS exports
+- Enhanced logging to identify any remaining compatibility issues
+
+**User Experience**:
+- Professional HTML interface with SleepMe branding
+- Intuitive form-based configuration instead of raw JSON
+- Real-time validation and user-friendly error messages
+- Comprehensive schedule management interface
+
+---
+
 ## 7.1.7 (2025-07-25)
 
 ### 🔧 Temporary Fix: Disable Custom UI to Restore Config Access
