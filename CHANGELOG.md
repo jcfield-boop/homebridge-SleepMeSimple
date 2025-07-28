@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.1.10 (2025-07-28)
+
+### 🚀 Fixed Critical Request Delays - True Immediate Execution
+
+**Resolved remaining delays** in critical user actions by implementing proper bypass slot management and immediate execution flow.
+
+**Problem**: The previous fix in 7.1.9 still had a flaw where critical requests were delayed ~27 seconds because:
+- Rate limiter was reserving slots during `shouldAllowRequest()` check
+- Actual HTTP execution happened later in queue processing
+- This caused delays even when bypass was "approved"
+
+**Solution**:
+- **True immediate execution**: Added `useCriticalBypass()` method that properly manages bypass slots
+- **Bypass-first processing**: Critical requests now check and consume bypass slots upfront
+- **Skip all rate limiting**: When bypass is used, request executes immediately without any queue delays
+- **Preserved safety**: Non-critical requests and critical requests without bypasses still respect rate limits
+
+**Result**: User power/temperature changes now execute within 1-2 seconds consistently, eliminating the remaining 27-second delays.
+
+**Technical Changes**:
+- Added `useCriticalBypass()` method to `EmpiricalDiscreteWindowLimiter`
+- Modified queue processor to handle critical bypasses before rate limit checks
+- Separated bypass usage from slot reservation for proper timing
+- Enhanced logging to track bypass usage vs normal rate limiting
+
+---
+
 ## 7.1.9 (2025-07-25)
 
 ### 🚀 Critical Performance Fix: Immediate User Actions

@@ -268,6 +268,17 @@ export class EmpiricalDiscreteWindowLimiter {
   }
 
   /**
+   * Use a critical bypass slot (called when critical request is about to execute)
+   */
+  public useCriticalBypass(): boolean {
+    if (this.canUseCriticalBypass()) {
+      this.state.criticalBypassesUsed++;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Calculate wait time for next window
    */
   private calculateWaitTimeForNextWindow(): number {

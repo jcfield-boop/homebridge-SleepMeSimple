@@ -61,6 +61,10 @@ export declare class EmpiricalDiscreteWindowLimiter {
      */
     private canUseCriticalBypass;
     /**
+     * Use a critical bypass slot (called when critical request is about to execute)
+     */
+    useCriticalBypass(): boolean;
+    /**
      * Calculate wait time for next window
      */
     private calculateWaitTimeForNextWindow;

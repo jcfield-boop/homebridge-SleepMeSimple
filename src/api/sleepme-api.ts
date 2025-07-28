@@ -900,100 +900,109 @@ private async processQueue(): Promise<void> {
         break; // No requests to process
       }
 
-      // Use empirical discrete window rate limiter (primary) to check if request should be allowed
-      const rateLimitCheck = this.discreteWindowLimiter.shouldAllowRequest(request.priority);
-      
-      // Get window status for emergency protection checks
-      const windowStatus = this.discreteWindowLimiter.getStatus();
-      
-      // CRITICAL REQUEST IMMEDIATE EXECUTION
-      // If this is a critical request and rate limiter allows it (including bypass), execute immediately
-      if (request.priority === RequestPriority.CRITICAL && rateLimitCheck.allowed) {
-        this.logger.debug(`Critical request executing immediately: ${rateLimitCheck.reason}`);
-        // Skip all waiting and emergency protections for critical requests that are allowed
-        // Continue to execution section below
+      // CRITICAL REQUEST IMMEDIATE EXECUTION - BYPASS ALL RATE LIMITING
+      // Check if this is a critical request and handle it with true immediate execution
+      let criticalBypassUsed = false;
+      if (request.priority === RequestPriority.CRITICAL) {
+        // Try to use a critical bypass
+        criticalBypassUsed = this.discreteWindowLimiter.useCriticalBypass();
+        
+        if (criticalBypassUsed) {
+          this.logger.debug(`Critical request using bypass and executing immediately`);
+          // Skip all rate limiting and execute immediately
+        } else {
+          // No bypasses left - fall through to normal rate limiting
+          this.logger.warn(`Critical request has no bypasses remaining, falling back to normal rate limiting`);
+        }
       }
-      // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
-      // BUT NEVER apply emergency protection to critical requests that got bypass approval
-      else if (windowStatus.consecutiveRateLimits > 2 && !rateLimitCheck.allowed && 
-               request.priority !== RequestPriority.CRITICAL) {
-        const emergencyWaitMs = Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000);
-        this.logger.warn(`Emergency rate limit protection: extending wait to ${Math.ceil(emergencyWaitMs / 1000)}s`);
-        await new Promise(resolve => setTimeout(resolve, emergencyWaitMs));
-        continue;
-      }
-      // Handle rate limiting for non-critical requests or critical requests that couldn't bypass
-      else if (!rateLimitCheck.allowed) {
-        // For status requests, try to use cached data before waiting
-        if (request.config.method === 'GET' && 
-            request.config.url?.includes('/devices/') && 
-            request.priority !== RequestPriority.CRITICAL) {
-          
-          const deviceId = request.config.url.split('/devices/')[1];
-          if (deviceId && this.deviceStatusCache.has(deviceId)) {
-            const cached = this.deviceStatusCache.get(deviceId)!;
-            const age = Date.now() - cached.timestamp;
+      
+      // For non-critical requests or critical requests without bypasses, check rate limits
+      if (!criticalBypassUsed) {
+        
+        const rateLimitCheck = this.discreteWindowLimiter.shouldAllowRequest(request.priority);
+        
+        // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
+        if (this.discreteWindowLimiter.getStatus().consecutiveRateLimits > 2 && !rateLimitCheck.allowed) {
+          const emergencyWaitMs = Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000);
+          this.logger.warn(`Emergency rate limit protection: extending wait to ${Math.ceil(emergencyWaitMs / 1000)}s`);
+          await new Promise(resolve => setTimeout(resolve, emergencyWaitMs));
+          continue;
+        }
+        
+        // Handle rate limiting for requests that are not allowed
+        if (!rateLimitCheck.allowed) {
+          // For status requests, try to use cached data before waiting
+          if (request.config.method === 'GET' && 
+              request.config.url?.includes('/devices/') && 
+              request.priority !== RequestPriority.CRITICAL) {
             
-            // Use cache if less than 2 minutes old for non-critical requests
-            if (age < 120000) {
-              this.logger.debug(
-                `Using cached data for rate-limited request to device ${deviceId} (age: ${Math.round(age/1000)}s)`
-              );
+            const deviceId = request.config.url.split('/devices/')[1];
+            if (deviceId && this.deviceStatusCache.has(deviceId)) {
+              const cached = this.deviceStatusCache.get(deviceId)!;
+              const age = Date.now() - cached.timestamp;
               
-              // Remove request from queue and resolve with cached data
-              const queueIndex = this.findRequestInQueues(request.id);
-              if (queueIndex) {
-                this.removeRequestFromQueue(queueIndex.queue, queueIndex.index);
+              // Use cache if less than 2 minutes old for non-critical requests
+              if (age < 120000) {
+                this.logger.debug(
+                  `Using cached data for rate-limited request to device ${deviceId} (age: ${Math.round(age/1000)}s)`
+                );
+                
+                // Remove request from queue and resolve with cached data
+                const queueIndex = this.findRequestInQueues(request.id);
+                if (queueIndex) {
+                  this.removeRequestFromQueue(queueIndex.queue, queueIndex.index);
+                }
+                
+                request.resolve(cached.status);
+                continue;
               }
-              
-              request.resolve(cached.status);
-              continue;
             }
           }
-        }
-        
-        // Contextual logging for rate limiting behavior
-        if (!this.rateExceededLogged) {
-          const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
           
-          // Special logging for critical requests that have to wait (this should be rare)
-          if (request.priority === RequestPriority.CRITICAL) {
-            this.logger.warn(
-              `CRITICAL request forced to wait ${waitTimeSeconds}s - bypass limit exceeded. ` +
-              `Reason: ${rateLimitCheck.reason}`
-            );
-          } else {
-            // Log at debug level for expected rate limiting, info for longer waits
-            const logLevel = waitTimeSeconds <= 20 ? 'debug' : 'info';
-            const contextMessage = rateLimitCheck.reason === 'Minimum gap not met' 
-              ? `Rate limited: waiting ${waitTimeSeconds}s between requests (API enforces discrete windows)`
-              : `Rate limited: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`;
-              
-            this.logger[logLevel](contextMessage);
+          // Contextual logging for rate limiting behavior
+          if (!this.rateExceededLogged) {
+            const waitTimeSeconds = Math.ceil(rateLimitCheck.waitTimeMs / 1000);
+            
+            // Special logging for critical requests that have to wait (this should be rare)
+            if (request.priority === RequestPriority.CRITICAL) {
+              this.logger.warn(
+                `CRITICAL request forced to wait ${waitTimeSeconds}s - bypass limit exceeded. ` +
+                `Reason: ${rateLimitCheck.reason}`
+              );
+            } else {
+              // Log at debug level for expected rate limiting, info for longer waits
+              const logLevel = waitTimeSeconds <= 20 ? 'debug' : 'info';
+              const contextMessage = rateLimitCheck.reason === 'Minimum gap not met' 
+                ? `Rate limited: waiting ${waitTimeSeconds}s between requests (API enforces discrete windows)`
+                : `Rate limited: ${rateLimitCheck.reason}, waiting ${waitTimeSeconds}s`;
+                
+              this.logger[logLevel](contextMessage);
+            }
+            
+            // Verbose debug logging only when needed for troubleshooting
+            const currentWindowStatus = this.discreteWindowLimiter.getStatus();
+            if (currentWindowStatus.consecutiveRateLimits > 1) {
+              this.logger.debug(
+                `Rate limit details: Priority=${request.priority}, ` +
+                `WindowRequests=${currentWindowStatus.requestsInCurrentWindow}/${currentWindowStatus.maxRequestsPerWindow}, ` +
+                `WindowDuration=${currentWindowStatus.windowDurationMs}ms, ` +
+                `AdaptiveBackoff=${currentWindowStatus.adaptiveBackoffActive}, ` +
+                `ConsecutiveFailures=${currentWindowStatus.consecutiveRateLimits}, ` +
+                `CriticalBypasses=${currentWindowStatus.criticalBypassesUsed}/${currentWindowStatus.criticalBypassesRemaining + currentWindowStatus.criticalBypassesUsed}`
+              );
+            }
+            
+            this.rateExceededLogged = true;
           }
           
-          // Verbose debug logging only when needed for troubleshooting
-          if (windowStatus.consecutiveRateLimits > 1) {
-            this.logger.debug(
-              `Rate limit details: Priority=${request.priority}, ` +
-              `WindowRequests=${windowStatus.requestsInCurrentWindow}/${windowStatus.maxRequestsPerWindow}, ` +
-              `WindowDuration=${windowStatus.windowDurationMs}ms, ` +
-              `AdaptiveBackoff=${windowStatus.adaptiveBackoffActive}, ` +
-              `ConsecutiveFailures=${windowStatus.consecutiveRateLimits}, ` +
-              `CriticalBypasses=${windowStatus.criticalBypassesUsed}/${windowStatus.criticalBypassesRemaining + windowStatus.criticalBypassesUsed}`
-            );
-          }
-          
-          this.rateExceededLogged = true;
+          // Wait for the recommended time
+          await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTimeMs));
+          continue;
         }
         
-        // Wait for the recommended time
-        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTimeMs));
-        continue;
+        // Reset rate exceeded logging on successful check
+        this.rateExceededLogged = false;
       }
-      
-      // Reset rate exceeded logging on successful check
-      this.rateExceededLogged = false;
       
       // Mark the request as executing
       request.executing = true;
