@@ -1,5 +1,34 @@
 # Changelog
 
+## 7.1.11 (2025-07-31)
+
+### 🚀 Critical Fix: Resolved Rate Limiting Window Misalignment & 6am Turn Off Command Issues
+
+**Fixed fundamental rate limiting problems** causing 429 errors and failed turn off commands by updating discrete window limiter to match empirical API findings.
+
+**Problems Solved**:
+- **Rate limit window misalignment**: Plugin windows vs API server timing causing constant 429 errors
+- **Overly conservative limiting**: 1-per-75s vs actual 8-per-60s API capacity 
+- **6am turn off command failures**: Commands failing due to exhausted rate limit budget
+- **Poor cached data fallback**: Complete failures instead of graceful degradation
+
+**Solution**:
+- **Updated discrete window limiter**: 6 requests per 60s (was 1 per 75s) to match empirical findings
+- **Wall-clock window alignment**: Aligned rate limit windows to API server timing (every minute on the minute)
+- **Enhanced turn off command priority**: Added forced bypass for critical OFF commands
+- **Improved cached data fallback**: Use cached data up to 10 minutes on rate limit instead of failing
+- **Request deduplication**: Prevent multiple identical requests from stacking up
+
+**Technical Changes**:
+- Updated `sleepme-api.ts` rate limiter configuration to use empirical 8-token findings
+- Fixed `empirical-token-bucket-limiter.ts` window calculation for wall-clock alignment
+- Enhanced critical command bypass with special OFF command handling
+- Better utilization of available API budget (6 of 8 tokens vs previous 1)
+
+**Result**: 6am turn off commands now execute reliably, no more steady-state 429 errors, and better overall system responsiveness while respecting API limits.
+
+---
+
 ## 7.1.10 (2025-07-28)
 
 ### 🚀 Fixed Critical Request Delays - True Immediate Execution
