@@ -54,6 +54,7 @@ export declare class EmpiricalDiscreteWindowLimiter {
     private handleRateLimit;
     /**
      * Update current window and reset counters if needed
+     * CRITICAL FIX: Align windows to wall clock time (every minute on the minute)
      */
     private updateCurrentWindow;
     /**

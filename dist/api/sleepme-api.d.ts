@@ -253,6 +253,13 @@ export declare class SleepMeApi {
      */
     private removeRequestFromQueue;
     /**
+     * Find an existing request for the same device and operation (for deduplication)
+     * @param deviceId Device ID to search for
+     * @param operationType Operation type to match
+     * @returns Existing request if found, undefined otherwise
+     */
+    private findExistingRequest;
+    /**
      * Convert Celsius to Fahrenheit
      * @param celsius Temperature in Celsius
      * @returns Temperature in Fahrenheit

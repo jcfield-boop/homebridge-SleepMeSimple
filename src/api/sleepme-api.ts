@@ -157,16 +157,16 @@ export class SleepMeApi {
     });
     
     // Initialize PRIMARY rate limiter - empirical discrete window (based on live testing)
-    // Configuration optimized based on empirical 10-15s success windows
+    // CRITICAL FIX: Updated to match actual API server rate limits (8 requests per 60s)
     this.discreteWindowLimiter = new EmpiricalDiscreteWindowLimiter({
-      windowDurationMs: 75000,        // 75s windows (reduced from 90s for better responsiveness)
-      requestsPerWindow: 1,           // Only 1 request per window
-      minWindowGapMs: 15000,          // 15s minimum between requests (reduced from 22.5s)
-      safetyMargin: 0.25,             // 25% safety margin balances caution with responsiveness
+      windowDurationMs: 60000,        // 60s windows (aligned with API server)
+      requestsPerWindow: 6,           // 6 requests per window (conservative use of 8 available)
+      minWindowGapMs: 5000,           // 5s minimum between requests (much more responsive)
+      safetyMargin: 0.1,              // 10% safety margin (less conservative)
       allowCriticalBypass: true,
-      criticalBypassLimit: 3,         // Max 3 critical bypasses per minute
-      adaptiveBackoffMultiplier: 1.2, // Reduced from 1.5 to 1.2 for less aggressive backoff
-      maxAdaptiveBackoffMs: 120000    // Reduced from 5 minutes to 2 minutes
+      criticalBypassLimit: 2,         // 2 critical bypasses per window (leaves budget for normal ops)
+      adaptiveBackoffMultiplier: 1.5, // Moderate backoff on consecutive failures
+      maxAdaptiveBackoffMs: 180000    // 3 minutes max backoff
     });
     
     this.logger.info('SleepMe API client initialized with empirical token bucket rate limiting');
@@ -433,10 +433,12 @@ const response = await this.makeRequest<Record<string, unknown>>({
         const ageSeconds = Math.round((Date.now() - cachedEntry.timestamp) / 1000);
         const ageMinutes = Math.round(ageSeconds / 60);
         
-        // Use cached data if it's not too old (up to 30 minutes for rate limit scenarios)
-        if (ageSeconds < 1800) { // 30 minutes
-          this.logger.warn(
-            `Rate limited (429) for device ${deviceId}, using cached data (${ageMinutes}m old)`
+        // ENHANCED: Much more generous cached data fallback for rate limit scenarios
+        // Use cached data if it's not too old (up to 10 minutes for rate limit scenarios)
+        // This prevents the system from failing completely when rate limited
+        if (ageSeconds < 600) { // 10 minutes (was 30 minutes, but 10 is more reasonable)
+          this.logger.info(
+            `Rate limited (429) for device ${deviceId}, using cached data (${ageMinutes}m old) - preventing failure`
           );
           return cachedEntry.status;
         } else {
@@ -446,7 +448,7 @@ const response = await this.makeRequest<Record<string, unknown>>({
         }
       } else {
         this.logger.warn(
-          `Rate limited (429) for device ${deviceId}, no cached data available`
+          `Rate limited (429) for device ${deviceId}, no cached data available - consider increasing cache retention`
         );
       }
     }
@@ -904,12 +906,22 @@ private async processQueue(): Promise<void> {
       // Check if this is a critical request and handle it with true immediate execution
       let criticalBypassUsed = false;
       if (request.priority === RequestPriority.CRITICAL) {
+        // Special handling for turn OFF commands - they get extra bypass attempts
+        const isOffCommand = request.data && 
+                           typeof request.data === 'object' && 
+                           'thermal_control_status' in request.data && 
+                           request.data.thermal_control_status === 'standby';
+        
         // Try to use a critical bypass
         criticalBypassUsed = this.discreteWindowLimiter.useCriticalBypass();
         
         if (criticalBypassUsed) {
-          this.logger.debug(`Critical request using bypass and executing immediately`);
+          this.logger.debug(`Critical request using bypass and executing immediately${isOffCommand ? ' (OFF command)' : ''}`);
           // Skip all rate limiting and execute immediately
+        } else if (isOffCommand) {
+          // OFF commands are so critical they get a second chance with forced bypass
+          this.logger.warn(`OFF command has no bypasses remaining - forcing execution anyway`);
+          criticalBypassUsed = true; // Force bypass for OFF commands
         } else {
           // No bypasses left - fall through to normal rate limiting
           this.logger.warn(`Critical request has no bypasses remaining, falling back to normal rate limiting`);
@@ -1338,6 +1350,31 @@ private async makeRequest<T>(options: {
   // Set default priority
   const priority = options.priority || RequestPriority.NORMAL;
   
+  // ENHANCED REQUEST DEDUPLICATION - prevent multiple similar requests
+  if (options.operationType === 'getDeviceStatus' && options.deviceId) {
+    // Check for existing requests for the same device and operation
+    const existingRequest = this.findExistingRequest(options.deviceId, options.operationType);
+    if (existingRequest && priority !== RequestPriority.CRITICAL) {
+      this.logger.debug(`Deduplicating status request for device ${options.deviceId} - using existing request`);
+      
+      // Return the promise from the existing request
+      return new Promise<T>((resolve, reject) => {
+        const originalResolve = existingRequest.resolve;
+        const originalReject = existingRequest.reject;
+        
+        existingRequest.resolve = (value: unknown) => {
+          originalResolve(value);
+          resolve(value as T);
+        };
+        
+        existingRequest.reject = (reason: unknown) => {
+          originalReject(reason);
+          reject(reason);
+        };
+      });
+    }
+  }
+  
   // Skip redundant status updates only if queue is getting large (not due to rate limiting)
   // Rate limiting should be handled by the rate limiter itself, not by skipping requests
   if (this.criticalQueue.length + this.highPriorityQueue.length > 8 && 
@@ -1627,6 +1664,36 @@ private removeRequestFromQueue(queue: QueuedRequest[], index: number): void {
   if (index >= 0 && index < queue.length) {
     queue.splice(index, 1);
   }
+}
+
+/**
+ * Find an existing request for the same device and operation (for deduplication)
+ * @param deviceId Device ID to search for
+ * @param operationType Operation type to match
+ * @returns Existing request if found, undefined otherwise
+ */
+private findExistingRequest(deviceId: string, operationType: string): QueuedRequest | undefined {
+  // Search all queues for existing requests
+  const allQueues = [
+    this.criticalQueue,
+    this.highPriorityQueue,
+    this.normalPriorityQueue,
+    this.lowPriorityQueue
+  ];
+  
+  for (const queue of allQueues) {
+    const existingRequest = queue.find(request => 
+      request.deviceId === deviceId && 
+      request.operationType === operationType &&
+      !request.executing
+    );
+    
+    if (existingRequest) {
+      return existingRequest;
+    }
+  }
+  
+  return undefined;
 }
 
 /**

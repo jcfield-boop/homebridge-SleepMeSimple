@@ -80,17 +80,19 @@ export class EmpiricalDiscreteWindowLimiter {
     this.config.windowDurationMs = Math.floor(this.config.windowDurationMs * safetyFactor);
     this.config.minWindowGapMs = Math.floor(this.config.minWindowGapMs * safetyFactor);
 
-    // Initialize state
+    // Initialize state with wall-clock aligned windows
     const now = Date.now();
+    const wallClockWindowStart = Math.floor(now / this.config.windowDurationMs) * this.config.windowDurationMs;
+    
     this.state = {
-      currentWindowStart: now,
+      currentWindowStart: wallClockWindowStart,
       requestsInCurrentWindow: 0,
       lastRequestTime: 0,
       consecutiveRateLimits: 0,
       lastRateLimitTime: 0,
       adaptiveBackoffUntil: 0,
       criticalBypassesUsed: 0,
-      criticalBypassResetTime: now
+      criticalBypassResetTime: wallClockWindowStart
     };
   }
 
@@ -242,20 +244,23 @@ export class EmpiricalDiscreteWindowLimiter {
 
   /**
    * Update current window and reset counters if needed
+   * CRITICAL FIX: Align windows to wall clock time (every minute on the minute)
    */
   private updateCurrentWindow(now: number): void {
-    const windowAge = now - this.state.currentWindowStart;
+    // Calculate wall-clock aligned window start (every minute on the minute)
+    const wallClockWindowStart = Math.floor(now / this.config.windowDurationMs) * this.config.windowDurationMs;
     
-    // Check if we need to start a new window
-    if (windowAge >= this.config.windowDurationMs) {
-      this.state.currentWindowStart = now;
+    // Check if we need to start a new window (wall clock aligned)
+    if (this.state.currentWindowStart !== wallClockWindowStart) {
+      this.state.currentWindowStart = wallClockWindowStart;
       this.state.requestsInCurrentWindow = 0;
     }
     
-    // Reset critical bypass counter per window
-    if (now - this.state.criticalBypassResetTime > this.config.windowDurationMs) {
+    // Reset critical bypass counter per window (also wall clock aligned)
+    const bypassWindowStart = Math.floor(now / this.config.windowDurationMs) * this.config.windowDurationMs;
+    if (this.state.criticalBypassResetTime < bypassWindowStart) {
       this.state.criticalBypassesUsed = 0;
-      this.state.criticalBypassResetTime = now;
+      this.state.criticalBypassResetTime = bypassWindowStart;
     }
   }
 
