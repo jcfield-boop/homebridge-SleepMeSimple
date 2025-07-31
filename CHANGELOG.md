@@ -1,5 +1,28 @@
 # Changelog
 
+## 7.1.12 (2025-07-31)
+
+### 🔧 Critical Fix: HomeKit State Sync When API Commands Fail
+
+**Fixed HomeKit displaying incorrect device state** when API commands fail due to rate limiting or other API issues.
+
+**Problem**: When you turned on a device in HomeKit, the UI would immediately show "ON" even if the actual API command failed due to rate limiting (429 errors). This created a confusing experience where HomeKit showed the device as on, but it was actually still off.
+
+**Root Cause**: The trust-based caching system was updating HomeKit state optimistically but not reverting changes when API calls failed.
+
+**Solution**:
+- **Enhanced error handling** in `setPowerState()` and `setTemperature()` methods
+- **Automatic state reversion** when API commands fail - HomeKit now reverts to the actual device state
+- **Force status refresh** after API failures to ensure accurate state synchronization
+- **Better logging** to explain what's happening when commands fail
+
+**Technical Changes**:
+- Updated `src/accessory.ts` with robust error handling for failed API commands
+- Added logic to revert optimistic HomeKit state changes on API failures
+- Implemented automatic device status refresh after command failures
+
+**Impact**: HomeKit now accurately reflects the actual device state even when rate limited or experiencing API issues.
+
 ## 7.1.11 (2025-07-31)
 
 ### 🚀 Critical Fix: Resolved Rate Limiting Window Misalignment & 6am Turn Off Command Issues

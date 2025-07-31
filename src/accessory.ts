@@ -353,18 +353,56 @@ export class SleepMeAccessory {
    * Actually set temperature on the device (called by debounced handler)
    */
   private async setTemperature(temperature: number): Promise<void> {
+    const originalTemp = this.targetTemperature;
+    const originalPowerState = this.isPowered;
+    
     try {
+      let success = false;
       if (!this.isPowered) {
-        const success = await this.api.turnDeviceOn(this.deviceId, temperature);
+        success = await this.api.turnDeviceOn(this.deviceId, temperature);
         if (success) {
           this.isPowered = true;
           this.updateAllServices();
+        } else {
+          // Revert optimistic state changes
+          this.platform.log.warn(`Failed to turn device ON, reverting temperature from ${temperature}°C back to ${originalTemp}°C`);
+          this.targetTemperature = originalTemp;
+          this.isPowered = originalPowerState;
+          this.updateAllServices();
         }
       } else {
-        await this.api.setTemperature(this.deviceId, temperature);
+        success = await this.api.setTemperature(this.deviceId, temperature);
+        if (!success) {
+          // Revert temperature change
+          this.platform.log.warn(`Failed to set temperature, reverting from ${temperature}°C back to ${originalTemp}°C`);
+          this.targetTemperature = originalTemp;
+          this.updateAllServices();
+        }
+      }
+      
+      // If any API call failed, force refresh device status to get real state
+      if (!success) {
+        setTimeout(() => {
+          this.refreshDeviceStatus(true).catch(error => {
+            this.platform.log.error(`Failed to refresh device status after temperature API failure: ${error}`);
+          });
+        }, 2000);
       }
     } catch (error) {
       this.platform.log.error(`Failed to set temperature: ${error}`);
+      
+      // On exception, revert all optimistic changes
+      this.platform.log.warn(`Exception occurred, reverting temperature from ${temperature}°C back to ${originalTemp}°C and power state to ${originalPowerState ? 'ON' : 'OFF'}`);
+      this.targetTemperature = originalTemp;
+      this.isPowered = originalPowerState;
+      this.updateAllServices();
+      
+      // Force refresh device status to get the real state
+      setTimeout(() => {
+        this.refreshDeviceStatus(true).catch(refreshError => {
+          this.platform.log.error(`Failed to refresh device status after temperature exception: ${refreshError}`);
+        });
+      }, 2000);
     }
   }
   
@@ -395,14 +433,43 @@ export class SleepMeAccessory {
    * Actually set power state on device (called by debounced handler)
    */
   private async setPowerState(on: boolean): Promise<void> {
+    const originalState = this.isPowered;
+    
     try {
+      let success = false;
       if (on) {
-        await this.api.turnDeviceOn(this.deviceId, this.targetTemperature);
+        success = await this.api.turnDeviceOn(this.deviceId, this.targetTemperature);
       } else {
-        await this.api.turnDeviceOff(this.deviceId);
+        success = await this.api.turnDeviceOff(this.deviceId);
+      }
+      
+      // If API call failed, revert HomeKit state to match actual device state
+      if (!success) {
+        this.platform.log.warn(`API command failed, reverting HomeKit state from ${on ? 'ON' : 'OFF'} back to ${originalState ? 'ON' : 'OFF'}`);
+        this.isPowered = originalState;
+        this.updateAllServices();
+        
+        // Force refresh device status to get the real state
+        setTimeout(() => {
+          this.refreshDeviceStatus(true).catch(error => {
+            this.platform.log.error(`Failed to refresh device status after API failure: ${error}`);
+          });
+        }, 2000);
       }
     } catch (error) {
       this.platform.log.error(`Failed to set power state: ${error}`);
+      
+      // On exception, also revert HomeKit state
+      this.platform.log.warn(`Exception occurred, reverting HomeKit state from ${on ? 'ON' : 'OFF'} back to ${originalState ? 'ON' : 'OFF'}`);
+      this.isPowered = originalState;
+      this.updateAllServices();
+      
+      // Force refresh device status to get the real state
+      setTimeout(() => {
+        this.refreshDeviceStatus(true).catch(refreshError => {
+          this.platform.log.error(`Failed to refresh device status after exception: ${refreshError}`);
+        });
+      }, 2000);
     }
   }
   
