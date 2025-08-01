@@ -8,6 +8,22 @@
   <img src="https://github.com/homebridge/branding/raw/latest/logos/homebridge-wordmark-logo-vertical.png" width="150">
 </p>
 
+## 🎬 See It In Action
+
+<p align="center">
+  <a href="https://github.com/jcfield-boop/homebridge-SleepMeSimple/raw/main/sleepme-simple-promo.mp4">
+    <img src="https://img.shields.io/badge/▶️_Watch_Demo-30s_Video-blue?style=for-the-badge&logo=video" alt="Watch Demo Video" width="200">
+  </a>
+</p>
+
+*Click above to watch our 30-second overview showcasing native HomeKit integration, simplified controls, and reliable device management.*
+
+> **📱 Features shown in video:**
+> - Native HomeKit device control and temperature adjustment
+> - Three interface modes (Switch, Thermostat, Hybrid)
+> - Real-time status synchronization and smart rate limiting
+> - Easy installation with `npm install homebridge-sleepme-simple`
+
 A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad) that provides reliable and responsive HomeKit integration with advanced API management.
 
 ## Key Features

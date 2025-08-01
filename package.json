@@ -25,7 +25,8 @@
     "homebridge-ui",
     "license.md",
     "CHANGELOG.md",
-    "README.MD"
+    "README.MD",
+    "sleepme-simple-promo.mp4"
   ],
   "keywords": [
     "homebridge-plugin",

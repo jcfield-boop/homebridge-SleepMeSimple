@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.1.14 (2025-08-01)
+
+### 🎬 Added Promotional Video and Enhanced Documentation
+
+**Added professional promotional video** showcasing the plugin's key features and HomeKit integration.
+
+**New Content**:
+- **30-second promotional video** created with Remotion showcasing:
+  - Native HomeKit device control and temperature adjustment
+  - Three interface modes (Switch, Thermostat, Hybrid)
+  - Real-time status synchronization and smart rate limiting
+  - Professional animations and modern design
+- **Enhanced README** with prominent "See It In Action" section
+- **Clickable demo button** for easy video access on GitHub
+
+**Technical Details**:
+- Video file included in npm package distribution (2.5MB, 1080p)
+- GitHub-friendly presentation with download link
+- Professional badge-style button design
+- Features overview highlighting video content
+
+**Benefits**:
+- **Immediate visual appeal** for new users discovering the plugin
+- **Professional presentation** demonstrating active maintenance
+- **Quick feature overview** helping users understand capabilities
+- **Easy installation guidance** with visual demonstration
+
 ## 7.1.13 (2025-07-31)
 
 ### 🔥 Critical Fix: Aggressive Retry Logic for OFF Commands
