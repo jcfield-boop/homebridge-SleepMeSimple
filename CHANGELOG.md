@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.1.13 (2025-07-31)
+
+### 🔥 Critical Fix: Aggressive Retry Logic for OFF Commands
+
+**Fixed OFF commands failing completely** due to API server-level rate limiting despite plugin bypasses working correctly.
+
+**Problem**: OFF commands were hitting 429 rate limits at the API server level (beyond plugin control) and failing after only 3 retry attempts. Even when plugin bypasses were used, the SleepMe API server itself was still rate limiting, causing OFF commands to fail completely and leaving devices stuck in the ON state.
+
+**Root Cause Analysis**: 
+- Plugin-level critical bypasses were working correctly
+- But API server has its own rate limiting that can't be bypassed by the plugin
+- OFF commands were only getting 3 retry attempts before giving up
+- Users had to use the native SleepMe app to turn devices off
+
+**Solution**:
+- **Aggressive OFF command retries**: OFF commands now get **10 retry attempts** (vs 3 for normal commands)
+- **Prioritized retry queue**: OFF commands jump ahead in the retry queue for faster processing
+- **Enhanced retry logging**: Special tracking and feedback for OFF command retry attempts  
+- **Clear failure messages**: When OFF commands fail after all retries, clearly indicates API server-level rate limiting
+
+**Technical Changes**:
+- Updated `src/api/sleepme-api.ts` with OFF command detection and special retry limits
+- Enhanced `requeueRequest()` method to prioritize OFF commands with aggressive retry timing
+- Added comprehensive logging for OFF command retry attempts and failures
+
+**Impact**: OFF commands should now succeed even under heavy rate limiting conditions by retrying aggressively until the API server accepts the request.
+
 ## 7.1.12 (2025-07-31)
 
 ### 🔧 Critical Fix: HomeKit State Sync When API Commands Fail

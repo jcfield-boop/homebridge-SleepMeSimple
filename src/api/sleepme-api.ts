@@ -1096,18 +1096,45 @@ private async processQueue(): Promise<void> {
           
           // Legacy rate limiting counter removed - now handled by token bucket limiter
           
+          // Special handling for OFF commands - they are critical for UX
+          const isOffCommand = request.data && 
+                             typeof request.data === 'object' && 
+                             'thermal_control_status' in request.data && 
+                             request.data.thermal_control_status === 'standby';
+          
+          // Determine retry limits based on command type
+          let maxRetries = MAX_RETRIES;
+          if (request.priority === RequestPriority.CRITICAL) {
+            maxRetries = isOffCommand ? 10 : 6; // OFF commands get 10 retries, other critical get 6
+          }
+          
           // For 429 errors, don't immediately requeue - let the empirical rate limiter handle backoff
           // The request will be retried when the rate limiter allows it
-          if (request.retryCount < MAX_RETRIES) {
+          if (request.retryCount < maxRetries) {
             request.retryCount++;
+            
+            // Special logging for OFF commands to track their retry attempts
+            if (isOffCommand) {
+              this.logger.warn(
+                `OFF command rate limited (429), retry ${request.retryCount}/${maxRetries} - OFF commands are critical for UX`
+              );
+            }
+            
             this.requeueRequest(request);
             // Don't remove the request from queue - it was requeued
             continue;
           } else {
             // Max retries exceeded
-            this.logger.error(
-              `Rate limit (429) retries exceeded for ${request.priority} request`
-            );
+            if (isOffCommand) {
+              this.logger.error(
+                `CRITICAL: OFF command failed after ${maxRetries} retries due to persistent rate limiting. ` +
+                `This indicates API server-level rate limiting beyond plugin control.`
+              );
+            } else {
+              this.logger.error(
+                `Rate limit (429) retries exceeded for ${request.priority} request`
+              );
+            }
             request.reject(error);
           }
         }
@@ -1269,12 +1296,22 @@ private removeRequest(request: QueuedRequest): void {
  * @param request Request to requeue
  */
 private requeueRequest(request: QueuedRequest): void {
+  // Check if this is an OFF command for special handling
+  const isOffCommand = request.data && 
+                     typeof request.data === 'object' && 
+                     'thermal_control_status' in request.data && 
+                     request.data.thermal_control_status === 'standby';
+  
+  // For OFF commands, use aggressive retry timing (immediate requeue)
+  // For other commands, use normal timestamp
+  const retryTimestamp = isOffCommand ? Date.now() - 30000 : Date.now(); // OFF commands get prioritized by appearing older
+  
   // Create new request with incremented retry count
   const newRequest: QueuedRequest = {
     ...request,
     executing: false,
     retryCount: request.retryCount + 1,
-    timestamp: Date.now() // Update timestamp for proper sorting
+    timestamp: retryTimestamp // OFF commands get prioritized timing
   };
   
   // Add to the appropriate queue based on priority
