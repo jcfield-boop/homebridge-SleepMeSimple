@@ -1,5 +1,34 @@
 # Changelog
 
+## 7.1.15 (2025-08-02)
+
+### 🔧 Critical Fix: HomeKit Synchronization Issue
+
+**Fixed HomeKit interface showing incorrect device state** when commands are rate limited by the SleepMe API.
+
+**The Problem**:
+- When a power toggle command was rate limited (HTTP 429), HomeKit would show the device as OFF
+- Background status updates would then overwrite this with cached data showing the device as ON
+- Users had to toggle the switch twice to actually control the device
+
+**The Solution**:
+- **Added pending command state tracking** to prevent status update conflicts
+- **Enhanced power state update logic** to respect pending commands for up to 30 seconds
+- **Improved command handling** with proper cleanup on completion/timeout
+- **Added comprehensive cleanup** for pending commands during accessory destruction
+
+**Technical Details**:
+- Pending commands block status updates from overwriting optimistic HomeKit states
+- Automatic timeout after 30 seconds prevents stuck states
+- Commands are properly tracked through retry cycles and rate limiting
+- Handles both successful completions and error conditions
+
+**Benefits**:
+- **Eliminates double-toggle requirement** - commands work on first try
+- **Maintains responsive UI** during rate limiting periods
+- **Prevents state confusion** between HomeKit and actual device state
+- **Improves user experience** with more reliable control
+
 ## 7.1.14 (2025-08-01)
 
 ### 🎬 Added Promotional Video and Enhanced Documentation
