@@ -1,9 +1,0 @@
-{
-  "apiToken": "your-sleep-me-api-token-here",
-  "deviceId": "optional-device-id-will-auto-discover-if-omitted",
-  "notes": {
-    "howToGetToken": "Get your API token from the SleepMe developer portal or app settings",
-    "howToGetDeviceId": "Leave deviceId empty and the tool will auto-discover your device",
-    "safety": "This tool only makes GET requests and will not modify your device settings"
-  }
-}
