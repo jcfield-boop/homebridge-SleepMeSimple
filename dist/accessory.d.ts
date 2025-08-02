@@ -34,6 +34,8 @@ export declare class SleepMeAccessory {
     private statusUpdateTimer?;
     private lastStatusUpdate;
     private lastUserActionTime;
+    private pendingPowerCommand?;
+    private pendingTemperatureCommand?;
     private lastScheduleActionTime;
     private failedUpdateAttempts;
     private updateInProgress;
@@ -92,6 +94,14 @@ export declare class SleepMeAccessory {
      * Get target heating/cooling state (AUTO when on, OFF when off)
      */
     private getTargetHeatingCoolingState;
+    /**
+     * Clear pending power command and its timeout
+     */
+    private clearPendingPowerCommand;
+    /**
+     * Clear pending temperature command and its timeout
+     */
+    private clearPendingTemperatureCommand;
     /**
      * Power toggle handler for switch interface
      */

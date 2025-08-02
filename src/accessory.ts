@@ -98,6 +98,18 @@ export class SleepMeAccessory {
   private statusUpdateTimer?: NodeJS.Timeout;
   private lastStatusUpdate = 0;
   private lastUserActionTime = 0;
+  
+  // Pending command state to prevent status update conflicts
+  private pendingPowerCommand?: {
+    targetState: boolean;
+    timestamp: number;
+    timeout?: NodeJS.Timeout;
+  };
+  private pendingTemperatureCommand?: {
+    targetTemperature: number;
+    timestamp: number;
+    timeout?: NodeJS.Timeout;
+  };
   private lastScheduleActionTime = 0;
   private failedUpdateAttempts = 0;
   private updateInProgress = false;
@@ -443,6 +455,9 @@ export class SleepMeAccessory {
         success = await this.api.turnDeviceOff(this.deviceId);
       }
       
+      // Clear pending command - operation completed (success or failure)
+      this.clearPendingPowerCommand();
+      
       // If API call failed, revert HomeKit state to match actual device state
       if (!success) {
         this.platform.log.warn(`API command failed, reverting HomeKit state from ${on ? 'ON' : 'OFF'} back to ${originalState ? 'ON' : 'OFF'}`);
@@ -455,9 +470,14 @@ export class SleepMeAccessory {
             this.platform.log.error(`Failed to refresh device status after API failure: ${error}`);
           });
         }, 2000);
+      } else {
+        this.platform.log.debug(`Power command completed successfully: ${on ? 'ON' : 'OFF'}`);
       }
     } catch (error) {
       this.platform.log.error(`Failed to set power state: ${error}`);
+      
+      // Clear pending command on exception too
+      this.clearPendingPowerCommand();
       
       // On exception, also revert HomeKit state
       this.platform.log.warn(`Exception occurred, reverting HomeKit state from ${on ? 'ON' : 'OFF'} back to ${originalState ? 'ON' : 'OFF'}`);
@@ -503,6 +523,26 @@ export class SleepMeAccessory {
   }
   
   /**
+   * Clear pending power command and its timeout
+   */
+  private clearPendingPowerCommand(): void {
+    if (this.pendingPowerCommand?.timeout) {
+      clearTimeout(this.pendingPowerCommand.timeout);
+    }
+    this.pendingPowerCommand = undefined;
+  }
+  
+  /**
+   * Clear pending temperature command and its timeout
+   */
+  private clearPendingTemperatureCommand(): void {
+    if (this.pendingTemperatureCommand?.timeout) {
+      clearTimeout(this.pendingTemperatureCommand.timeout);
+    }
+    this.pendingTemperatureCommand = undefined;
+  }
+
+  /**
    * Power toggle handler for switch interface
    */
   private async handlePowerToggle(value: CharacteristicValue): Promise<void> {
@@ -515,6 +555,19 @@ export class SleepMeAccessory {
     if (shouldTurnOn === this.isPowered) {
       return;
     }
+    
+    // Clear any existing pending power command
+    this.clearPendingPowerCommand();
+    
+    // Set up pending command tracking to prevent status update conflicts
+    this.pendingPowerCommand = {
+      targetState: shouldTurnOn,
+      timestamp: Date.now(),
+      timeout: setTimeout(() => {
+        this.platform.log.warn(`Pending power command timeout after 30s for ${this.deviceId}`);
+        this.clearPendingPowerCommand();
+      }, 30000)
+    };
     
     // Update state immediately for responsiveness
     this.isPowered = shouldTurnOn;
@@ -868,14 +921,31 @@ export class SleepMeAccessory {
         this.targetTemperature = validatedTargetTemp;
       }
       
-      // Update power state
+      // Update power state - but respect pending commands to prevent conflicts
       const newPowerState = status.powerState === PowerState.ON || 
                            (status.thermalStatus !== ThermalStatus.STANDBY && 
                             status.thermalStatus !== ThermalStatus.OFF);
       
-      if (this.isPowered !== newPowerState) {
-        this.platform.log.debug(`Power state update: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
-        this.isPowered = newPowerState;
+      // Check if we have a pending power command that should take precedence
+      if (this.pendingPowerCommand) {
+        const pendingAge = Date.now() - this.pendingPowerCommand.timestamp;
+        if (pendingAge < 30000) { // Respect pending commands for up to 30 seconds
+          this.platform.log.debug(`Skipping power state update due to pending command (${Math.round(pendingAge/1000)}s old): keeping optimistic state ${this.isPowered ? 'ON' : 'OFF'}`);
+        } else {
+          // Pending command is too old, clear it and use server state
+          this.platform.log.warn(`Pending power command expired after ${Math.round(pendingAge/1000)}s, using server state: ${newPowerState ? 'ON' : 'OFF'}`);
+          this.clearPendingPowerCommand();
+          if (this.isPowered !== newPowerState) {
+            this.platform.log.debug(`Power state update: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
+            this.isPowered = newPowerState;
+          }
+        }
+      } else {
+        // No pending command, safe to update from server state
+        if (this.isPowered !== newPowerState) {
+          this.platform.log.debug(`Power state update: ${this.isPowered ? 'ON' : 'OFF'} → ${newPowerState ? 'ON' : 'OFF'}`);
+          this.isPowered = newPowerState;
+        }
       }
       
       // Update water level if available
@@ -905,5 +975,9 @@ export class SleepMeAccessory {
       clearInterval(this.statusUpdateTimer);
       this.statusUpdateTimer = undefined;
     }
+    
+    // Clean up any pending commands
+    this.clearPendingPowerCommand();
+    this.clearPendingTemperatureCommand();
   }
 }
