@@ -1,7 +1,7 @@
 # SleepMe Simple - Homebridge Plugin
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jcfield-boop/homebridge-SleepMeSimple/main/icons/sleepmebasic.png" width="100" height="100">
+  <img src="https://raw.githubusercontent.com/jcfield-boop/homebridge-SleepMeSimple/main/homebridge-ui/public/icons/sleepmebasic.png" width="100" height="100">
 </p>
 
 <p align="center">
