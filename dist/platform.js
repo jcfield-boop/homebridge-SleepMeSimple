@@ -1,6 +1,10 @@
+/**
+ * Entry point for the SleepMe Simple Homebridge plugin
+ * This file exports the platform constructor to Homebridge
+ */
 import { SleepMeApi } from './api/sleepme-api.js';
 import { SleepMeAccessory } from './accessory.js';
-import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel } from './settings.js';
+import { PLATFORM_NAME, PLUGIN_NAME, DEFAULT_POLLING_INTERVAL, LogLevel, } from './settings.js';
 import { ScheduleManager } from './schedule.js';
 /**
  * SleepMe Simple Platform
@@ -25,7 +29,8 @@ export class SleepMeSimplePlatform {
     pollingInterval;
     temperatureUnit = 'C';
     startTime;
-    startupDelay = 45000; // Default 45 seconds
+    // Startup delay (ms) – default 45 seconds
+    startupDelay = 45000;
     // Map to track active accessory instances for proper cleanup
     accessoryInstances = new Map();
     // Timer for periodic device discovery
@@ -77,15 +82,34 @@ export class SleepMeSimplePlatform {
             // Initialize the SleepMe API client with the provided token
             this.api = new SleepMeApi(config.apiToken, this.log);
             // Log platform initialization information
-            this.log.info(`Initializing ${PLATFORM_NAME} platform with ${this.temperatureUnit === 'C' ? 'Celsius' : 'Fahrenheit'} ` +
-                `units and ${this.pollingInterval}s polling interval`);
+            this.log.info(`Initializing ${PLATFORM_NAME} platform with ${this.temperatureUnit === 'C' ? 'Celsius' : 'Fahrenheit'} units and ${this.pollingInterval}s polling interval`);
             // Initialize the warm hug config upfront
             const warmHugConfig = {
                 increment: config.advanced?.warmHugIncrement || 2,
-                duration: config.advanced?.warmHugDuration || 10
+                duration: config.advanced?.warmHugDuration || 10,
             };
-            // Get startup delay configuration (default to 45 seconds for rate limit management)
-            this.startupDelay = (config.advanced?.startupDelay || 45) * 1000;
+            // --- SAFE STARTUP DELAY HANDLING ---
+            // Get startup delay configuration (seconds, default 45, range 5–300)
+            const rawStartupDelay = Number(config.advanced?.startupDelay);
+            let startupDelaySeconds;
+            if (Number.isFinite(rawStartupDelay)) {
+                startupDelaySeconds = rawStartupDelay;
+            }
+            else {
+                startupDelaySeconds = 45;
+            }
+            // Clamp to documented safe range 5–300 seconds and avoid negatives
+            if (startupDelaySeconds < 5) {
+                this.log.warn(`Configured startupDelay (${startupDelaySeconds}s) is below minimum 5s. Clamping to 5s.`);
+                startupDelaySeconds = 5;
+            }
+            else if (startupDelaySeconds > 300) {
+                this.log.warn(`Configured startupDelay (${startupDelaySeconds}s) exceeds maximum 300s. Clamping to 300s.`);
+                startupDelaySeconds = 300;
+            }
+            this.startupDelay = startupDelaySeconds * 1000;
+            this.log.info(`Using startup delay of ${startupDelaySeconds}s (${this.startupDelay}ms) before initial discovery`);
+            // --- END SAFE STARTUP DELAY HANDLING ---
             // Initialize schedule manager if enabled
             if (config.enableSchedules && this.api) {
                 // Create the schedule manager with callback for adaptive polling
@@ -119,7 +143,7 @@ export class SleepMeSimplePlatform {
                     await this.discoverDevices();
                     // Add delay between discovery and status requests to avoid rate limiting
                     this.log.info('Waiting 5s before initial device status requests to avoid rate limits...');
-                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await new Promise((resolve) => setTimeout(resolve, 5000));
                     // Mark initial discovery as complete to allow HIGH priority for subsequent discoveries
                     if (this.api) {
                         this.api.markInitialDiscoveryComplete();
@@ -128,7 +152,7 @@ export class SleepMeSimplePlatform {
                     if (config.enableSchedules && this.api && this._scheduleManager) {
                         // Extract device IDs from discovered accessories
                         const deviceIds = [];
-                        this.accessories.forEach(accessory => {
+                        this.accessories.forEach((accessory) => {
                             const deviceId = accessory.context.device?.id;
                             if (deviceId) {
                                 deviceIds.push(deviceId);
@@ -138,7 +162,8 @@ export class SleepMeSimplePlatform {
                             this.log.info(`Applying schedules to ${deviceIds.length} discovered devices`);
                             // In platform.ts - MODIFIED CODE
                             // Inside the didFinishLaunching callback
-                            if (Array.isArray(config.schedules) && config.schedules.length > 0) {
+                            if (Array.isArray(config.schedules) &&
+                                config.schedules.length > 0) {
                                 for (const deviceId of deviceIds) {
                                     const schedules = [];
                                     for (const scheduleConfig of config.schedules) {
@@ -146,10 +171,11 @@ export class SleepMeSimplePlatform {
                                         const schedule = {
                                             type: ScheduleManager.scheduleTypeFromString(scheduleConfig.type),
                                             time: scheduleConfig.time,
-                                            temperature: scheduleConfig.temperature
+                                            temperature: scheduleConfig.temperature,
                                         };
                                         // Add day for specific day schedules
-                                        if (scheduleConfig.type === 'Specific Day' && scheduleConfig.day !== undefined) {
+                                        if (scheduleConfig.type === 'Specific Day' &&
+                                            scheduleConfig.day !== undefined) {
                                             schedule.day = ScheduleManager.dayNameToDayOfWeek(scheduleConfig.day);
                                         }
                                         // Add description if present
@@ -197,7 +223,7 @@ export class SleepMeSimplePlatform {
                 this._scheduleManager.cleanup();
             }
             // Clean up accessory resources
-            this.accessoryInstances.forEach(accessory => {
+            this.accessoryInstances.forEach((accessory) => {
                 accessory.cleanup();
             });
         });
@@ -220,7 +246,8 @@ export class SleepMeSimplePlatform {
             warn: (message) => logger.warn(`[SleepMe Simple] ${message}`),
             error: (message) => logger.error(`[SleepMe Simple] ${message}`),
             debug: (message) => {
-                if (this.logLevel === LogLevel.DEBUG || this.logLevel === LogLevel.VERBOSE) {
+                if (this.logLevel === LogLevel.DEBUG ||
+                    this.logLevel === LogLevel.VERBOSE) {
                     logger.debug(`[SleepMe Simple] ${message}`);
                 }
             },
@@ -230,7 +257,8 @@ export class SleepMeSimplePlatform {
                 }
             },
             isVerbose: () => this.logLevel === LogLevel.VERBOSE,
-            isDebug: () => this.logLevel === LogLevel.DEBUG || this.logLevel === LogLevel.VERBOSE
+            isDebug: () => this.logLevel === LogLevel.DEBUG ||
+                this.logLevel === LogLevel.VERBOSE,
         };
     }
     /**
@@ -278,10 +306,10 @@ export class SleepMeSimplePlatform {
                 // Use the devices from config instead of making an API call
                 this.log.info(`Using ${configuredDevices.length} devices from configuration`);
                 // Map config devices to the format expected by the rest of the code
-                devices = configuredDevices.map(device => ({
+                devices = configuredDevices.map((device) => ({
                     id: device.id,
                     name: device.name || `SleepMe Device (${device.id})`,
-                    attachments: [] // Add required fields with default values
+                    attachments: [], // Add required fields with default values
                 }));
             }
             else {
@@ -302,8 +330,8 @@ export class SleepMeSimplePlatform {
                 const device = devices[i];
                 // Add significant delay between devices (45 seconds)
                 if (i > 0) {
-                    this.log.info(`Waiting 45s before initializing next device...`);
-                    await new Promise(resolve => setTimeout(resolve, 45000));
+                    this.log.info('Waiting 45s before initializing next device...');
+                    await new Promise((resolve) => setTimeout(resolve, 45000));
                 }
                 // Skip devices with missing IDs
                 if (!device.id) {
@@ -317,7 +345,7 @@ export class SleepMeSimplePlatform {
                 // Generate a unique identifier for this device in HomeKit
                 const uuid = this.homebridgeApi.hap.uuid.generate(device.id);
                 // Check if we already have an accessory for this device
-                const existingAccessory = this.accessories.find(acc => acc.UUID === uuid);
+                const existingAccessory = this.accessories.find((acc) => acc.UUID === uuid);
                 if (existingAccessory) {
                     // The accessory already exists, just update its context
                     this.log.info(`Restoring accessory from cache: ${existingAccessory.displayName} (ID: ${device.id})`);
@@ -367,7 +395,7 @@ export class SleepMeSimplePlatform {
     initializeAccessory(accessory, deviceId) {
         // Skip initialization if the plugin is not properly configured
         if (!this.isConfigured || !this.api) {
-            this.log.warn(`Skipping accessory initialization because the plugin is not properly configured`);
+            this.log.warn('Skipping accessory initialization because the plugin is not properly configured');
             return;
         }
         this.log.info(`Initializing accessory for device ID: ${deviceId}`);
@@ -391,7 +419,7 @@ export class SleepMeSimplePlatform {
      */
     cleanupInactiveAccessories(activeDeviceIds) {
         // Find accessories to remove - those not in the active devices list
-        const accessoriesToRemove = this.accessories.filter(accessory => {
+        const accessoriesToRemove = this.accessories.filter((accessory) => {
             const deviceId = accessory.context.device?.id;
             return deviceId && !activeDeviceIds.has(deviceId);
         });
