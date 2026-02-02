@@ -104,7 +104,12 @@ export class SleepMeApi {
   private startupFinished = false;
   private initialDiscoveryComplete = false;
   private startupTime = Date.now();
-  
+
+  // Auth format detection - handles API auth changes transparently
+  private authHeaderValue: string;
+  private triedWithoutBearer = false;
+  private authFormatChangeLogged = false;
+
   /**
    * Create a new SleepMe API client
    * @param apiToken API authentication token
@@ -119,7 +124,9 @@ export class SleepMeApi {
       this.logger.error('Invalid API token provided');
       throw new Error('Invalid API token provided');
     }
-    
+
+    this.authHeaderValue = `Bearer ${this.apiToken}`;
+
     // Startup will be marked complete by the platform after initial discovery
     this.startupComplete = new Promise(resolve => {
       // The platform will call markStartupComplete() when ready
@@ -1029,7 +1036,7 @@ private async processQueue(): Promise<void> {
         // Add auth token to request
         request.config.headers = {
           ...(request.config.headers || {}),
-          Authorization: `Bearer ${this.apiToken}`
+          Authorization: this.authHeaderValue
         };
         
         this.logger.verbose(
@@ -1049,7 +1056,16 @@ private async processQueue(): Promise<void> {
         this.empiricalRateLimiter.recordRequest(request.priority, true, responseTime, false);
         this.ultraConservativeRateLimiter.recordRequest(request.priority, true, false);
         this.discreteWindowLimiter.recordRequest(request.priority, true, false);
-        
+
+        // Log when auth format change is detected and confirmed working
+        if (this.triedWithoutBearer && !this.authFormatChangeLogged) {
+          this.logger.info(
+            'API auth format change detected: successfully authenticated without Bearer prefix. ' +
+            'Using updated format for all subsequent requests.'
+          );
+          this.authFormatChangeLogged = true;
+        }
+
         // Log successful request timing for patterns analysis
         this.logger.verbose(
           `Request success: ${request.method} ${request.url} [${request.priority}] ` +
@@ -1137,6 +1153,27 @@ private async processQueue(): Promise<void> {
             }
             request.reject(error);
           }
+        }
+        else if (axiosError.response?.status === 403) {
+          // 403 Forbidden - authentication issue
+          // On first 403, try without Bearer prefix in case the API auth format changed
+          if (!this.triedWithoutBearer && this.authHeaderValue.startsWith('Bearer ')) {
+            this.logger.warn(
+              'Received 403 Forbidden - API may have changed auth format. Retrying without Bearer prefix...'
+            );
+            this.triedWithoutBearer = true;
+            this.authHeaderValue = this.apiToken;
+            this.requeueRequest(request);
+            continue;
+          }
+
+          // Auth format change didn't help, or already tried - token is likely invalid
+          this.logger.error(
+            'Authentication failed (403 Forbidden). ' +
+            'Please verify your API token is valid. You may need to generate ' +
+            'a new token at https://docs.developer.sleep.me/docs/setup'
+          );
+          request.reject(error);
         }
         else {
           // For other errors, check retry logic by priority

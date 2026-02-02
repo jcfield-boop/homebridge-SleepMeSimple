@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.1.18 (2026-02-01)
+
+### 🔧 Fix: API Authentication Auto-Detection
+
+**Fixed 403 Forbidden authentication errors** caused by SleepMe API authentication format changes.
+
+**Problem**: Users experiencing "403 Forbidden" errors and "No SleepMe devices found" messages due to API authentication format changes.
+
+**Solution**:
+- **Automatic auth format detection**: Plugin automatically detects and adapts to API authentication changes
+- **Smart retry with fallback**: On 403 errors, retries without Bearer prefix and switches permanently if successful
+- **Improved error messages**: Clear guidance directing users to regenerate API token if authentication fails
+- **No more pointless retries**: 403 errors handled intelligently instead of wasting retry attempts
+
+**Technical Changes**:
+- Added `authHeaderValue` property for dynamic auth format switching
+- Added 403-specific error handler with automatic fallback to direct token format
+- Added confirmation logging when auth format change is detected and working
+- Prevents endless retry loops on authentication failures
+
+**User Impact**:
+- Plugin automatically adapts to API changes without user intervention
+- Clear error messages guide users when token regeneration is needed
+- Better reliability for users experiencing authentication issues
+
+**Note**: Version 7.1.17 deprecated due to build configuration issue.
+
 ## 7.1.14 (2025-08-01)
 
 ### 🎬 Added Promotional Video and Enhanced Documentation
