@@ -1,5 +1,27 @@
 # Changelog
 
+## 7.1.22 (2026-02-02)
+
+### 🐛 Fix: Negative Timeout Warning
+
+**Fixed Node.js `TimeoutNegativeWarning` during startup.**
+
+**The Problem**:
+Node.js was logging warnings like `TimeoutNegativeWarning: -4000 is a negative number. Timeout duration was set to 1.` during plugin startup.
+
+**Root Cause**:
+Rate limiter code was calculating wait times by subtracting timestamps without ensuring the result was non-negative. When the backoff period had already passed, this produced negative values which Node.js then coerced to 1ms.
+
+**The Fix**:
+Added `Math.max(0, ...)` guards to all wait time calculations in:
+- `empirical-token-bucket-limiter.ts` - Adaptive backoff wait time
+- `ultra-conservative-rate-limiter.ts` - Emergency backoff wait time
+- `empirical-rate-limiter.ts` - Adaptive backoff wait time
+
+**User Impact**:
+- No more `TimeoutNegativeWarning` messages in logs
+- Cleaner startup experience
+
 ## 7.1.21 (2026-02-02)
 
 ### 🔧 Fix: Custom UI Configuration Architecture

@@ -90,11 +90,11 @@ export class EmpiricalRateLimiter {
         }
       }
       
-      const waitTime = this.adaptiveBackoffUntil - now;
-      return { 
-        allowed: false, 
-        waitTime, 
-        reason: `Adaptive backoff active (${Math.ceil(waitTime / 1000)}s remaining)` 
+      const waitTime = Math.max(0, this.adaptiveBackoffUntil - now);
+      return {
+        allowed: false,
+        waitTime,
+        reason: `Adaptive backoff active (${Math.ceil(waitTime / 1000)}s remaining)`
       };
     }
 

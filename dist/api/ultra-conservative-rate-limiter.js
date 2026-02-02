@@ -50,7 +50,7 @@ export class UltraConservativeRateLimiter {
             }
             return {
                 allowed: false,
-                waitTimeMs: this.bucket.emergencyBackoffUntil - now,
+                waitTimeMs: Math.max(0, this.bucket.emergencyBackoffUntil - now),
                 reason: `Emergency backoff (${this.bucket.consecutiveFailures} consecutive failures)`,
                 tokensRemaining: this.bucket.tokens,
                 nextRefillTime: this.bucket.lastRefillTime + this.config.refillIntervalMs

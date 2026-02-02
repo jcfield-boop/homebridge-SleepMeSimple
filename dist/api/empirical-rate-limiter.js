@@ -50,7 +50,7 @@ export class EmpiricalRateLimiter {
                     return { allowed: true, waitTime: 0, reason: 'HIGH priority startup grace period bypass' };
                 }
             }
-            const waitTime = this.adaptiveBackoffUntil - now;
+            const waitTime = Math.max(0, this.adaptiveBackoffUntil - now);
             return {
                 allowed: false,
                 waitTime,

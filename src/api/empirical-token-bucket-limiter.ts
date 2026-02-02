@@ -119,13 +119,14 @@ export class EmpiricalDiscreteWindowLimiter {
         };
       }
       
+      const backoffWaitTime = Math.max(0, this.state.adaptiveBackoffUntil - now);
       return {
         allowed: false,
         reason: 'Adaptive backoff active',
-        waitTimeMs: this.state.adaptiveBackoffUntil - now,
+        waitTimeMs: backoffWaitTime,
         requestsRemaining: this.config.requestsPerWindow - this.state.requestsInCurrentWindow,
         nextWindowTime: this.calculateNextWindowTime(),
-        recommendation: `Wait ${Math.ceil((this.state.adaptiveBackoffUntil - now) / 1000)}s for adaptive backoff to end`
+        recommendation: `Wait ${Math.ceil(backoffWaitTime / 1000)}s for adaptive backoff to end`
       };
     }
 
