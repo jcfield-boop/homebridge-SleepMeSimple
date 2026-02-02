@@ -1,5 +1,44 @@
 # Changelog
 
+## 7.1.21 (2026-02-02)
+
+### 🔧 Fix: Custom UI Configuration Architecture
+
+**Fixed fundamental architectural issue with custom UI config load/save mechanism.**
+
+**The Problem**:
+Previous versions (7.1.19-7.1.20) attempted to use `getPluginConfig()`, `updatePluginConfig()`, and `savePluginConfig()` methods on the server-side `HomebridgePluginUiServer` class. These methods don't exist on the server - they are **client-side only** methods available on the `homebridge` object in the browser.
+
+**Root Cause**:
+- `server.js` had `/config/load` and `/config/save` endpoints calling `this.getPluginConfig()` which doesn't exist on `HomebridgePluginUiServer`
+- The frontend was making server requests instead of using the client-side API directly
+- This architectural misunderstanding caused config operations to fail silently
+
+**The Solution**:
+Rewrote the configuration mechanism to use the correct Homebridge Plugin UI Utils API:
+
+- **Removed server-side config handlers** - `server.js` no longer handles config load/save
+- **Client-side API only** - `ui-config-handlers.js` now calls `homebridge.getPluginConfig()`, `homebridge.updatePluginConfig()`, and `homebridge.savePluginConfig()` directly in the browser
+- **Removed workaround file** - Deleted `ui-config-fix.js` as it's no longer needed
+- **Cleaned up HTML** - Removed script references to deleted file
+
+**Technical Details**:
+Per the [Homebridge plugin-ui-utils documentation](https://github.com/homebridge/plugin-ui-utils):
+- `homebridge.getPluginConfig()` - Client-side method returning config array
+- `homebridge.updatePluginConfig(array)` - Client-side method updating config in memory
+- `homebridge.savePluginConfig()` - Client-side method persisting to disk
+
+**Files Changed**:
+- `homebridge-ui/server.js` - Removed broken config endpoints, kept only `/device/test`
+- `homebridge-ui/public/js/ui-config-handlers.js` - Complete rewrite using client-side API
+- `homebridge-ui/public/js/ui-config-fix.js` - Deleted (no longer needed)
+- `homebridge-ui/public/index.html` - Removed references to deleted file
+
+**User Impact**:
+- Configuration now loads and saves correctly through the custom UI
+- No more silent failures or hanging "Loading configuration..." states
+- Settings persist properly to config.json
+
 ## 7.1.20 (2026-02-01)
 
 ### 🐛 Fix: Custom UI Config Save and Load Issues (Complete Fix)
@@ -88,6 +127,35 @@ See 7.1.19 changelog below for full technical details.
 - Better reliability for users experiencing authentication issues
 
 **Note**: Version 7.1.17 deprecated due to build configuration issue.
+
+## 7.1.15 (2025-08-02)
+
+### 🔧 Critical Fix: HomeKit Synchronization Issue
+
+**Fixed HomeKit interface showing incorrect device state** when commands are rate limited by the SleepMe API.
+
+**The Problem**:
+- When a power toggle command was rate limited (HTTP 429), HomeKit would show the device as OFF
+- Background status updates would then overwrite this with cached data showing the device as ON
+- Users had to toggle the switch twice to actually control the device
+
+**The Solution**:
+- **Added pending command state tracking** to prevent status update conflicts
+- **Enhanced power state update logic** to respect pending commands for up to 30 seconds
+- **Improved command handling** with proper cleanup on completion/timeout
+- **Added comprehensive cleanup** for pending commands during accessory destruction
+
+**Technical Details**:
+- Pending commands block status updates from overwriting optimistic HomeKit states
+- Automatic timeout after 30 seconds prevents stuck states
+- Commands are properly tracked through retry cycles and rate limiting
+- Handles both successful completions and error conditions
+
+**Benefits**:
+- **Eliminates double-toggle requirement** - commands work on first try
+- **Maintains responsive UI** during rate limiting periods
+- **Prevents state confusion** between HomeKit and actual device state
+- **Improves user experience** with more reliable control
 
 ## 7.1.14 (2025-08-01)
 
