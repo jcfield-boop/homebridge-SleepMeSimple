@@ -769,7 +769,7 @@ export class SleepMeApi {
                     const rateLimitCheck = this.discreteWindowLimiter.shouldAllowRequest(request.priority);
                     // Emergency protection: if we've had multiple consecutive rate limits, increase wait time
                     if (this.discreteWindowLimiter.getStatus().consecutiveRateLimits > 2 && !rateLimitCheck.allowed) {
-                        const emergencyWaitMs = Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000);
+                        const emergencyWaitMs = Math.max(0, Math.min(rateLimitCheck.waitTimeMs * 1.5, 60000));
                         this.logger.warn(`Emergency rate limit protection: extending wait to ${Math.ceil(emergencyWaitMs / 1000)}s`);
                         await new Promise(resolve => setTimeout(resolve, emergencyWaitMs));
                         continue;
@@ -825,8 +825,8 @@ export class SleepMeApi {
                             }
                             this.rateExceededLogged = true;
                         }
-                        // Wait for the recommended time
-                        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTimeMs));
+                        // Wait for the recommended time (ensure non-negative)
+                        await new Promise(resolve => setTimeout(resolve, Math.max(0, rateLimitCheck.waitTimeMs)));
                         continue;
                     }
                     // Reset rate exceeded logging on successful check

@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.1.23 (2026-02-02)
+
+### 🐛 Fix: Additional Negative Timeout Safeguards
+
+**Added belt-and-suspenders protection against negative timeout values.**
+
+Building on 7.1.22's fixes, this version adds `Math.max(0, ...)` guards at the setTimeout call sites in `sleepme-api.ts`:
+- Emergency rate limit protection wait time
+- Rate limit check wait time
+
+This ensures even if a rate limiter somehow returns a negative value, the setTimeout will never receive it.
+
 ## 7.1.22 (2026-02-02)
 
 ### 🐛 Fix: Negative Timeout Warning
