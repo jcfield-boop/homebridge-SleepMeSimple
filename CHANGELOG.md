@@ -24,6 +24,13 @@ Added `Math.max()` guards at all setTimeout/setInterval calls that use device ji
 
 This preserves the jitter functionality for spreading out device polling while ensuring timeouts never go negative.
 
+### 🔧 CI/CD: Automated npm Publishing
+
+- Added automatic npm publishing to GitHub Actions release workflow
+- Simplified workflow to prevent hanging issues
+- Added timeouts to build and publish steps
+- Requires `NPM_TOKEN` secret configured in repository settings
+
 ## 7.1.23 (2026-02-02)
 
 ### 🐛 Fix: Additional Negative Timeout Safeguards
