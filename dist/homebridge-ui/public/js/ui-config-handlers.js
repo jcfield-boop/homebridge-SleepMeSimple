@@ -21,6 +21,15 @@ window.loadConfig = async function() {
 
       if (!response || !response.success) {
         console.error('Failed to load config from server:', response?.error);
+
+        // Clear loading notification before returning
+        if (typeof NotificationManager !== 'undefined') {
+          NotificationManager.error(
+            'Failed to load configuration. Using defaults.',
+            'Load Error'
+          );
+        }
+
         return createMockConfig();
       }
 
@@ -88,9 +97,15 @@ window.loadConfig = async function() {
           console.log('Schedules not enabled or no schedules in config');
         }
         
-        // Clear the loading message
+        // Clear the loading notification and show success
         if (typeof NotificationManager !== 'undefined') {
-          // Hide the status message after a short delay
+          NotificationManager.success(
+            'Configuration loaded successfully',
+            'Ready',
+            { autoHide: true }
+          );
+
+          // Also hide the status element if it exists
           setTimeout(() => {
             const statusElement = document.getElementById('status');
             if (statusElement) {
@@ -102,14 +117,41 @@ window.loadConfig = async function() {
         return config;
       } else {
         console.warn('Platform config not found, using default config');
+
+        // Clear loading notification
+        if (typeof NotificationManager !== 'undefined') {
+          NotificationManager.warning(
+            'No existing configuration found. Using defaults.',
+            'New Setup'
+          );
+        }
+
         return createMockConfig();
       }
     } catch (error) {
       console.error('Error getting plugin config:', error);
+
+      // Clear loading notification
+      if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.error(
+          `Error loading configuration: ${error.message}`,
+          'Load Error'
+        );
+      }
+
       return createMockConfig();
     }
   } catch (error) {
     console.error('Unexpected configuration loading error:', error);
+
+    // Clear loading notification
+    if (typeof NotificationManager !== 'undefined') {
+      NotificationManager.error(
+        `Unexpected error: ${error.message}`,
+        'Load Error'
+      );
+    }
+
     return createMockConfig();
   }
 };

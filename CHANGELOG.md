@@ -1,33 +1,66 @@
 # Changelog
 
+## 7.1.20 (2026-02-01)
+
+### 🐛 Fix: Custom UI Config Save and Load Issues (Complete Fix)
+
+**Fixed critical bugs preventing custom UI from loading and saving configuration.**
+
+This is the complete fix for version 7.1.19, which addressed the config save issue but still had the UI hanging on "Loading configuration..."
+
+**Changes from 7.1.19**:
+- Added proper notification clearing in ALL loadConfig code paths (success, error, not found)
+- Success path now shows "Configuration loaded successfully" with auto-hide
+- Error paths show appropriate error messages instead of hanging forever
+- UI now provides clear feedback and loads existing configuration properly
+
+See 7.1.19 changelog below for full technical details.
+
 ## 7.1.19 (2026-02-01)
 
-### 🐛 Fix: Custom UI Config Save Bug
+### 🐛 Fix: Custom UI Config Save and Load Issues
 
-**Fixed configuration not persisting to config.json** when using the custom UI.
+**Fixed critical bugs preventing custom UI from loading and saving configuration.**
 
-**Problem**: Users reported API tokens and other settings entered via the custom UI were not being saved to the config.json file, requiring manual editing of the file.
+**Problem 1 - Config Not Saving**: API tokens and other settings entered via the custom UI were not being saved to the config.json file, requiring manual editing.
 
 **Root Cause**:
 - Server-side `saveConfig` method was calling `updatePluginConfig()` but missing the required `savePluginConfig()` call
 - According to Homebridge docs, `updatePluginConfig()` only updates in-memory and does NOT persist to disk
 - Frontend was trying to call Homebridge methods directly instead of using custom server endpoint
 
+**Problem 2 - UI Hanging on "Loading configuration..."**: Custom UI would show "Please Wait: Loading configuration..." indefinitely and never load existing config values.
+
+**Root Cause**:
+- Frontend was showing loading notification but never clearing it in any code path (success or error)
+- When config load failed or returned empty, the notification stayed visible forever
+- Made UI appear completely broken and unusable
+
 **Solution**:
 - **server.js**: Added missing `savePluginConfig()` call after `updatePluginConfig()` to persist config to disk
-- **ui-config-handlers.js**: Changed frontend to use custom server endpoint `/config/save` which properly handles persistence
+- **ui-config-handlers.js**:
+  - Changed frontend to use custom server endpoint `/config/save` and `/config/load`
+  - Added proper notification clearing in ALL code paths (success, error, not found)
+  - Success path now shows "Configuration loaded successfully" with auto-hide
+  - Error paths show appropriate error messages instead of hanging forever
 - **Simplified workflow**: Server now handles all config array merging and disk persistence
+- **package.json**: Replaced `rimraf` with native `rm -rf` to fix build hanging on macOS
 
 **Technical Changes**:
 - Fixed `server.js` saveConfig method to call both `updatePluginConfig()` and `savePluginConfig()`
 - Updated frontend to use `homebridge.request('/config/save')` instead of direct Homebridge methods
 - Removed redundant config array management from frontend (server handles it now)
-- Load config also uses custom server endpoint for consistency
+- Load config uses custom server endpoint for consistency
+- Added NotificationManager success/error/warning messages in all loadConfig paths
+- Replaced hanging rimraf with native rm -rf command
 
 **User Impact**:
 - Custom UI now properly saves all configuration changes to disk
+- Custom UI loads existing configuration correctly instead of hanging
 - API tokens and settings persist across restarts
+- Clear feedback on config load success/failure
 - No more need to manually edit config.json
+- Build process no longer hangs on macOS
 
 ## 7.1.18 (2026-02-01)
 
