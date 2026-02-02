@@ -118,12 +118,16 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
       }
       
       // Save the updated config
+      // CRITICAL: Must call both methods to persist to disk
       await this.updatePluginConfig(configArray);
-      console.log('[SleepMeUI] Configuration saved successfully');
-      
-      return { 
-        success: true, 
-        message: 'Configuration saved successfully' 
+      console.log('[SleepMeUI] Configuration updated in memory');
+
+      await this.savePluginConfig();
+      console.log('[SleepMeUI] Configuration saved to disk');
+
+      return {
+        success: true,
+        message: 'Configuration saved successfully'
       };
       
     } catch (error) {

@@ -9,22 +9,26 @@ window.loadConfig = async function() {
     }
     
     // Check if homebridge API is available
-    if (typeof homebridge === 'undefined' || typeof homebridge.getPluginConfig !== 'function') {
+    if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
       console.error('Homebridge API not available');
       return createMockConfig();
     }
-    
+
     try {
-      // Get plugin config
-      const pluginConfig = await homebridge.getPluginConfig();
-      console.log('Plugin config retrieved:', pluginConfig);
-      
-      // Find our platform config
-      const config = Array.isArray(pluginConfig) ? 
-        pluginConfig.find(cfg => cfg && cfg.platform === 'SleepMeSimple') : null;
-        
-      if (config) {
-        console.log('Platform config found:', config);
+      // Use custom server endpoint to load config
+      console.log('Loading config via custom server endpoint...');
+      const response = await homebridge.request('/config/load');
+
+      if (!response || !response.success) {
+        console.error('Failed to load config from server:', response?.error);
+        return createMockConfig();
+      }
+
+      const config = response.config;
+      console.log('Config loaded from server:', config);
+
+      if (config && config.platform === 'SleepMeSimple') {
+        console.log('Platform config loaded:', config);
         // Populate form with loaded configuration
         populateFormWithConfig(config);
         
@@ -255,26 +259,22 @@ function createMockConfig() {
 
 /**
  * Save configuration to Homebridge
- * @param {boolean} saveToFile - Whether to also save to config.json file
+ * Always saves to disk via custom server endpoint
  * @returns {Promise<void>}
  */
-window.saveConfig = async function(saveToFile = true) {
+window.saveConfig = async function() {
   try {
-    console.log(`Starting configuration ${saveToFile ? 'save' : 'update'} process...`);
+    console.log('Starting configuration save process...');
     if (typeof NotificationManager !== 'undefined') {
-      NotificationManager.info(`${saveToFile ? 'Saving' : 'Updating'} configuration...`, 'Please Wait');
+      NotificationManager.info('Saving configuration...', 'Please Wait');
     }
     
     // STEP 1: Check if Homebridge API is available
-    if (typeof homebridge === 'undefined' || 
-        typeof homebridge.getPluginConfig !== 'function' ||
-        typeof homebridge.updatePluginConfig !== 'function' ||
-        (saveToFile && typeof homebridge.savePluginConfig !== 'function')) {
-        
-      console.error('Homebridge API methods not available');
+    if (typeof homebridge === 'undefined' || typeof homebridge.request !== 'function') {
+      console.error('Homebridge API not available');
       if (typeof NotificationManager !== 'undefined') {
         NotificationManager.error(
-          'Homebridge API not available. Please reload the page.', 
+          'Homebridge API not available. Please reload the page.',
           'Save Error'
         );
       }
@@ -333,12 +333,7 @@ console.log(`Reading enable schedules from form: ${enableSchedules}`);
       return;
     }
     
-    // STEP 3: Get current plugin config to find platform config
-    console.log('Getting current plugin config...');
-    const currentConfig = await homebridge.getPluginConfig();
-    console.log('Current plugin config retrieved');
-    
-    // STEP 4: Create updated configuration object
+    // STEP 3: Create configuration object
     console.log('Creating configuration object...');
     const config = {
       platform: 'SleepMeSimple',
@@ -401,66 +396,40 @@ console.log(`Reading enable schedules from form: ${enableSchedules}`);
       config.schedules = [];
     }
     
-    // STEP 6: Get advanced settings
+    // STEP 4: Get advanced settings
     const advancedSettings = getAdvancedSettings();
     if (advancedSettings) {
       config.advanced = advancedSettings;
     }
-    
-    // STEP 7: Find existing config in the array or prepare to add new one
-    console.log('Preparing updated config array...');
-    let updatedConfigArray = [];
-    
-    if (Array.isArray(currentConfig)) {
-      updatedConfigArray = [...currentConfig]; // Create a new copy to avoid reference issues
-      
-      const existingIndex = updatedConfigArray.findIndex(c => c && c.platform === 'SleepMeSimple');
-      
-      if (existingIndex >= 0) {
-        // Update existing config
-        console.log(`Updating existing config at index ${existingIndex}`);
-        updatedConfigArray[existingIndex] = config;
-      } else {
-        // Add new config
-        console.log('Adding new platform config');
-        updatedConfigArray.push(config);
-      }
-    } else {
-      // If no valid config array, create a new one with just our config
-      console.log('Creating new config array');
-      updatedConfigArray = [config];
-    }
-    
-    // STEP 8: Save configuration using client-side API
-    console.log('Updating plugin config in memory...');
+
+    // STEP 5: Save configuration using custom server endpoint
+    // Server handles merging with existing config array
+    console.log('Saving configuration via custom server...');
     try {
-      // Update config in memory
-      await homebridge.updatePluginConfig(updatedConfigArray);
-      console.log('Configuration updated in memory successfully');
-      
-      // If requested, also save to file (only when user explicitly clicks Save button)
-      if (saveToFile) {
-        console.log('Saving config to disk...');
-        await homebridge.savePluginConfig();
-        console.log('Configuration saved to disk successfully');
+      // Use custom server endpoint which properly saves to disk
+      const response = await homebridge.request('/config/save', { config });
+
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Server returned unsuccessful response');
       }
-      
-      console.log('Configuration process completed successfully');
+
+      console.log('Configuration saved successfully via server:', response.message);
       if (typeof NotificationManager !== 'undefined') {
         NotificationManager.success(
-          `Configuration ${saveToFile ? 'saved' : 'updated'} successfully`,
-          `Configuration ${saveToFile ? 'Saved' : 'Updated'}`,
+          'Configuration saved successfully',
+          'Configuration Saved',
           { autoHide: true }
         );
       }
       
-      // Verify update
+      // Verify update by reloading config
       try {
-        const verifyConfig = await homebridge.getPluginConfig();
-        const saved = verifyConfig.find(c => c && c.platform === 'SleepMeSimple');
-        console.log('Verification - Config saved correctly:', !!saved);
-        if (saved) {
+        const verifyResponse = await homebridge.request('/config/load');
+        if (verifyResponse && verifyResponse.success && verifyResponse.config) {
+          const saved = verifyResponse.config;
+          console.log('Verification - Config saved correctly:', saved.platform === 'SleepMeSimple');
           console.log('Saved config values:');
+          console.log('- apiToken:', saved.apiToken ? '[SET]' : '[MISSING]');
           console.log('- logLevel:', saved.logLevel);
           console.log('- unit:', saved.unit);
           console.log('- pollingInterval:', saved.pollingInterval);
@@ -472,7 +441,7 @@ console.log(`Reading enable schedules from form: ${enableSchedules}`);
       console.error('Error saving configuration:', saveError);
       if (typeof NotificationManager !== 'undefined') {
         NotificationManager.error(
-          `Error ${saveToFile ? 'saving' : 'updating'} configuration: ${saveError.message}`,
+          `Error saving configuration: ${saveError.message}`,
           'Save Error'
         );
       }

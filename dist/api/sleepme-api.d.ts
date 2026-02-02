@@ -26,6 +26,9 @@ export declare class SleepMeApi {
     private startupFinished;
     private initialDiscoveryComplete;
     private startupTime;
+    private authHeaderValue;
+    private triedWithoutBearer;
+    private authFormatChangeLogged;
     /**
      * Create a new SleepMe API client
      * @param apiToken API authentication token
