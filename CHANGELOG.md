@@ -1,5 +1,29 @@
 # Changelog
 
+## 7.1.24 (2026-02-02)
+
+### 🐛 Fix: Negative Timeout from Device Jitter
+
+**Fixed the actual source of the `TimeoutNegativeWarning: -4000` warning.**
+
+**Root Cause Found**:
+The `getDeviceJitter()` function in `accessory.ts` intentionally returns negative values (line 799):
+```typescript
+const jitterDirection = (hash % 2 === 0) ? 1 : -1;
+```
+
+When this negative jitter was added to the initial poll delay:
+```typescript
+setTimeout(pollFunction, 2000 + deviceJitter);  // 2000 + (-6000) = -4000
+```
+
+**The Fix**:
+Added `Math.max()` guards at all setTimeout/setInterval calls that use device jitter:
+- Initial poll delay: `Math.max(100, 2000 + deviceJitter)`
+- Polling interval: `Math.max(1000, interval + deviceJitter)`
+
+This preserves the jitter functionality for spreading out device polling while ensuring timeouts never go negative.
+
 ## 7.1.23 (2026-02-02)
 
 ### 🐛 Fix: Additional Negative Timeout Safeguards

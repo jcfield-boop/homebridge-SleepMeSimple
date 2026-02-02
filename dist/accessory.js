@@ -576,10 +576,11 @@ export class SleepMeAccessory {
         };
         // Add device-specific jitter to prevent synchronized polling across devices
         const deviceJitter = this.getDeviceJitter();
-        // Initial poll with jitter
-        setTimeout(pollFunction, 2000 + deviceJitter);
+        // Initial poll with jitter (ensure non-negative delay)
+        setTimeout(pollFunction, Math.max(100, 2000 + deviceJitter));
         // Set up recurring polling - we'll adjust interval dynamically with jitter
-        const jitteredInterval = (this.currentPollingInterval * 1000) + deviceJitter;
+        // Ensure interval is never negative (minimum 1 second)
+        const jitteredInterval = Math.max(1000, (this.currentPollingInterval * 1000) + deviceJitter);
         this.statusUpdateTimer = setInterval(pollFunction, jitteredInterval);
     }
     /**
@@ -607,7 +608,8 @@ export class SleepMeAccessory {
             if (this.statusUpdateTimer) {
                 clearInterval(this.statusUpdateTimer);
                 const deviceJitter = this.getDeviceJitter();
-                const jitteredInterval = (newInterval * 1000) + deviceJitter;
+                // Ensure interval is never negative (minimum 1 second)
+                const jitteredInterval = Math.max(1000, (newInterval * 1000) + deviceJitter);
                 this.statusUpdateTimer = setInterval(() => {
                     this.refreshDeviceStatus().catch(error => {
                         this.failedUpdateAttempts++;
