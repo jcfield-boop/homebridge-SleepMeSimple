@@ -34,13 +34,21 @@ class SleepMeUiServer extends HomebridgePluginUiServer {
     }
 
     try {
+      // Set up request timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch('https://api.developer.sleep.me/v1/devices', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${payload.apiToken}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();

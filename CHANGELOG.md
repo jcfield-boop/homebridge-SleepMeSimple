@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.1.25 (2026-02-03)
+
+### 🔒 Security: Harden API Communication
+
+**Improved security posture for API requests and UI.**
+
+- **Explicit Content-Type/Accept headers**: Added `Content-Type: application/json` and `Accept: application/json` to all API requests (Axios and server-side fetch)
+- **Request timeouts**: Added 30s timeout to Axios requests and 15s timeout to UI server fetch to prevent hanging connections
+- **API token masking**: Changed token input from `type="text"` to `type="password"` so tokens are not visible on screen
+
 ## 7.1.24 (2026-02-02)
 
 ### 🐛 Fix: Negative Timeout from Device Jitter
