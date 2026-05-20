@@ -839,10 +839,12 @@ export class SleepMeApi {
                 const startTime = now;
                 try {
                     // Rate limiting is now handled exclusively by the empirical token bucket limiter
-                    // Add auth token to request
+                    // Add auth token and content headers to request
                     request.config.headers = {
                         ...(request.config.headers || {}),
-                        Authorization: this.authHeaderValue
+                        'Authorization': this.authHeaderValue,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     };
                     this.logger.verbose(`Executing request ${request.id}: ${request.method} ${request.url} [${request.priority}]`);
                     // Execute the request
@@ -1214,6 +1216,7 @@ export class SleepMeApi {
             const config = {
                 method: options.method,
                 url: API_BASE_URL + options.url,
+                timeout: 30000,
                 validateStatus: (status) => {
                     // Consider 2xx status codes as successful
                     return status >= 200 && status < 300;
