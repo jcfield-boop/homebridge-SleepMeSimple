@@ -1,6 +1,6 @@
 # Changelog
 
-## 7.1.26 (2026-05-20)
+## 7.2.1 (2026-05-20)
 
 ### 🔒 Security: Dependency Updates
 
