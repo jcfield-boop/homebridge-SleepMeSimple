@@ -38,6 +38,7 @@ A sophisticated Homebridge plugin for SleepMe devices (Dock Pro, OOLER, ChiliPad
 - **Comprehensive Model Support**: Compatible with Dock Pro, OOLER, and ChiliPad devices
 - **Sleep Schedule Templates**: Pre-defined temperature profiles based on sleep science
 - **Schedule Editing**: Create, edit, and manage temperature schedules directly from the UI
+- **Security-hardened**: Dependencies regularly audited and updated to address CVEs
 
 ## Why Use This Plugin?
 

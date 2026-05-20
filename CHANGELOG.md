@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.1.26 (2026-05-20)
+
+### 🔒 Security: Dependency Updates
+
+**Resolved 10 npm audit vulnerabilities** (1 critical, 5 high, 4 moderate) by updating transitive and direct dependencies.
+
+- **axios** → 1.8.4: Fixes DoS, SSRF, prototype pollution, header injection, auth bypass, and credential exfiltration CVEs
+- **form-data** → 4.0.4: Fixes critical unsafe random boundary generation (GHSA-fjxv-7rqg-78g4)
+- **flatted** → 3.3.3: Fixes unbounded recursion DoS and prototype pollution
+- **glob** → 10.4.5+: Fixes command injection via CLI `--cmd` flag
+- **minimatch** → patched: Fixes multiple ReDoS vulnerabilities
+- **picomatch** → patched: Fixes method injection and ReDoS
+- **ajv** → 6.14.0+: Fixes ReDoS via `$data` option
+- **brace-expansion** → patched: Fixes ReDoS and process hang
+- **follow-redirects** → 1.15.12+: Fixes auth header leakage to cross-domain redirects
+- **js-yaml** → patched: Fixes prototype pollution in merge
+
 ## 7.1.25 (2026-02-03)
 
 ### 🔒 Security: Harden API Communication
